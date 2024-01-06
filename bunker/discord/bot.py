@@ -10,6 +10,7 @@ from discord.utils import escape_markdown as esc_md
 from bunker import schemas
 from bunker.db import models
 from bunker.discord.views.player_review import PlayerReviewView
+from bunker.discord.utils import handle_error
 from bunker.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID, DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID, DISCORD_REPORTS_CHANNEL_ID
 from bunker.utils import get_player_id_type, PlayerIDType
 
@@ -31,6 +32,7 @@ async def load_all_cogs():
 
 async def sync_commands():
     try:
+        await asyncio.wait_for(bot.tree.sync(guild=discord.Object(DISCORD_GUILD_ID)), timeout=5)
         await asyncio.wait_for(bot.tree.sync(), timeout=5)
         logging.info('Synced app commands')
     except asyncio.TimeoutError:
@@ -164,6 +166,10 @@ bot = Bot(
     command_prefix=command_prefix,
     case_insensitive=True
 )
+
+@bot.tree.error
+async def on_interaction_error(interaction: discord.Interaction, error: Exception):
+    await handle_error(interaction, error)
 
 @bot.command()
 @commands.is_owner()

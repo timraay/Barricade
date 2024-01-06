@@ -12,7 +12,7 @@ class CRCONService(ModelBase):
     __tablename__ = "crcon_services"
 
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"), primary_key=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, server_default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default="1")
 
     api_key: Mapped[str]
     api_url: Mapped[str]

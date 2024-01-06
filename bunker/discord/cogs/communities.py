@@ -16,6 +16,7 @@ from bunker.discord.views.admin_confirmation import (
     OwnershipTransferConfirmationView,
     LeaveCommunityConfirmationView
 )
+from bunker.discord.views.service_management import ServiceManagementView
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -24,7 +25,7 @@ class CommunitiesCog(commands.Cog):
     def __init__(self, bot: 'Bot'):
         self.bot = bot
     
-    @app_commands.command(name="add_admin", description="Add one of your community's admins to the Bunker")
+    @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def add_admin_to_community(self, interaction: Interaction, user: discord.Member):
@@ -48,7 +49,8 @@ class CommunitiesCog(commands.Cog):
                         f"{esc_md(user.nick or user.display_name)} is already part of another community!",
                         (
                             "Ask them to leave their current community first by using the"
-                           f" {get_command_mention(interaction.client.tree, 'leave_community')} command."
+                           f" {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
+                           " command."
                         )
                     )
             
@@ -65,7 +67,7 @@ class CommunitiesCog(commands.Cog):
             view = AdminAddConfirmationView(admin.community, user)
             await view.send(interaction)
 
-    @app_commands.command(name="remove_admin", description="Remove an admin's access from the Bunker")
+    @app_commands.command(name="remove-admin", description="Remove an admin's access from the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def remove_admin_from_community(self, interaction: Interaction, user: discord.Member):
@@ -81,8 +83,8 @@ class CommunitiesCog(commands.Cog):
                 raise CustomException(
                     f"You cannot remove yourself from your own community!",
                     (
-                       f"Use {get_command_mention(interaction.client.tree, 'transfer_ownership')} to"
-                       f" transfer ownership, then {get_command_mention(interaction.client.tree, 'leave_community')}"
+                       f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)} to"
+                       f" transfer ownership, then {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
                         " to leave."
                     )
                 )
@@ -96,7 +98,7 @@ class CommunitiesCog(commands.Cog):
             view = AdminRemoveConfirmationView(admin.community, user)
             await view.send(interaction)
 
-    @app_commands.command(name="transfer_ownership", description="Transfer ownership to another admin")
+    @app_commands.command(name="transfer-ownership", description="Transfer ownership to another admin")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def transfer_ownership_of_community(self, interaction: Interaction, user: discord.Member):
@@ -121,8 +123,8 @@ class CommunitiesCog(commands.Cog):
                 raise CustomException(
                     f"{esc_md(user.nick or user.display_name)} is not part of {esc_md(owner.community.name)}!",
                     (
-                        f"Use {get_command_mention(interaction.client.tree, 'add_admin')} first to add them"
-                        " to your community, before transfering ownership to them."
+                        f"Use {await get_command_mention(interaction.client.tree, 'add-admin', guild_only=True)}"
+                        " first to add them to your community, before transfering ownership to them."
                     )
                 )
             # Make sure admin is part of the community
@@ -134,7 +136,7 @@ class CommunitiesCog(commands.Cog):
             view = OwnershipTransferConfirmationView(admin.community, user, owner)
             await view.send(interaction)
 
-    @app_commands.command(name="leave_community", description="Remove your admin access from the Bunker")
+    @app_commands.command(name="leave-community", description="Remove your admin access from the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def leave_community_as_admin(self, interaction: Interaction):
@@ -148,13 +150,30 @@ class CommunitiesCog(commands.Cog):
                 raise CustomException(
                     "You must transfer ownership first!",
                     (
-                        f"Use {get_command_mention(interaction.client.tree, 'transfer_ownership')} to transfer"
-                        " ownership to another community admin."
+                        f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)}"
+                        " to transfer ownership to another community admin."
                     )
                 )
             
             view = LeaveCommunityConfirmationView(admin.community, interaction.user)
             await view.send(interaction)
+    
+
+    @app_commands.command(name="manage-services", description="Enable, disable, or configure your services")
+    @app_commands.guilds(DISCORD_GUILD_ID)
+    @app_commands.default_permissions(manage_guild=True)
+    async def manage_services(self, interaction: Interaction):
+        async with session_factory() as db:
+            # Make sure the user owns a community
+            owner = await get_admin_by_id(db, interaction.user.id)
+            if not owner or not owner.owned_community:
+                raise CustomException(
+                    "You need to be a community owner to do this!"
+                )
+            
+            view = ServiceManagementView(owner.community)
+            await view.send(interaction)
+
 
 async def setup(bot: 'Bot'):
     await bot.add_cog(CommunitiesCog(bot))

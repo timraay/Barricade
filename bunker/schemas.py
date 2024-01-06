@@ -174,11 +174,15 @@ class Response(PendingResponse):
 class ServiceConfig(BaseModel):
     name: ClassVar[str]
     emoji: ClassVar[str]
+    community_id: int
     api_key: str
     enabled: bool = True
 
+    class Config:
+        from_attributes = True
+
     @classmethod
-    def create(cls, community: models.Community) -> 'ServiceConfig' | None:
+    def create(cls, community: models.Community) -> Optional['ServiceConfig']:
         return None
     
     def get_url(self) -> str:

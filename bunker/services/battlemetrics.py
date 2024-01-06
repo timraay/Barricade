@@ -1,8 +1,12 @@
 import aiohttp
 from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 from bunker import schemas
+from bunker.communities import set_battlemetrics_service
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
+from bunker.db import models
 from bunker.services.service import Service
 from bunker.utils import get_player_id_type, PlayerIDType
 
@@ -18,8 +22,11 @@ class BattlemetricsService(Service):
     BASE_URL = "https://api.battlemetrics.com"
 
     def __init__(self, config: schemas.BattlemetricsServiceConfig) -> None:
-        super().__init__("Battlemetrics", config)
+        super().__init__(config, "Battlemetrics")
         self.config: schemas.BattlemetricsServiceConfig
+
+    async def save_config(self, db: AsyncSession, community: Optional[models.Community] = None):
+        return await set_battlemetrics_service(db, self.config, community)
 
     async def validate(self, community: schemas.Community):
         await self.validate_scopes()
@@ -178,7 +185,7 @@ class BattlemetricsService(Service):
         resp = await self._make_request(method="POST", url=url, data=data)
 
         assert resp["data"]["type"] == "banList"
-        self.config.banlist_id = resp["data"]["id"]
+        self.config.banlist_id = UUID(resp["data"]["id"])
 
 
     async def validate_ban_list(self):
@@ -189,7 +196,7 @@ class BattlemetricsService(Service):
 
         # TODO: Raise properly
         assert resp["data"]["id"] == str(self.config.banlist_id)
-        assert resp["relationships"]["owner"]["data"]["id"] == self.config.organization_id
+        assert resp["data"]["relationships"]["owner"]["data"]["id"] == self.config.organization_id
 
     async def validate_scopes(self):
         scopes = await self.get_api_scopes()

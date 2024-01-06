@@ -1,7 +1,9 @@
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import NoResultFound
+from typing import Optional
 
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
@@ -11,7 +13,6 @@ from bunker.exceptions import (
     AdminNotAssociatedError, AdminAlreadyAssociatedError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
 )
-from bunker.services.battlemetrics import BattlemetricsService
 
 async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
     """Look up an admin by their discord ID.
@@ -282,18 +283,50 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     return True
 
 
-async def set_battlemetrics_service(db: AsyncSession, community: models.Community, config: schemas.BattlemetricsServiceConfig):
-    service = BattlemetricsService(config)
-    await service.validate(community)
+async def set_battlemetrics_service(
+        db: AsyncSession,
+        config: schemas.BattlemetricsServiceConfig,
+        community: Optional[models.Community] = None
+):
+    if community is None:
+        community = await get_community_by_id(db, config.community_id)
+        if not community:
+            raise NotFoundError("Community no longer exists")
 
-    community.battlemetrics_service = models.BattlemetricsService(**config.model_dump())
+    if community.battlemetrics_service:
+        stmt = update(models.BattlemetricsService) \
+            .where(models.BattlemetricsService.community_id == community.id) \
+            .values(**config.model_dump(exclude={'community_id'}))
+        await db.execute(stmt)
+    
+    else:
+        community.battlemetrics_service = models.BattlemetricsService(**config.model_dump())
+
     await db.commit()
     await db.refresh(community)
     return community
 
-async def set_crcon_service(db: AsyncSession, community: models.Community, config: schemas.CRCONServiceConfig):
-    community.crcon_service = models.BattlemetricsService(**config.model_dump())
-    await db.commit()
+async def set_crcon_service(
+        db: AsyncSession,
+        config: schemas.CRCONServiceConfig,
+        community: Optional[models.Community] = None
+):
+    if community is None:
+        community = await get_community_by_id(db, config.community_id)
+        if not community:
+            raise NotFoundError("Community no longer exists")
+
+    if community.crcon_service:
+        stmt = update(models.CRCONService) \
+            .where(models.CRCONService.community_id == community.id) \
+            .values(**config.model_dump(exclude={'community_id'}))
+        await db.execute(stmt)
+    
+    else:
+        community.crcon_service = models.CRCONService(**config.model_dump())
+        await db.commit()
+
     await db.refresh(community)
     return community
+
 

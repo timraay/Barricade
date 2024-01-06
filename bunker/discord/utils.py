@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-import traceback
+import logging
 
 from typing import Callable, Optional, Any, Awaitable
 
@@ -8,6 +8,7 @@ from discord import ui, app_commands, Interaction, ButtonStyle, Emoji, PartialEm
 from discord.ext import commands
 from discord.utils import escape_markdown as esc_md, MISSING
 
+from bunker.constants import DISCORD_GUILD_ID
 from bunker.utils import async_ttl_cache
 
 class CallableButton(ui.Button):
@@ -103,8 +104,9 @@ class ExpiredButtonError(Exception):
 
 class CustomException(Exception):
     """Raised to log a custom exception"""
-    def __init__(self, error, *args):
+    def __init__(self, error, *args, log_traceback: bool = False):
         self.error = error
+        self.log_traceback = log_traceback
         super().__init__(*args)
 
 
@@ -115,8 +117,10 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
     if isinstance(error, (app_commands.CommandNotFound, commands.CommandNotFound)):
         embed = get_error_embed(title='Unknown command!')
 
-    elif type(error).__name__ == CustomException.__name__:
+    elif isinstance(error, CustomException):
         embed = get_error_embed(title=error.error, description=str(error))
+        if error.log_traceback:
+            logging.error("An unexpected error occured when handling an interaction", exc_info=error)
     
     elif isinstance(error, ExpiredButtonError):
         embed = get_error_embed(title="This action no longer is available.")
@@ -145,10 +149,7 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
         embed = get_error_embed(title="Invalid argument!", description=esc_md(str(error)))
     else:
         embed = get_error_embed(title="An unexpected error occured!", description=esc_md(str(error)))
-        try:
-            raise error
-        except:
-            traceback.print_exc()
+        logging.error("An unexpected error occured when handling an interaction", exc_info=error)
 
     if isinstance(interaction, Interaction):
         if interaction.response.is_done() or interaction.is_expired():
@@ -178,8 +179,11 @@ def only_once(func):
     return decorated
 
 @async_ttl_cache(size=100, seconds=60*60*24)
-async def get_command_mention(tree: discord.app_commands.CommandTree, name: str, subcommands: str = None):
-    commands = await tree.fetch_commands()
+async def get_command_mention(tree: discord.app_commands.CommandTree, name: str, subcommands: str = None, guild_only: bool = False):
+    if guild_only:
+        commands = await tree.fetch_commands(guild=discord.Object(DISCORD_GUILD_ID))
+    else:
+        commands = await tree.fetch_commands()
     command = next(cmd for cmd in commands if cmd.name == name)
     if subcommands:
         return f"</{command.name} {subcommands}:{command.id}>"

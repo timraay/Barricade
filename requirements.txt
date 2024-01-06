@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pydantic>=2.0.0
+sqlalchemy>=2.0.0
+psycopg2
+discord.py>=2.1.0
