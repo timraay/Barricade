@@ -96,52 +96,51 @@ class Bot(commands.Bot):
         user = await self.get_or_fetch_user(user_id)
         await user.remove_roles(admin_role, owner_role)
 
-    async def get_report_message_payload(self, report: schemas.ReportCreateParams):
-        content = ""
-        for player in report.players:
-            links = []
-            content += f"**Username:** {esc_md(player.name)}\n"
+    async def get_report_embed(self, report: schemas.ReportCreateParams) -> discord.Embed:
+        embed = discord.Embed(
+            title="New report!",
+            description="**" + "**, **".join(report.reasons) + "**\n" + esc_md(report.body),
+            colour=discord.Colour.dark_theme()
+        )
+
+        for i, player in enumerate(report.players, 1):
+            value = f"*`{player.id}`*"
 
             player_id_type = get_player_id_type(player.id)
             if player_id_type == PlayerIDType.STEAM_64_ID:
-                content += f"**Steam ID:** `{player.id}`\n"
-                links.append(f"[Steam profile](https://steamcommunity.com/profiles/{player.id})")
-            elif player_id_type == PlayerIDType.UUID:
-                content += f"**UUID:** {player.id}\n"
-            
-            if player.bm_rcon_url:
-                links.append(f"[Battlemetrics profile]({player.bm_rcon_url})")
-            if links:
-                content += f"**Links:** " + " | ".join(links) + "\n"
-            content += "\n"
-        
-        content += (
-            "**Reason:** " + ", ".join(report.reasons)
-            + "\n>>> " + esc_md(report.body)
-        )
+                value += f"\n[**View on Steam** 🡥](https://steamcommunity.com/profiles/{player.id})"
 
-        embed = discord.Embed()
+            if player.bm_rcon_url:
+                value += f"\n[**View on Battlemetrics** 🡥]({player.bm_rcon_url})"
+
+            embed.add_field(
+                name=f"**`{i}.`** {esc_md(player.name)}",
+                value=value,
+                inline=True
+            )
+
         try:
             user = await self.get_or_fetch_user(report.token.admin_id)
-            embed.set_author(name=f"Report by {user.nick or user.display_name}", icon_url=user.avatar.url)
+            admin_name = user.nick or user.display_name
         except:
-            embed.set_author(name=f"Report by {report.token.admin.name}")
-        embed.set_footer(text=f"Community: {report.token.community.name} • {report.token.community.contact_url}")
+            admin_name = report.token.admin.name
 
-        return schemas.DiscordMessagePayload(
-            content=content,
-            embeds=[embed]
+        embed.set_footer(
+            text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
+            icon_url=user.avatar.url
         )
 
-    async def send_report(self, payload: schemas.DiscordMessagePayload):
+        return embed
+
+    async def send_report(self, embed: discord.Embed):
         channel = self.get_report_channel()
-        message = await channel.send(**payload.model_dump())
+        message = await channel.send(embed=embed)
         return message
 
     async def forward_report_to_community(self,
             report: models.Report,
             community: schemas.Community,
-            payload: schemas.DiscordMessagePayload
+            embed: discord.Embed
     ):
         guild = self.get_guild(community.forward_guild_id)
         if not guild:
@@ -156,7 +155,7 @@ class Bot(commands.Bot):
         ) for player in report.players]
 
         view = PlayerReviewView(responses=responses)
-        await channel.send(**payload.model_dump(exclude_none=True), view=view)
+        await channel.send(embed=embed, view=view)
 
 def command_prefix(bot: Bot, message: discord.Message):
     return bot.user.mention + " "

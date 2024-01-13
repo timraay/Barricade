@@ -1,6 +1,6 @@
 from bunker.db import ModelBase
 
-from sqlalchemy import String, TIMESTAMP
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from typing import Optional, TYPE_CHECKING

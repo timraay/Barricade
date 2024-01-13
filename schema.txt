@@ -55,9 +55,11 @@ PlayerReportResponses (
 )
 
 Services (
-  community_id  Integer (PK, FK -> Communities.id)
-  service_type  String (PK)
-  api_key       String (Nullable)
+  id            Integer (PK)
+  community_id  Integer (FK -> Communities.id)
+  service_type  String
+  api_key       String
+  api_url       String
 )
 
 WebUsers (

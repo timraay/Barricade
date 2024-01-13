@@ -2,8 +2,7 @@ Service implementation:
     CRCON
     Battlemetrics
 
-Set up two separate bots?
-Allow unbanning
+Allow deleting reports
 Add logging???
 Add various web endpoints
 Change web authentication from OAuth2 to HTTP

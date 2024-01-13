@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta, timezone
-import discord
 from pydantic import BaseModel, Field
 from typing import Optional, ClassVar
 from uuid import UUID
 
 from bunker.db import models
+from bunker.enums import ReportRejectReason, ServiceType
 
 class AdminBase(BaseModel):
     discord_id: int
@@ -152,6 +152,7 @@ class ResponsePlayer(PlayerReport):
 
 class ResponseBase(BaseModel):
     banned: bool
+    reject_reason: Optional[ReportRejectReason] = None
 
 class ResponseCreateParams(ResponseBase):
     pr_id: int
@@ -166,58 +167,44 @@ class PendingResponse(ResponseBase):
 class Response(PendingResponse):
     pr_id: int
     banned: bool
+    bm_ban_id: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
-class ServiceConfig(BaseModel):
-    name: ClassVar[str]
-    emoji: ClassVar[str]
+class ServiceConfigBase(BaseModel):
+    id: int | None
+
     community_id: int
-    api_key: str
+    service_type: ServiceType
     enabled: bool = True
 
+    api_key: str
+    api_url: str
+
+class ServiceConfig(ServiceConfigBase):
+    id: int
+
     class Config:
         from_attributes = True
 
-    @classmethod
-    def create(cls, community: models.Community) -> Optional['ServiceConfig']:
-        return None
-    
-    def get_url(self) -> str:
-        return ""
+class BattlemetricsServiceConfigParams(ServiceConfigBase):
+    id: int | None = None
+    service_type: ClassVar[ServiceType] = ServiceType.BATTLEMETRICS
+    api_url: str = "https://api.battlemetrics.com"
 
-class BattlemetricsServiceConfig(ServiceConfig):
-    name: ClassVar[str] = "Battlemetrics"
-    emoji: ClassVar[str] = "🤕"
     organization_id: str
     banlist_id: Optional[UUID] = None
 
-    @classmethod
-    def create(cls, community: models.Community):
-        if community.battlemetrics_service:
-            return cls.model_validate(community.battlemetrics_service)
-    
-    def get_url(self) -> str:
-        return f"https://battlemetrics.com/rcon/orgs/edit/{self.organization_id}"
+class BattlemetricsServiceConfig(ServiceConfig, BattlemetricsServiceConfigParams):
+    pass
 
-class CRCONServiceConfig(ServiceConfig):
-    name: ClassVar[str] = "Community RCON"
-    emoji: ClassVar[str] = "🤩"
-    api_url: str
+class CRCONServiceConfigParams(ServiceConfigBase):
+    id: int | None = None
+    service_type: ClassVar[ServiceType] = ServiceType.COMMUNITY_RCON
 
-    @classmethod
-    def create(cls, community: models.Community):
-        if community.crcon_service:
-            return cls.model_validate(community.crcon_service)
-    
-    def get_url(self) -> str:
-        return self.api_url.removesuffix("api/")
+    bunker_api_key_id: int
 
-
-class DiscordMessagePayload(BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
-    content: Optional[str] = None
-    embeds: Optional[list[discord.Embed]] = None
+class CRCONServiceConfig(ServiceConfig, CRCONServiceConfigParams):
+    pass

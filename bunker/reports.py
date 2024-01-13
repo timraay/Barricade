@@ -1,17 +1,14 @@
-import asyncio
 import secrets
-from itertools import groupby
 
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bunker import schemas
 from bunker.constants import REPORT_FORM_URL
 from bunker.db import models, session_factory
 from bunker.discord import bot
 from bunker.hooks import EventHooks, add_hook
-from bunker.utils import log_task_error
 
 async def get_token_data(db: AsyncSession, access_token: str, load_relations: bool = False):
     stmt = select(models.ReportToken).where(models.ReportToken.token == access_token).limit(1)
@@ -54,8 +51,8 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     )
     db.add(db_report)
 
-    message_payload = await bot.get_report_message_payload(report)
-    message = await bot.send_report(message_payload)
+    embed = await bot.get_report_embed(report)
+    message = await bot.send_report(embed)
     db_report.message_id = message.id
 
     await db.commit()
@@ -67,7 +64,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.Report, params: schemas.ReportCreateParams):
-    message_payload = None
+    embed = None
     async with session_factory() as db:
         stmt = select(models.Community).where(
             models.Community.forward_guild_id.is_not(None),
@@ -77,19 +74,25 @@ async def forward_report_to_communities(report: schemas.Report, params: schemas.
         communities = result.all()
 
         for community in communities:
-            if message_payload is None:
-                message_payload = await bot.get_report_message_payload(params)
-            await bot.forward_report_to_community(report, community, message_payload)
+            if embed is None:
+                embed = await bot.get_report_embed(params)
+            await bot.forward_report_to_community(report, community, embed)
 
+async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParams):
+    db_prr = await db.get(models.PlayerReportResponse, (prr.pr_id, prr.community_id))
 
+    if not db_prr:
+        db_prr = models.PlayerReportResponse(**prr.model_dump())
+        db.add(db_prr)
+        await db.commit()
+        await db.refresh(db_prr)
+    
+    else:
+        db_prr.banned = prr.banned
+        db_prr.reject_reason = prr.reject_reason
+        await db.commit()
 
-        
-
-        
-                
-                
-                    
-
+    return db_prr
 
 async def get_player(db: AsyncSession, player_id: str):
     return await db.get(models.Player, player_id)

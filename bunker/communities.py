@@ -1,4 +1,5 @@
 from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
@@ -283,50 +284,32 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     return True
 
 
-async def set_battlemetrics_service(
+async def create_service_config(
         db: AsyncSession,
-        config: schemas.BattlemetricsServiceConfig,
-        community: Optional[models.Community] = None
+        params: schemas.ServiceConfigBase,
 ):
-    if community is None:
-        community = await get_community_by_id(db, config.community_id)
-        if not community:
-            raise NotFoundError("Community no longer exists")
-
-    if community.battlemetrics_service:
-        stmt = update(models.BattlemetricsService) \
-            .where(models.BattlemetricsService.community_id == community.id) \
-            .values(**config.model_dump(exclude={'community_id'}))
-        await db.execute(stmt)
-    
-    else:
-        community.battlemetrics_service = models.BattlemetricsService(**config.model_dump())
-
+    db_service = models.Service(
+        **params.model_dump(),
+        service_type=params.service_type # may be ClassVar
+    )
+    db.add(db_service)
     await db.commit()
-    await db.refresh(community)
-    return community
+    # await db.refresh(db_service)
+    return db_service
 
-async def set_crcon_service(
+async def update_service_config(
         db: AsyncSession,
-        config: schemas.CRCONServiceConfig,
-        community: Optional[models.Community] = None
+        config: schemas.ServiceConfig,
 ):
-    if community is None:
-        community = await get_community_by_id(db, config.community_id)
-        if not community:
-            raise NotFoundError("Community no longer exists")
+    stmt = update(models.Service).values(
+        **config.model_dump(),
+        service_type=config.service_type # may be ClassVar
+    ).where(
+        models.Service.id == config.id
+    ).returning(models.Service)
+    db_service = await db.scalar(stmt)
 
-    if community.crcon_service:
-        stmt = update(models.CRCONService) \
-            .where(models.CRCONService.community_id == community.id) \
-            .values(**config.model_dump(exclude={'community_id'}))
-        await db.execute(stmt)
+    if not db_service:
+        raise NotFoundError("Service does not exist")
     
-    else:
-        community.crcon_service = models.CRCONService(**config.model_dump())
-        await db.commit()
-
-    await db.refresh(community)
-    return community
-
-
+    return db_service

@@ -3,30 +3,50 @@ from discord import ButtonStyle
 
 from bunker import schemas
 from bunker.discord.utils import View
+from bunker.enums import ReportRejectReason
 
 class PlayerReviewView(View):
     def __init__(self, responses: list[schemas.PendingResponse]):
         super().__init__(timeout=None)
 
         for row, response in enumerate(responses):
-            if response.banned is None:
-                self.add_item(discord.ui.Button(
-                    label="Ban",
-                    emoji="🔨",
-                    style=ButtonStyle.green,
-                    row=row,
-                    custom_id=f"prr:{response.community.id}:{response.player_report.id}:1"
-                ))
-                self.add_item(discord.ui.Button(
-                    label="Reject",
-                    emoji="🚫",
-                    style=ButtonStyle.red,
-                    row=row,
-                    custom_id=f"prr:{response.community.id}:{response.player_report.id}:0"
-                ))
-            self.add_item(discord.ui.Button(label=response.player_report.player_name, style=ButtonStyle.gray, row=row, disabled=True))
+            self.add_item(discord.ui.Button(
+                label=f"# {row + 1}.",
+                style=ButtonStyle.red if response.banned is True else ButtonStyle.gray,
+                custom_id=f"prr:refresh:{response.community.id}:{response.player_report.report_id}",
+                row=row
+            ))
+
             if response.banned is True:
-                self.add_item(discord.ui.Button(label="Player banned!", style=ButtonStyle.green, row=row, disabled=True))
-            elif response.banned is False:
-                self.add_item(discord.ui.Button(label="Report rejected!", style=ButtonStyle.red, row=row, disabled=True))
-                
+                self.add_item(discord.ui.Button(
+                    label="Unban player",
+                    style=ButtonStyle.blurple,
+                    disabled=True,
+                    custom_id=f"prr:unban:{response.community.id}:{response.player_report.id}",
+                    row=row
+                ))
+            else:
+                self.add_item(discord.ui.Button(
+                    label="Ban player...",
+                    style=ButtonStyle.red,
+                    disabled=False,
+                    custom_id=f"prr:ban:{response.community.id}:{response.player_report.id}",
+                    row=row
+                ))
+
+
+            for reason in ReportRejectReason:
+                if response.banned is None:
+                    button_style = ButtonStyle.blurple
+                if response.reject_reason == reason:
+                    button_style = ButtonStyle.green
+                else:
+                    button_style = ButtonStyle.gray
+
+                self.add_item(discord.ui.Button(
+                    label=reason.value,
+                    style=button_style,
+                    disabled=response.banned is False,
+                    custom_id=f"prr:reject:{response.community.id}:{response.player_report.id}:{reason.name}",
+                    row=row
+                ))

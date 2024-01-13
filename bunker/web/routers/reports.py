@@ -1,6 +1,5 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 import logging
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,7 +63,22 @@ async def forward_report(
             detail="Report does not exist"
         )
     
-    await forward_report_to_communities(db_report, schemas.DiscordMessagePayload())
+    db_token = await get_token_data(db, db_report.token.token, load_relations=True)
+    
+    params = schemas.ReportCreateParams(
+        timestamp=db_report.timestamp,
+        body=db_report.body,
+        token=db_token,
+        reasons=[reason.reason for reason in db_report.reasons],
+        players=[schemas.ReportPlayerCreateParams(
+            id=player.player_id,
+            name=player.player_name,
+            bm_rcon_url=player.player.bm_rcon_url
+        ) for player in db_report.players],
+        attachment_urls=[attachment.url for attachment in db_report.attachments],
+    )
+    
+    await forward_report_to_communities(db_report, params)
     return db_report
 
 

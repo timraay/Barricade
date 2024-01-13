@@ -6,6 +6,8 @@ from functools import wraps
 import logging
 import re
 
+from bunker.enums import PlayerIDType
+
 def async_ttl_cache(size: int, seconds: int):
     def decorator(func):
         func.cache = TTLCache(size, ttl=seconds)
@@ -37,10 +39,6 @@ def log_task_error(task: asyncio.Task, message: str = None):
 
 RE_PLAYER_STEAM_64_ID = re.compile(r"^\d{17}$")
 RE_PLAYER_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-
-class PlayerIDType(Enum):
-    STEAM_64_ID = "steamID"
-    UUID = "UUID"
 
 def get_player_id_type(player_id: str) -> PlayerIDType:
     if RE_PLAYER_STEAM_64_ID.match(player_id):

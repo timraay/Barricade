@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from datetime import timedelta
 import os
 from pathlib import Path
 from sqlalchemy.engine.url import URL
@@ -30,6 +31,9 @@ DB_URL = URL.create(
     port=DB_PORT,
     database="bunker",
 ).render_as_string(hide_password=False)
+
+# Time it takes for web access tokens to expire
+ACCESS_TOKEN_EXPIRE_DELTA = timedelta(days=1)
 
 # Discord bot's token
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')

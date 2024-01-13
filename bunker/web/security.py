@@ -1,6 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import hashlib
 from typing import Annotated
+import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import Depends, HTTPException, status
@@ -8,24 +11,57 @@ from fastapi.security import (
     OAuth2PasswordBearer,
     SecurityScopes,
 )
-from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import ValidationError
 
+from bunker import schemas
+from bunker.constants import ACCESS_TOKEN_EXPIRE_DELTA
 from bunker.db import models, get_db
+from bunker.web import schemas as web_schemas
 from bunker.web.scopes import Scopes
 
 # to get a string like this run:
 # openssl rand -hex 32
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 24*60 # 1 day
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="login",
-    scopes=Scopes.all().to_dict(),
-)
+
+async def create_user(db: AsyncSession, user: web_schemas.WebUserCreateParams) -> models.WebUser:
+    db_user = models.WebUser(
+        **user.model_dump(exclude={"password"}),
+        hashed_password=get_password_hash(user.password),
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+async def create_token(
+        db: AsyncSession,
+        scopes: Scopes | None = None,
+        user: web_schemas.WebUser | None = None,
+        community: schemas.Community | None = None,
+        expires_delta: timedelta | None = ACCESS_TOKEN_EXPIRE_DELTA,
+) -> tuple[models.WebToken, str]:
+    if scopes is None and user is None:
+        raise ValueError("\"scopes\" and \"user\" cannot both be None")
+    
+    token_value = str(uuid.uuid4())
+    hashed_token_value = get_token_hash(token_value)
+    print(hashed_token_value)
+    db_token = models.WebToken(
+        hashed_token=hashed_token_value,
+        scopes=scopes,
+        expires=datetime.now(tz=timezone.utc) + expires_delta,
+        user_id=user.id if user else None,
+        community_id=community.id if community else None,
+    )
+    db.add(db_token)
+    await db.commit()
+    await db.refresh(db_token)
+    return db_token, token_value
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify if the given plain password is the same
@@ -60,7 +96,16 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
-async def get_user(db: AsyncSession, username: str):
+
+def verify_token(plain_token: str, hashed_token: str) -> bool:
+    return get_token_hash(plain_token) == hashed_token
+
+def get_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+
+async def get_user_by_username(db: AsyncSession, username: str):
     """Find a user by their username
 
     Parameters
@@ -75,7 +120,15 @@ async def get_user(db: AsyncSession, username: str):
     WebUser | None
         The user, or None if they do not exist
     """
-    return await db.get(models.WebUser, username)
+    stmt = select(models.WebUser).where(models.WebUser.username == username).limit(1)
+    db_user = await db.scalar(stmt)
+    return db_user
+
+async def get_token_by_value(db: AsyncSession, token_value: str):
+    hashed_token_value = get_token_hash(token_value)
+    stmt = select(models.WebToken).where(models.WebToken.hashed_token == hashed_token_value).limit(1)
+    db_token = await db.scalar(stmt)
+    return db_token
 
 async def authenticate_user(db: AsyncSession, username: str, password: str):
     """Authenthicate a user by their username and password
@@ -95,44 +148,18 @@ async def authenticate_user(db: AsyncSession, username: str, password: str):
         The authenticated user, or False if they could not be
         authenticated
     """
-    user = await get_user(db, username)
+    user = await get_user_by_username(db, username)
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
         return False
     return user
 
-def create_access_token(username: str, scopes: Scopes, expires_delta: timedelta | None = None) -> str:
-    """Create a new access token
 
-    Parameters
-    ----------
-    username : str
-        The name of the user the token belongs to
-    scopes : Scopes
-        The scopes that should be granted to the user
-    expires_delta : timedelta | None, optional
-        How long the token should last for before expiring, by
-        default None
-
-    Returns
-    -------
-    str
-        A new access token
-    """
-    to_encode = {"sub": username, "scopes": scopes.to_list()}
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-async def get_current_user(
-    security_scopes: SecurityScopes,
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: AsyncSession = Depends(get_db),
+async def get_active_token(
+        security_scopes: SecurityScopes,
+        token: Annotated[str, Depends(oauth2_scheme)],
+        db: AsyncSession = Depends(get_db),
 ):
     if security_scopes.scopes:
         authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
@@ -145,21 +172,22 @@ async def get_current_user(
         headers={"WWW-Authenticate": authenticate_value},
     )
 
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        requested_scopes = Scopes.from_list(payload.get("scopes", []))
-    except (JWTError, ValidationError):
+    db_token = await get_token_by_value(db, token)
+    if not db_token:
+        raise credentials_exception
+    
+    if db_token.expires and db_token.expires < datetime.now(tz=timezone.utc):
+        await db.delete(db_token)
+        await db.commit()
         raise credentials_exception
 
-    user = await get_user(db, username)
-    if user is None:
-        raise credentials_exception
-
+    permitted_scopes = Scopes(
+        db_token.scopes
+        if db_token.scopes is not None
+        else db_token.user.scopes
+    )
     required_scopes = Scopes.from_list(security_scopes.scopes)
-    missing_scopes = required_scopes ^ (required_scopes & requested_scopes)
+    missing_scopes = required_scopes ^ (required_scopes & permitted_scopes)
 
     if missing_scopes:
         raise HTTPException(
@@ -168,4 +196,27 @@ async def get_current_user(
             headers={"WWW-Authenticate": authenticate_value},
         )
 
-    return user
+    return db_token
+
+async def get_active_token_of_user(
+        token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token)],
+):
+    if not token.user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token not associated with user",
+        )
+
+    return token
+
+
+async def get_active_token_of_community(
+        token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token)],
+):
+    if token.community_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token not associated with community",
+        )
+
+    return token

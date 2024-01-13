@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import Integer, String, TIMESTAMP, ForeignKey, func, Interval
+from sqlalchemy import Integer, String, TIMESTAMP, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bunker.db import ModelBase

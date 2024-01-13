@@ -1,14 +1,14 @@
 import aiohttp
 from uuid import UUID
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from bunker import schemas
-from bunker.communities import set_battlemetrics_service
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
-from bunker.db import models
+from bunker.db import models, session_factory
 from bunker.services.service import Service
-from bunker.utils import get_player_id_type, PlayerIDType
+from bunker.utils import get_player_id_type
 
 REQUIRED_SCOPES = [
     "ban:create",
@@ -21,14 +21,17 @@ REQUIRED_SCOPES = [
 class BattlemetricsService(Service):
     BASE_URL = "https://api.battlemetrics.com"
 
-    def __init__(self, config: schemas.BattlemetricsServiceConfig) -> None:
-        super().__init__(config, "Battlemetrics")
-        self.config: schemas.BattlemetricsServiceConfig
+    def __init__(self, config: schemas.BattlemetricsServiceConfigParams) -> None:
+        super().__init__(config)
+        self.config: schemas.BattlemetricsServiceConfigParams
 
-    async def save_config(self, db: AsyncSession, community: Optional[models.Community] = None):
-        return await set_battlemetrics_service(db, self.config, community)
+    async def get_instance_name(self) -> str:
+        return "NAME"
 
     async def validate(self, community: schemas.Community):
+        if community.id != self.config.community_id:
+            raise ValueError("Communities do not match")
+
         await self.validate_scopes()
 
         if not self.config.banlist_id:
@@ -36,9 +39,12 @@ class BattlemetricsService(Service):
         else:
             await self.validate_ban_list()        
 
-    async def confirm_report(self, response: schemas.Response):
+    async def ban_player(self, response: schemas.Response):
+        if response.bm_ban_id:
+            return
+
         reason = self._get_ban_reason(response.community)
-        await self.add_ban(
+        ban_id = await self.add_ban(
             identifier=response.player_report.player_id,
             reason=reason,
             note=(
@@ -46,6 +52,26 @@ class BattlemetricsService(Service):
                 f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
             )
         )
+        async with session_factory() as db:
+            stmt = update(schemas.Response).values(bm_ban_id=ban_id).where(
+                models.PlayerReportResponse.pr_id==response.pr_id,
+                models.PlayerReportResponse.community_id==response.community.id
+            )
+            await db.execute(stmt)
+            await db.commit()
+
+    async def unban_player(self, response: schemas.Response):
+        if not response.bm_ban_id:
+            return
+
+        await self.remove_ban(response.bm_ban_id)
+        async with session_factory() as db:
+            stmt = update(schemas.Response).values(bm_ban_id=response.bm_ban_id).where(
+                models.PlayerReportResponse.pr_id==response.pr_id,
+                models.PlayerReportResponse.community_id==response.community.id
+            )
+            await db.execute(stmt)
+            await db.commit()
 
 
     def _get_ban_reason(self, community: schemas.Community) -> str:
@@ -115,7 +141,9 @@ class BattlemetricsService(Service):
             # TODO: Create more specific exception class
             raise Exception("Invalid API key")
 
-    async def add_ban(self, identifier: str, reason: str, note: str):
+    async def add_ban(self, identifier: str, reason: str, note: str) -> str:
+        identifier_type = get_player_id_type(identifier)
+        
         data = {
             "data": {
                 "type": "ban",
@@ -124,7 +152,7 @@ class BattlemetricsService(Service):
                     "expires": None,
                     "identifiers": [
                         {
-                            "type": "steamID",
+                            "type": identifier_type.value,
                             "identifier": identifier,
                             "manual": True
                         }
@@ -143,7 +171,7 @@ class BattlemetricsService(Service):
                     "banList": {
                         "data": {
                             "type": "banList",
-                            "id": self.config.banlist_id
+                            "id": str(self.config.banlist_id)
                         }
                     }
                 }
@@ -151,7 +179,13 @@ class BattlemetricsService(Service):
         }
 
         url = f"{self.BASE_URL}/bans"
-        return await self._make_request(method="POST", url=url, data=data)
+        resp = await self._make_request(method="POST", url=url, data=data)
+
+        return resp["data"]["id"]
+
+    async def remove_ban(self, ban_id: str) -> str:
+        url = f"{self.BASE_URL}/bans/{ban_id}"
+        await self._make_request(method="DELETE", url=url)
 
     async def create_ban_list(self, community: schemas.Community):
         data = {
@@ -186,6 +220,23 @@ class BattlemetricsService(Service):
 
         assert resp["data"]["type"] == "banList"
         self.config.banlist_id = UUID(resp["data"]["id"])
+
+    async def get_ban_list_bans(self) -> list:
+        data = {
+            "filter[banList]": str(self.config.banlist_id),
+            "page[size]": 100,
+            "filter[expired]": "true"
+        }
+
+        url = f"{self.BASE_URL}/bans"
+        resp = await self._make_request(method="GET", url=url, data=data)
+        responses: list = resp["data"]
+
+        # while resp["links"].get("next"):
+        #     resp = await self._make_request(method="GET", url=resp["links"]["next"])
+        #     responses.extend(resp["data"])
+
+        return responses
 
 
     async def validate_ban_list(self):

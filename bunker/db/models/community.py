@@ -1,5 +1,4 @@
 from bunker.db import ModelBase
-import enum
 
 from sqlalchemy import Integer, BigInteger, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -10,8 +9,8 @@ if TYPE_CHECKING:
     from .admin import Admin
     from .report_token import ReportToken
     from .player_report_response import PlayerReportResponse
-    from .battlemetrics_service import BattlemetricsService
-    from .crcon_service import CRCONService
+    from .service import Service
+    from .web_token import WebToken
 
 class Community(ModelBase):
     __tablename__ = "communities"
@@ -28,5 +27,5 @@ class Community(ModelBase):
     owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id], lazy="selectin")
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
-    battlemetrics_service: Mapped[Optional['BattlemetricsService']] = relationship(back_populates="community", lazy="selectin")
-    crcon_service: Mapped[Optional['CRCONService']] = relationship(back_populates="community", lazy="selectin")
+    services: Mapped[list['Service']] = relationship(back_populates="community", lazy="selectin")
+    api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")
