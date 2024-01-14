@@ -1,3 +1,4 @@
+import asyncio
 from functools import partial
 from pydantic import BaseModel
 import re
@@ -11,8 +12,8 @@ from discord.utils import escape_markdown as esc_md
 
 from bunker import schemas
 from bunker.db import models, session_factory
-from bunker.communities import get_admin_by_id, update_service_config, create_service_config
-from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed
+from bunker.communities import get_admin_by_id
+from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed, get_question_embed, only_once
 from bunker.services import Service, BattlemetricsService, CRCONService
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
@@ -26,6 +27,7 @@ class ServiceProperties(BaseModel):
     config_cls: type[schemas.ServiceConfig]
     service_cls: type[Service]
     configure_func: Callable[[schemas.ServiceConfig | None], Coroutine[Any, Any, None]]
+    ask_remove_bans: bool
     name: str
     emoji: str
     url_func: Callable[[schemas.ServiceConfig], str]
@@ -45,6 +47,7 @@ SERVICE_PROPERTIES = {
         config_cls=schemas.BattlemetricsServiceConfig,
         service_cls=BattlemetricsService,
         configure_func=configure_battlemetrics_service,
+        ask_remove_bans=False,
         name="Battlemetrics",
         emoji="🤕",
         url_func=lambda config: f"https://battlemetrics.com/rcon/orgs/{config.organization_id}/edit",
@@ -53,6 +56,7 @@ SERVICE_PROPERTIES = {
         config_cls=schemas.CRCONServiceConfig,
         service_cls=CRCONService,
         configure_func=configure_crcon_service,
+        ask_remove_bans=True,
         name="Community RCON",
         emoji="🤩",
         url_func=lambda config: config.api_url.removesuffix("/api"),
@@ -242,12 +246,22 @@ class ServiceManagementView(View):
             config = properties.config_cls.model_validate(db_config)
             service = properties.service_cls(config)
 
-            self.community = await service.disable(db, community)
+            if properties.ask_remove_bans:
+                try:
+                    remove_bans = await ask_remove_bans(interaction)
+                except asyncio.TimeoutError:
+                    return
 
-        await interaction.response.send_message(embed=get_success_embed(
+            self.community = await service.disable(db, community, remove_bans=remove_bans)
+        
+        embed = get_success_embed(
             f"Disabled {properties.name} service!",
             await get_name_hyperlink(service)
-        ), ephemeral=True)
+        )
+        if interaction.response.is_done():
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         await self.edit()
 
     async def add_service(self, interaction: Interaction):
@@ -267,6 +281,38 @@ class ServiceManagementView(View):
             row=1
         ))
         await interaction.response.edit_message(view=self)
+
+class AskRemoveBansView(View):
+    def __init__(self, fut: asyncio.Future):
+        self.fut = fut
+        self.add_item(CallableButton(partial(self.submit, True), label="Yes", style=ButtonStyle.blurple))
+        self.add_item(CallableButton(partial(self.submit, False), label="No", style=ButtonStyle.blurple))
+
+    @only_once
+    async def submit(self, remove_bans: bool, interaction: Interaction):
+        await interaction.response.defer()
+        self.fut.set_result(remove_bans)
+    
+    async def on_timeout(self):
+        self.fut.set_exception(asyncio.TimeoutError())
+
+async def ask_remove_bans(interaction: Interaction):
+    fut = asyncio.get_running_loop().create_future()
+    view = AskRemoveBansView(fut)
+    await interaction.response.send_message(embed=get_question_embed(
+        "Do you want to unban all players?",
+        (
+            "You are about to disconnect this integration from Bunker, meaning it will no longer"
+            "receive updates from Bunker on what players to ban or unban."
+            "\n\n"
+            "If you want this integration to remove all its Bunker bans, press \"Yes\". If you want"
+            " them to remain in place, press \"No\"."
+            "\n\n"
+            "This decision does not affect any other integrations. Should you choose \"Yes\", you"
+            " will always be able to import your bans again in the future."
+        )
+    ), view=view)
+    return await fut
 
 async def submit_service_config(interaction: Interaction, service: Service):
     # Defer the interaction in case below steps take longer than 3 seconds

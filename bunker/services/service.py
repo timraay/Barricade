@@ -28,7 +28,7 @@ class Service(ABC):
         self.config.enabled = True
         return await self.save_config(db)
 
-    async def disable(self, db: AsyncSession) -> models.Service:
+    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Service:
         """Disable this service.
 
         Updates and saves the config.
@@ -37,6 +37,8 @@ class Service(ABC):
         ----------
         db : AsyncSession
             An asynchronous database session
+        remove_bans : bool
+            Whether to remove all bans
 
         Returns
         -------

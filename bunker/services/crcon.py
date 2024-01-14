@@ -47,7 +47,7 @@ class CRCONService(Service):
         self.config.bunker_api_key_id = db_token.id
         return await super().enable(db)
     
-    async def disable(self, db: AsyncSession) -> models.Service:
+    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Service:
         if self.config.bunker_api_key_id:
             # Delete token
             db_token = await db.get_one(models.WebToken, self.config.bunker_api_key_id)
@@ -59,7 +59,7 @@ class CRCONService(Service):
             try:
                 await self.revoke_api_key(DoDisableBunkerApiIntegrationPayload(
                     community=db_community,
-                    remove_bans=False
+                    remove_bans=remove_bans
                 ))
             except:
                 logging.error("Failed to notify server of disabled CRCON integration")
