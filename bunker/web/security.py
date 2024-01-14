@@ -3,7 +3,7 @@ import hashlib
 from typing import Annotated
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import Depends, HTTPException, status
@@ -27,6 +27,10 @@ ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
+def generate_token_value():
+    return str(uuid.uuid4())
+
 async def create_user(db: AsyncSession, user: web_schemas.WebUserCreateParams) -> models.WebUser:
     db_user = models.WebUser(
         **user.model_dump(exclude={"password"}),
@@ -47,19 +51,22 @@ async def create_token(
     if scopes is None and user is None:
         raise ValueError("\"scopes\" and \"user\" cannot both be None")
     
-    token_value = str(uuid.uuid4())
+    if community:
+        community_id = community.id
+    else:
+        community_id = None
+    
+    token_value = generate_token_value()
     hashed_token_value = get_token_hash(token_value)
-    print(hashed_token_value)
     db_token = models.WebToken(
         hashed_token=hashed_token_value,
         scopes=scopes,
         expires=datetime.now(tz=timezone.utc) + expires_delta,
         user_id=user.id if user else None,
-        community_id=community.id if community else None,
+        community_id=community_id
     )
     db.add(db_token)
     await db.commit()
-    await db.refresh(db_token)
     return db_token, token_value
 
 

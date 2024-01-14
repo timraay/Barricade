@@ -10,6 +10,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .community import Community
     from .player_ban import PlayerBan
+    from .web_token import WebToken
 
 class Service(ModelBase):
     __tablename__ = "services"
@@ -31,3 +32,4 @@ class Service(ModelBase):
 
     community: Mapped['Community'] = relationship(back_populates="services")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="service")
+    bunker_api_key: Mapped[Optional['WebToken']] = relationship(back_populates="services")

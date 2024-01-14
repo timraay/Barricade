@@ -1,19 +1,19 @@
 import aiohttp
+import logging
 import pydantic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.communities import get_community_by_id
 from bunker.db import models
 from bunker.services.service import Service
-from bunker.web.security import create_token
-
+from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
-    api_key: str
     community: schemas.CommunityBase
+    api_key: str
 
 class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
+    community: schemas.CommunityBase
     remove_bans: bool = False
 
 
@@ -22,13 +22,50 @@ class CRCONService(Service):
         super().__init__(config)
         self.config: schemas.CRCONServiceConfigParams
 
-    async def enable(self, db: AsyncSession, community: models.Community | None = None) -> models.Community:
-        if not community:
-            community = await get_community_by_id(db, self.config.community_id)
-        
-        # db_token, token = await create_token(db, scopes=0, community=community, expires_delta=None)
+    async def enable(self, db: AsyncSession):
+        # Generate token
+        token_value = generate_token_value()
+        hashed_token_value = get_token_hash(token_value)
+        db_token = models.WebToken(
+            hashed_token=hashed_token_value,
+            scopes=0,
+            expires=None,
+            user_id=None,
+            community_id=self.config.community_id
+        )
+        db.add(db_token)
+        await db.flush()
+        await db.refresh(db_token)
 
-        return await super().enable(db, community)
+        # Submit token
+        await self.submit_api_key(self, DoEnableBunkerApiIntegrationPayload(
+            community=db_token.community,
+            api_key=token_value,
+        ))
+
+        # Enable and save
+        self.config.bunker_api_key_id = db_token.id
+        return await super().enable(db)
+    
+    async def disable(self, db: AsyncSession) -> models.Service:
+        if self.config.bunker_api_key_id:
+            # Delete token
+            db_token = await db.get_one(models.WebToken, self.config.bunker_api_key_id)
+            db_community = db_token.community
+            db.delete(db_token)
+            await db.flush()
+
+            # Notify CRCON
+            try:
+                await self.revoke_api_key(DoDisableBunkerApiIntegrationPayload(
+                    community=db_community,
+                    remove_bans=False
+                ))
+            except:
+                logging.error("Failed to notify server of disabled CRCON integration")
+
+        # Disable and save
+        return await super().disable(db)
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:
@@ -98,10 +135,9 @@ class CRCONService(Service):
         elif is_auth is not True:
             raise ValueError("Received unexpected API response")
 
-    async def submit_api_key(self):
-        # TODO: Generate actual key
-        api_key = "gabagool"
+    async def submit_api_key(self, data: DoEnableBunkerApiIntegrationPayload):
+        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data)
+    
+    async def revoke_api_key(self, data: DoDisableBunkerApiIntegrationPayload):
+        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data)
 
-        data = DoEnableBunkerApiIntegrationPayload
-
-        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration")

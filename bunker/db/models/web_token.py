@@ -9,6 +9,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .community import Community
     from .web_user import WebUser
+    from .service import Service
 
 class WebToken(ModelBase):
     __tablename__ = "web_tokens"
@@ -22,4 +23,5 @@ class WebToken(ModelBase):
     community_id: Mapped[Optional[int]] = mapped_column(ForeignKey("communities.id"), nullable=True)
 
     user: Mapped[Optional['WebUser']] = relationship(back_populates="tokens", lazy="selectin")
-    community: Mapped[Optional['Community']] = relationship(back_populates="api_keys")
+    community: Mapped[Optional['Community']] = relationship(back_populates="api_keys", lazy="selectin")
+    services: Mapped[list['Service']] = relationship(back_populates="bunker_api_key")
