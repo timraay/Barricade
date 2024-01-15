@@ -8,6 +8,6 @@ class ReportRejectReason(StrEnum):
     INSUFFICIENT = "Insufficient"
     INCONCLUSIVE = "Inconclusive"
 
-class ServiceType(StrEnum):
+class IntegrationType(StrEnum):
     BATTLEMETRICS = "battlemetrics"
     COMMUNITY_RCON = "crcon"

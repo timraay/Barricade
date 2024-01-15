@@ -54,10 +54,10 @@ PlayerReportResponses (
   community_id  Integer (PK, FK -> Communities.id)
 )
 
-Services (
+Integrations (
   id            Integer (PK)
   community_id  Integer (FK -> Communities.id)
-  service_type  String
+  integration_type  String
   api_key       String
   api_url       String
 )

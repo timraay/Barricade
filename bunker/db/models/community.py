@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .admin import Admin
     from .report_token import ReportToken
     from .player_report_response import PlayerReportResponse
-    from .service import Service
+    from .integration import Integration
     from .web_token import WebToken
 
 class Community(ModelBase):
@@ -27,5 +27,5 @@ class Community(ModelBase):
     owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id], lazy="selectin")
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
-    services: Mapped[list['Service']] = relationship(back_populates="community", lazy="selectin")
+    integrations: Mapped[list['Integration']] = relationship(back_populates="community", lazy="selectin")
     api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")

@@ -284,32 +284,32 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     return True
 
 
-async def create_service_config(
+async def create_integration_config(
         db: AsyncSession,
-        params: schemas.ServiceConfigBase,
+        params: schemas.IntegrationConfigBase,
 ):
-    db_service = models.Service(
+    db_integration = models.Integration(
         **params.model_dump(),
-        service_type=params.service_type # may be ClassVar
+        integration_type=params.integration_type # may be ClassVar
     )
-    db.add(db_service)
+    db.add(db_integration)
     await db.commit()
-    # await db.refresh(db_service)
-    return db_service
+    # await db.refresh(db_integration)
+    return db_integration
 
-async def update_service_config(
+async def update_integration_config(
         db: AsyncSession,
-        config: schemas.ServiceConfig,
+        config: schemas.IntegrationConfig,
 ):
-    stmt = update(models.Service).values(
+    stmt = update(models.Integration).values(
         **config.model_dump(),
-        service_type=config.service_type # may be ClassVar
+        integration_type=config.integration_type # may be ClassVar
     ).where(
-        models.Service.id == config.id
-    ).returning(models.Service)
-    db_service = await db.scalar(stmt)
+        models.Integration.id == config.id
+    ).returning(models.Integration)
+    db_integration = await db.scalar(stmt)
 
-    if not db_service:
-        raise NotFoundError("Service does not exist")
+    if not db_integration:
+        raise NotFoundError("Integration does not exist")
     
-    return db_service
+    return db_integration

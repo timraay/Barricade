@@ -4,7 +4,7 @@ from typing import Optional, ClassVar
 from uuid import UUID
 
 from bunker.db import models
-from bunker.enums import ReportRejectReason, ServiceType
+from bunker.enums import ReportRejectReason, IntegrationType
 
 class AdminBase(BaseModel):
     discord_id: int
@@ -173,38 +173,38 @@ class Response(PendingResponse):
         from_attributes = True
 
 
-class ServiceConfigBase(BaseModel):
+class IntegrationConfigBase(BaseModel):
     id: int | None
 
     community_id: int
-    service_type: ServiceType
+    integration_type: IntegrationType
     enabled: bool = True
 
     api_key: str
     api_url: str
 
-class ServiceConfig(ServiceConfigBase):
+class IntegrationConfig(IntegrationConfigBase):
     id: int
 
     class Config:
         from_attributes = True
 
-class BattlemetricsServiceConfigParams(ServiceConfigBase):
+class BattlemetricsIntegrationConfigParams(IntegrationConfigBase):
     id: int | None = None
-    service_type: ClassVar[ServiceType] = ServiceType.BATTLEMETRICS
+    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
     api_url: str = "https://api.battlemetrics.com"
 
     organization_id: str
     banlist_id: Optional[UUID] = None
 
-class BattlemetricsServiceConfig(ServiceConfig, BattlemetricsServiceConfigParams):
+class BattlemetricsIntegrationConfig(IntegrationConfig, BattlemetricsIntegrationConfigParams):
     pass
 
-class CRCONServiceConfigParams(ServiceConfigBase):
+class CRCONIntegrationConfigParams(IntegrationConfigBase):
     id: int | None = None
-    service_type: ClassVar[ServiceType] = ServiceType.COMMUNITY_RCON
+    integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
 
     bunker_api_key_id: int
 
-class CRCONServiceConfig(ServiceConfig, CRCONServiceConfigParams):
+class CRCONIntegrationConfig(IntegrationConfig, CRCONIntegrationConfigParams):
     pass

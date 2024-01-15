@@ -1,17 +1,16 @@
 from abc import ABC, abstractmethod
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from bunker import schemas
-from bunker.communities import create_service_config, update_service_config
+from bunker.communities import create_integration_config, update_integration_config
 from bunker.db import models
 
-class Service(ABC):
-    def __init__(self, config: schemas.ServiceConfigBase):
+class Integration(ABC):
+    def __init__(self, config: schemas.IntegrationConfigBase):
         self.config = config
     
-    async def enable(self, db: AsyncSession) -> models.Service:
-        """Enable this service.
+    async def enable(self, db: AsyncSession) -> models.Integration:
+        """Enable this integration.
 
         Updates and saves the config.
 
@@ -22,14 +21,14 @@ class Service(ABC):
 
         Returns
         -------
-        models.Service
-            The service config record
+        models.Integration
+            The integration config record
         """
         self.config.enabled = True
         return await self.save_config(db)
 
-    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Service:
-        """Disable this service.
+    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Integration:
+        """Disable this integration.
 
         Updates and saves the config.
 
@@ -42,14 +41,14 @@ class Service(ABC):
 
         Returns
         -------
-        models.Service
-            The service config record
+        models.Integration
+            The integration config record
         """
         self.config.enabled = False
         return await self.save_config(db)
 
-    async def save_config(self, db: AsyncSession) -> models.Service:
-        """Save the service's config.
+    async def save_config(self, db: AsyncSession) -> models.Integration:
+        """Save the integration's config.
 
         Parameters
         ----------
@@ -58,18 +57,18 @@ class Service(ABC):
 
         Returns
         -------
-        models.Service
-            The service config record
+        models.Integration
+            The integration config record
         """
         if self.config.id is None:
-            return await create_service_config(db, self.config)
+            return await create_integration_config(db, self.config)
         else:
-            return await update_service_config(db, self.config)
+            return await update_integration_config(db, self.config)
 
     @abstractmethod
     async def get_instance_name(self) -> str:
         """Fetch the name of the specific instance that this
-        service connects to. Ideally this is cached.
+        integration connects to. Ideally this is cached.
 
         Returns
         -------
@@ -80,12 +79,12 @@ class Service(ABC):
 
     @abstractmethod
     async def validate(self, community: schemas.Community):
-        """Validate the service's config.
+        """Validate the integration's config.
 
         Parameters
         ----------
         community : models.Community
-            The community owning this service
+            The community owning this integration
 
         Raises
         ------
@@ -96,7 +95,7 @@ class Service(ABC):
 
     @abstractmethod
     async def ban_player(self, response: schemas.Response):
-        """Instruct the remote service to ban a player.
+        """Instruct the remote integration to ban a player.
 
         Parameters
         ----------
@@ -112,7 +111,7 @@ class Service(ABC):
 
     @abstractmethod
     async def unban_player(self, response: schemas.Response):
-        """Instruct the remote service to unban a player, should
+        """Instruct the remote integration to unban a player, should
         they be banned.
 
         Parameters

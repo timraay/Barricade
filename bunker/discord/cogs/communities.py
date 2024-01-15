@@ -16,7 +16,7 @@ from bunker.discord.views.admin_confirmation import (
     OwnershipTransferConfirmationView,
     LeaveCommunityConfirmationView
 )
-from bunker.discord.views.service_management import ServiceManagementView
+from bunker.discord.views.integration_management import IntegrationManagementView
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -159,10 +159,10 @@ class CommunitiesCog(commands.Cog):
             await view.send(interaction)
     
 
-    @app_commands.command(name="manage-services", description="Enable, disable, or configure your services")
+    @app_commands.command(name="manage-integrations", description="Enable, disable, or configure your integrations")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
-    async def manage_services(self, interaction: Interaction):
+    async def manage_integrations(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user owns a community
             owner = await get_admin_by_id(db, interaction.user.id)
@@ -171,7 +171,7 @@ class CommunitiesCog(commands.Cog):
                     "You need to be a community owner to do this!"
                 )
             
-            view = ServiceManagementView(owner.community)
+            view = IntegrationManagementView(owner.community)
             await view.send(interaction)
 
 

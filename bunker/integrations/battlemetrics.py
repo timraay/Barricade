@@ -7,7 +7,7 @@ from typing import Optional
 from bunker import schemas
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
 from bunker.db import models, session_factory
-from bunker.services.service import Service
+from bunker.integrations.integration import Integration
 from bunker.utils import get_player_id_type
 
 REQUIRED_SCOPES = [
@@ -18,12 +18,12 @@ REQUIRED_SCOPES = [
     "ban-list:read"
 ]
 
-class BattlemetricsService(Service):
+class BattlemetricsIntegration(Integration):
     BASE_URL = "https://api.battlemetrics.com"
 
-    def __init__(self, config: schemas.BattlemetricsServiceConfigParams) -> None:
+    def __init__(self, config: schemas.BattlemetricsIntegrationConfigParams) -> None:
         super().__init__(config)
-        self.config: schemas.BattlemetricsServiceConfigParams
+        self.config: schemas.BattlemetricsIntegrationConfigParams
 
     async def get_instance_name(self) -> str:
         return "NAME"

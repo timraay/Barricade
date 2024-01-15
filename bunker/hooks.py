@@ -7,9 +7,9 @@ from bunker.utils import log_task_error
 
 class EventHooks(Enum):
     report_create: list[Callable[[schemas.Report, schemas.ReportCreateParams], Coroutine]] = list()
-    service_add: list[Callable[[Any], Coroutine]] = list()
-    service_update: list[Callable[[Any], Coroutine]] = list()
-    service_remove: list[Callable[[Any], Coroutine]] = list()
+    integration_add: list[Callable[[Any], Coroutine]] = list()
+    integration_update: list[Callable[[Any], Coroutine]] = list()
+    integration_remove: list[Callable[[Any], Coroutine]] = list()
 
     @staticmethod
     def _invoke(hook_type: 'EventHooks', *args):
@@ -25,16 +25,16 @@ class EventHooks(Enum):
         EventHooks._invoke(EventHooks.report_create, report, params)
 
     @staticmethod
-    def invoke_service_add(service):
-        EventHooks._invoke(EventHooks.service_add, service)
+    def invoke_integration_add(integration):
+        EventHooks._invoke(EventHooks.integration_add, integration)
 
     @staticmethod
-    def invoke_service_update(service):
-        EventHooks._invoke(EventHooks.service_update, service)
+    def invoke_integration_update(integration):
+        EventHooks._invoke(EventHooks.integration_update, integration)
 
     @staticmethod
-    def invoke_service_remove(service):
-        EventHooks._invoke(EventHooks.service_remove, service)
+    def invoke_integration_remove(integration):
+        EventHooks._invoke(EventHooks.integration_remove, integration)
 
 def add_hook(hook_type: EventHooks):
     def _add_hook_inner(func: Callable[[Any], Coroutine]):

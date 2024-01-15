@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
 from bunker.db import models
-from bunker.services.service import Service
+from bunker.integrations.integration import Integration
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
@@ -17,10 +17,10 @@ class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
     remove_bans: bool = False
 
 
-class CRCONService(Service):
-    def __init__(self, config: schemas.CRCONServiceConfigParams) -> None:
+class CRCONIntegration(Integration):
+    def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
-        self.config: schemas.CRCONServiceConfigParams
+        self.config: schemas.CRCONIntegrationConfigParams
 
     async def enable(self, db: AsyncSession):
         # Generate token
@@ -47,7 +47,7 @@ class CRCONService(Service):
         self.config.bunker_api_key_id = db_token.id
         return await super().enable(db)
     
-    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Service:
+    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Integration:
         if self.config.bunker_api_key_id:
             # Delete token
             db_token = await db.get_one(models.WebToken, self.config.bunker_api_key_id)

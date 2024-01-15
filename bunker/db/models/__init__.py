@@ -8,6 +8,6 @@ from bunker.db.models.report_attachment import ReportAttachment
 from bunker.db.models.report_reason import ReportReason
 from bunker.db.models.report_token import ReportToken
 from bunker.db.models.report import Report
-from bunker.db.models.service import Service
+from bunker.db.models.integration import Integration
 from bunker.db.models.web_token import WebToken
 from bunker.db.models.web_user import WebUser
