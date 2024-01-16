@@ -1,7 +1,7 @@
 from bunker.db import ModelBase
 from bunker.enums import ReportRejectReason
 
-from sqlalchemy import Integer, ForeignKey, Enum
+from sqlalchemy import Integer, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from typing import Optional, TYPE_CHECKING
@@ -23,3 +23,7 @@ class PlayerReportResponse(ModelBase):
     player_report: Mapped['PlayerReport'] = relationship(back_populates="responses", lazy="selectin")
     community: Mapped['Community'] = relationship(back_populates="responses", lazy="selectin")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="response")
+
+    __table_args__ = (
+        UniqueConstraint('pr_id', 'community_id'),
+    )

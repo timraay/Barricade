@@ -1,4 +1,5 @@
 import asyncio
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
@@ -8,7 +9,11 @@ from bunker.hooks import EventHooks, add_hook
 from bunker.integrations import BattlemetricsIntegration, CRCONIntegration
 
 async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParams):
-    db_prr = await db.get(models.PlayerReportResponse, (prr.pr_id, prr.community_id))
+    stmt = select(models.PlayerReportResponse).where(
+        models.PlayerReportResponse.pr_id == prr.pr_id,
+        models.PlayerReportResponse.community_id == prr.community_id,
+    ).limit(1)
+    db_prr = await db.scalar(stmt)
 
     if not db_prr:
         db_prr = models.PlayerReportResponse(**prr.model_dump())
