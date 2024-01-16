@@ -5,7 +5,7 @@ from uuid import UUID
 from bunker import schemas
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
 from bunker.db import session_factory
-from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError
+from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
 from bunker.integrations.integration import Integration
 from bunker.schemas import Response
 from bunker.utils import get_player_id_type
@@ -30,14 +30,17 @@ class BattlemetricsIntegration(Integration):
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:
-            raise ValueError("Communities do not match")
+            raise IntegrationValidationError("Communities do not match")
 
         await self.validate_scopes()
 
         if not self.config.banlist_id:
-            await self.create_ban_list(community)
+            try:
+                await self.create_ban_list(community)
+            except Exception as e:
+                raise IntegrationValidationError("Failed to create ban list") from e
         else:
-            await self.validate_ban_list()        
+            await self.validate_ban_list()
 
     async def ban_player(self, response: schemas.Response):
         async with session_factory() as db:
@@ -285,14 +288,20 @@ class BattlemetricsIntegration(Integration):
         data = {"include": "owner"}
 
         url = f"{self.BASE_URL}/ban-lists/{self.config.banlist_id}"
-        resp = await self._make_request(method="GET", url=url, data=data)
+        try:
+            resp = await self._make_request(method="GET", url=url, data=data)
+        except Exception as e:
+            raise IntegrationValidationError("Failed to retrieve ban list") from e
 
-        # TODO: Raise properly
         assert resp["data"]["id"] == str(self.config.banlist_id)
         assert resp["data"]["relationships"]["owner"]["data"]["id"] == self.config.organization_id
 
     async def validate_scopes(self):
-        scopes = await self.get_api_scopes()
+        try:
+            scopes = await self.get_api_scopes()
+        except Exception as e:
+            raise IntegrationValidationError("Failed to retrieve API scopes") from e
+
         required_scopes = {s: False for s in REQUIRED_SCOPES}
         for scope in scopes:
             if scope == "ban" or scope == "ban-list":
@@ -303,4 +312,7 @@ class BattlemetricsIntegration(Integration):
                 required_scopes[scope] = True
 
         # TODO: Raise if missing
-        return all(required_scopes.values())
+        if not all(required_scopes.values()):
+            raise IntegrationValidationError("Missing scopes: %s" % ", ".join(
+                [k for k, v in required_scopes.items() if v is False]
+            )) 

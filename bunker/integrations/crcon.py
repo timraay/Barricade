@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
 from bunker.db import models, session_factory
-from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, AlreadyBannedError
+from bunker.exceptions import (
+    IntegrationBanError, IntegrationBulkBanError, NotFoundError,
+    AlreadyBannedError, IntegrationValidationError
+)
 from bunker.integrations.integration import Integration
 from bunker.schemas import Response
 from bunker.web.security import generate_token_value, get_token_hash
@@ -85,10 +88,10 @@ class CRCONIntegration(Integration):
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:
-            raise ValueError("Communities do not match")
+            raise IntegrationValidationError("Communities do not match")
 
         if not self.config.api_url.endswith("/api"):
-            raise ValueError("API URL does not end with \"/api\"")
+            raise IntegrationValidationError("API URL does not end with \"/api\"")
         
         await self.validate_api_access()
 
@@ -200,12 +203,15 @@ class CRCONIntegration(Integration):
         return response
     
     async def validate_api_access(self):
-        resp = await self._make_request(method="GET", endpoint="/is_logged_in")
+        try:
+            resp = await self._make_request(method="GET", endpoint="/is_logged_in")
+        except Exception as e:
+            raise IntegrationValidationError("Failed to connect") from e
         is_auth = resp.get("authenticated")
         if is_auth is False:
-            raise ValueError("Invalid API key")
+            raise IntegrationValidationError("Invalid API key")
         elif is_auth is not True:
-            raise ValueError("Received unexpected API response")
+            raise IntegrationValidationError("Received unexpected API response")
 
     async def submit_api_key(self, data: DoEnableBunkerApiIntegrationPayload):
         await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data.model_dump())
