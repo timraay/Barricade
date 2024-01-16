@@ -6,6 +6,44 @@ from uuid import UUID
 from bunker.db import models
 from bunker.enums import ReportRejectReason, IntegrationType
 
+
+class IntegrationConfigBase(BaseModel):
+    id: int | None
+
+    community_id: int
+    integration_type: IntegrationType
+    enabled: bool = True
+
+    api_key: str
+    api_url: str
+
+class IntegrationConfig(IntegrationConfigBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class BattlemetricsIntegrationConfigParams(IntegrationConfigBase):
+    id: int | None = None
+    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
+    api_url: str = "https://api.battlemetrics.com"
+
+    organization_id: str
+    banlist_id: Optional[UUID] = None
+
+class BattlemetricsIntegrationConfig(IntegrationConfig, BattlemetricsIntegrationConfigParams):
+    pass
+
+class CRCONIntegrationConfigParams(IntegrationConfigBase):
+    id: int | None = None
+    integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
+
+    bunker_api_key_id: int
+
+class CRCONIntegrationConfig(IntegrationConfig, CRCONIntegrationConfigParams):
+    pass
+
+
 class AdminBase(BaseModel):
     discord_id: int
     community_id: Optional[int]
@@ -37,6 +75,9 @@ class Community(CommunityBase):
     
     class Config:
         from_attributes = True
+
+class CommunityWithIntegrations(Community):
+    integrations: list[BattlemetricsIntegrationConfig | CRCONIntegrationConfig]
 
 
 class TokenBase(BaseModel):
@@ -162,7 +203,7 @@ class PendingResponse(ResponseBase):
     banned: Optional[bool] = None
 
     player_report: ResponsePlayer
-    community: Community
+    community: CommunityWithIntegrations
 
 class Response(PendingResponse):
     pr_id: int
@@ -171,40 +212,3 @@ class Response(PendingResponse):
 
     class Config:
         from_attributes = True
-
-
-class IntegrationConfigBase(BaseModel):
-    id: int | None
-
-    community_id: int
-    integration_type: IntegrationType
-    enabled: bool = True
-
-    api_key: str
-    api_url: str
-
-class IntegrationConfig(IntegrationConfigBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-class BattlemetricsIntegrationConfigParams(IntegrationConfigBase):
-    id: int | None = None
-    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
-    api_url: str = "https://api.battlemetrics.com"
-
-    organization_id: str
-    banlist_id: Optional[UUID] = None
-
-class BattlemetricsIntegrationConfig(IntegrationConfig, BattlemetricsIntegrationConfigParams):
-    pass
-
-class CRCONIntegrationConfigParams(IntegrationConfigBase):
-    id: int | None = None
-    integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
-
-    bunker_api_key_id: int
-
-class CRCONIntegrationConfig(IntegrationConfig, CRCONIntegrationConfigParams):
-    pass

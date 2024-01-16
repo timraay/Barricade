@@ -15,7 +15,8 @@ from bunker.communities import get_community_by_id
 from bunker.discord.utils import handle_error
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.enums import ReportRejectReason
-from bunker.reports import get_report_by_id, set_report_response
+from bunker.reports import get_report_by_id
+from bunker.responses import set_report_response
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot

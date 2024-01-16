@@ -1,6 +1,6 @@
 import secrets
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -77,22 +77,6 @@ async def forward_report_to_communities(report: schemas.Report, params: schemas.
             if embed is None:
                 embed = await bot.get_report_embed(params)
             await bot.forward_report_to_community(report, community, embed)
-
-async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParams):
-    db_prr = await db.get(models.PlayerReportResponse, (prr.pr_id, prr.community_id))
-
-    if not db_prr:
-        db_prr = models.PlayerReportResponse(**prr.model_dump())
-        db.add(db_prr)
-        await db.commit()
-        await db.refresh(db_prr)
-    
-    else:
-        db_prr.banned = prr.banned
-        db_prr.reject_reason = prr.reject_reason
-        await db.commit()
-
-    return db_prr
 
 async def get_player(db: AsyncSession, player_id: str):
     return await db.get(models.Player, player_id)

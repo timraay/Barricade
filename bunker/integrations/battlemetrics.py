@@ -1,8 +1,6 @@
 import aiohttp
 from uuid import UUID
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from bunker import schemas
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
