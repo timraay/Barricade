@@ -117,7 +117,6 @@ class ReportCreateParams(ReportBase):
     players: list[ReportPlayerCreateParams]
     attachment_urls: list[str] = Field(default_factory=list)
 
-
 class ReportReason(BaseModel):
     report_id: int
     reason: str
@@ -125,11 +124,16 @@ class ReportReason(BaseModel):
     class Config:
         from_attributes = True
 
+class Player(BaseModel):
+    id: str
+    bm_rcon_url: str | None
+
 class PlayerReport(BaseModel):
     id: int
     player_id: str
     report_id: int
     player_name: str
+    player: Player
 
     class Config:
         from_attributes = True
@@ -209,7 +213,15 @@ class Response(PendingResponse):
     id: int
     pr_id: int
     banned: bool
-    bm_ban_id: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PlayerBan(BaseModel):
+    prr_id: int
+    integration_id: int
+    remote_id: str
 
     class Config:
         from_attributes = True

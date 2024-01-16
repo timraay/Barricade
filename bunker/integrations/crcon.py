@@ -1,3 +1,4 @@
+from typing import Sequence
 import aiohttp
 import logging
 import pydantic
@@ -5,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
 from bunker.db import models, session_factory
+from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, AlreadyBannedError
 from bunker.integrations.integration import Integration
+from bunker.schemas import Response
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
@@ -18,10 +21,17 @@ class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
 
 class DoAddBanPayload(pydantic.BaseModel):
     player_id: str
+    player_name: str
     reason: str
 
 class DoRemoveBanPayload(pydantic.BaseModel):
     player_id: str
+
+class DoAddMultipleBansPayload(pydantic.BaseModel):
+    bans: list[DoAddBanPayload]
+
+class DoRemoveMultipleBansPayload(pydantic.BaseModel):
+    player_ids: list[str]
 
 class CRCONIntegration(Integration):
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
@@ -83,19 +93,66 @@ class CRCONIntegration(Integration):
         await self.validate_api_access()
 
     async def ban_player(self, response: schemas.Response):
-        await self.add_ban(DoAddBanPayload(
-            player_id=response.player_report.player_id,
-            reason=self.get_ban_reason(response.community)
-        ))
         async with session_factory() as db:
+            db_ban = await self.get_ban(db, response)
+            if db_ban is not None:
+                raise AlreadyBannedError(response, "Player is already banned")
+
+            try:
+                await self.add_ban(DoAddBanPayload(
+                    player_id=response.player_report.player_id,
+                    reason=self.get_ban_reason(response.community)
+                ))
+            except Exception as e:
+                raise IntegrationBanError(response, "Failed to ban player") from e
+
             await self.set_ban_id(db, response, response.player_report.player_id)
 
     async def unban_player(self, response: schemas.Response):
-        await self.remove_ban(DoRemoveBanPayload(
-            player_id=response.player_report.player_id,
-        ))
         async with session_factory() as db:
-            await self.discard_ban_id(db, response)
+            db_ban = await self.get_ban(db, response)
+            if db_ban is None:
+                raise NotFoundError("Ban does not exist")
+
+            try:
+                await self.remove_ban(DoRemoveBanPayload(
+                    player_id=response.player_report.player_id,
+                ))
+            except Exception as e:
+                raise IntegrationBanError(response, "Failed to unban player") from e
+
+            await db.delete(db_ban)
+            await db.commit()
+    
+    async def bulk_ban_players(self, responses: Sequence[Response]):
+        try:
+            await self.add_multiple_bans(DoAddMultipleBansPayload(bans=[
+                DoAddBanPayload(
+                    player_id=response.player_report.player_id,
+                    reason=self.get_ban_reason(response.community)
+                )
+                for response in responses
+            ]))
+        except Exception as e:
+            raise IntegrationBulkBanError(responses, "Failed to ban players") from e
+
+        async with session_factory() as db:
+            await self.set_multiple_ban_ids(db, [
+                (response, response.player_report.player_id)
+                for response in responses
+            ])
+
+    async def bulk_unban_players(self, responses: Sequence[Response]):
+        try:
+            await self.remove_multiple_bans(DoRemoveMultipleBansPayload(player_ids=[
+                response.player_report.player_id
+                for response in responses
+            ]))
+        except Exception as e:
+            raise IntegrationBulkBanError(responses, "Failed to unban players") from e
+
+        async with session_factory() as db:
+            await self.discard_multiple_ban_ids(db, responses)
 
     
     async def _make_request(self, method: str, endpoint: str, data: dict = None) -> dict:
@@ -161,3 +218,9 @@ class CRCONIntegration(Integration):
 
     async def remove_ban(self, data: DoRemoveBanPayload):
         await self._make_request(method="DELETE", endpoint="/do_remove_bunker_blacklist", data=data.model_dump())
+
+    async def add_multiple_bans(self, data: DoAddMultipleBansPayload):
+        await self._make_request(method="POST", endpoint="/do_add_multiple_bunker_blacklist", data=data.model_dump())
+
+    async def remove_multiple_bans(self, data: DoRemoveMultipleBansPayload):
+        await self._make_request(method="DELETE", endpoint="/do_remove_multiple_bunker_blacklist", data=data.model_dump())

@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
+from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Sequence
 
 from bunker import schemas
 from bunker.communities import create_integration_config, update_integration_config
-from bunker.exceptions import NotFoundError
+from bunker.exceptions import NotFoundError, AlreadyBannedError
 from bunker.db import models
 
 class Integration(ABC):
@@ -66,21 +70,121 @@ class Integration(ABC):
         else:
             return await update_integration_config(db, self.config)
     
+    async def get_ban(self, db: AsyncSession, response: schemas.Response) -> models.PlayerBan | None:
+        """Get a player ban.
+
+        Parameters
+        ----------
+        db : AsyncSession
+            An asynchronous database session
+        response : schemas.Response
+            A player report response
+
+        Returns
+        -------
+        models.PlayerBan | None
+            This integration's ban associated with the report, if any
+        """
+        return await db.get(models.PlayerBan, (response.id, self.config.id))
+
     async def set_ban_id(self, db: AsyncSession, response: schemas.Response, ban_id: str) -> models.PlayerBan:
+        """Create a ban record
+
+        Parameters
+        ----------
+        db : AsyncSession
+            An asynchronous database session
+        response : schemas.Response
+            A player report response
+        ban_id : str
+            The ban identifier
+
+        Returns
+        -------
+        models.PlayerBan
+            The ban record
+
+        Raises
+        ------
+        AlreadyBannedError
+            The player is already banned
+        """
         db_ban = models.PlayerBan(
             prr_id=response.id,
             integration_id=self.config.id,
             remote_id=ban_id,
         )
         db.add(db_ban)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            raise AlreadyBannedError(response, "Player is already banned")
         return db_ban
     
+    async def set_multiple_ban_ids(self, db: AsyncSession, responses_banids: Sequence[tuple[schemas.Response, str]]):
+        """Create multiple ban records.
+
+        In case a player is already banned and a conflict
+        arises, it is silently ignored.
+
+        Parameters
+        ----------
+        db : AsyncSession
+            An asynchronous database session
+        responses_banids : Sequence[tuple[schemas.Response, str]]
+            A sequence of player report responses with their
+            associated ban identifier.
+        """
+        stmt = insert(models.PlayerBan).values([
+            schemas.PlayerBan(
+                prr_id=response.id,
+                integration_id=self.config.id,
+                remote_id=ban_id,
+            ).model_dump()
+            for response, ban_id in responses_banids
+        ]).on_conflict_do_nothing(
+            index_elements=["prr_id", "integration_id"]
+        )
+        await db.execute(stmt)
+        await db.commit()
+    
     async def discard_ban_id(self, db: AsyncSession, response: schemas.Response):
-        db_ban = await db.get(models.PlayerBan, (response.pr_id, self.config.id))
+        """Delete a ban record
+
+        Parameters
+        ----------
+        db : AsyncSession
+            An asynchronous database session
+        response : schemas.Response
+            A player report response
+
+        Raises
+        ------
+        NotFoundError
+            No ban record could be found
+        """
+        db_ban = await self.get_ban(db, response)
         if not db_ban:
             raise NotFoundError("Ban does not exist")
         await db.delete(db_ban)
+        await db.commit()
+
+    async def discard_multiple_ban_ids(self, db: AsyncSession, responses: Sequence[schemas.Response]):
+        """Deletes all ban records that are associated
+        with any of the given responses
+
+        Parameters
+        ----------
+        db : AsyncSession
+            An asynchronous database session
+        responses : Sequence[schemas.Response]
+            A sequence of player report responses
+        """
+        stmt = delete(models.PlayerBan).where(
+            models.PlayerBan.prr_id.in_([response.id for response in responses]),
+            models.PlayerBan.integration_id==self.config.id,
+        )
+        await db.execute(stmt)
         await db.commit()
     
     def get_ban_reason(self, community: schemas.Community) -> str:
@@ -112,7 +216,7 @@ class Integration(ABC):
 
         Raises
         ------
-        Exception
+        IntegrationValidationError
             A config value is incorrect or outdated
         """
         raise NotImplementedError
@@ -128,7 +232,7 @@ class Integration(ABC):
 
         Raises
         ------
-        Exception
+        IntegrationBanError
             Failed to ban the player.
         """
         raise NotImplementedError
@@ -145,7 +249,49 @@ class Integration(ABC):
 
         Raises
         ------
-        Exception
+        NotFoundError
+            The player is not known to be banned.
+        IntegrationBanError
             Failed to unban the player.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
+        """Instruct the remote integration to ban multiple players.
+        Depending on the implementation this may take a while.
+
+        Players that are already banned will be silently ignored, but
+        should optimally be left out to avoid unnecessary requests.
+
+        Parameters
+        ----------
+        response : Sequence[schemas.Response]
+            The community's responses to all rapported players
+
+        Raises
+        ------
+        IntegrationBulkBanError
+            Failed to ban one or more players.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def bulk_unban_players(self, responses: Sequence[schemas.Response]):
+        """Instruct the remote integration to unban multiple players.
+        Depending on the implementation this may take a while.
+
+        Players that are not banned will be silently ignored, but should
+        optimally be left out to avoid unnecessary requests.
+
+        Parameters
+        ----------
+        response : Sequence[schemas.Response]
+            The community's responses to all rapported players
+
+        Raises
+        ------
+        IntegrationBulkBanError
+            Failed to unban one or more players.
         """
         raise NotImplementedError

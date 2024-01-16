@@ -1,11 +1,13 @@
+from typing import Sequence
 import aiohttp
 from uuid import UUID
-from sqlalchemy import update
 
 from bunker import schemas
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
-from bunker.db import models, session_factory
+from bunker.db import session_factory
+from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError
 from bunker.integrations.integration import Integration
+from bunker.schemas import Response
 from bunker.utils import get_player_id_type
 
 REQUIRED_SCOPES = [
@@ -38,28 +40,86 @@ class BattlemetricsIntegration(Integration):
             await self.validate_ban_list()        
 
     async def ban_player(self, response: schemas.Response):
-        if response.bm_ban_id:
-            return
-
-        reason = self.get_ban_reason(response.community)
-        ban_id = await self.add_ban(
-            identifier=response.player_report.player_id,
-            reason=reason,
-            note=(
-                f"Originally reported for {', '.join([reason.reason for reason in response.player_report.report.reasons])}\n"
-                f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
-            )
-        )
         async with session_factory() as db:
+            db_ban = await self.get_ban(db, response)
+            if db_ban is not None:
+                raise IntegrationBanError(response, "Player is already banned")
+
+            reason = self.get_ban_reason(response.community)
+            ban_id = await self.add_ban(
+                identifier=response.player_report.player_id,
+                reason=reason,
+                note=(
+                    f"Originally reported for {', '.join([reason.reason for reason in response.player_report.report.reasons])}\n"
+                    f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
+                )
+            )
             await self.set_ban_id(db, response, ban_id)
 
     async def unban_player(self, response: schemas.Response):
-        if not response.bm_ban_id:
-            return
-
-        await self.remove_ban(response.bm_ban_id)
         async with session_factory() as db:
-            await self.discard_ban_id(db, response)
+            db_ban = await self.get_ban(db, response)
+            if db_ban is None:
+                raise NotFoundError("Ban does not exist")
+
+            try:
+                await self.remove_ban(db_ban.remote_id)
+            except:
+                raise IntegrationBanError(response, "Failed to unban player")
+
+            await db.delete(db_ban)
+            await db.commit()
+
+    async def bulk_ban_players(self, responses: Sequence[Response]):
+        ban_ids = []
+        failed = []
+        for response in responses:
+            db_ban = await self.get_ban(db, response)
+            if db_ban is not None:
+                continue
+
+            reason = self.get_ban_reason(response.community)
+            identifier = response.player_report.player_id
+            try:
+                ban_id = await self.add_ban(
+                    identifier=identifier,
+                    reason=reason,
+                    note=(
+                        f"Originally reported for {', '.join([reason.reason for reason in response.player_report.report.reasons])}\n"
+                        f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
+                    )
+                )
+            except IntegrationBanError:
+                failed.append(response)
+            else:
+                ban_ids.append((response, ban_id))
+        
+        async with session_factory() as db:
+            await self.set_multiple_ban_ids(db)
+        
+        if failed:
+            raise IntegrationBulkBanError(failed, "Failed to ban players")
+
+    async def bulk_unban_players(self, responses: Sequence[Response]):
+        failed = []
+        async with session_factory() as db:
+            for response in responses:
+                db_ban = await self.get_ban(db, response)
+                if not db_ban:
+                    continue
+
+                try:
+                    await self.remove_ban(db_ban.remote_id)
+                except IntegrationBanError:
+                    failed.append(response.player_report.player_id)
+                else:
+                    await db.delete(db_ban)
+        
+            await db.commit()
+        
+        if failed:
+            raise IntegrationBulkBanError(failed, "Failed to unban players")
+
 
     async def _make_request(self, method: str, url: str, data: dict = None) -> dict:
         """Make an API request.
@@ -164,9 +224,10 @@ class BattlemetricsIntegration(Integration):
 
         return resp["data"]["id"]
 
-    async def remove_ban(self, ban_id: str) -> str:
+    async def remove_ban(self, ban_id: str):
         url = f"{self.BASE_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url)
+
 
     async def create_ban_list(self, community: schemas.Community):
         data = {

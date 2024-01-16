@@ -15,8 +15,6 @@ class AdminNotAssociatedError(Exception):
 class AdminAlreadyAssociatedError(Exception):
     """Raised when attempting to add an admin to more than
     one community"""
-    def __init__(self, *args):
-        super().__init__(*args)
 
 class AdminOwnsCommunityError(Exception):
     """Raised when attempting to remove an owner from a
@@ -29,4 +27,32 @@ class TooManyAdminsError(Exception):
     """Raised when attempting to exceed the upper limit of
     admins each community is allowed to have"""
     def __init__(self, *args):
+        super().__init__(*args)
+
+
+class IntegrationFailureError(Exception):
+    """Generic exception raised when an integration fails to
+    perform a remote action."""
+
+class IntegrationValidationError(IntegrationFailureError):
+    """Exception raised when an integration fails to validate"""
+
+class IntegrationBanError(IntegrationFailureError):
+    """Exception raised when an integration fails to ban or
+    unban a player."""
+    def __init__(self, response: schemas.Response, *args: object) -> None:
+        self.response = response
+        super().__init__(*args)
+
+class IntegrationBulkBanError(IntegrationFailureError):
+    """Exception raised when an integration fails to ban or
+    unban one or more players during a bulk operation."""
+    def __init__(self, responses: list[schemas.Response], *args: object) -> None:
+        self.responses = responses
+        super().__init__(*args)
+
+class AlreadyBannedError(IntegrationFailureError):
+    """Raised when a player is already banned"""
+    def __init__(self, response: schemas.Response, *args: object) -> None:
+        self.response = response
         super().__init__(*args)
