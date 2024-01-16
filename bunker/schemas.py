@@ -206,6 +206,7 @@ class PendingResponse(ResponseBase):
     community: CommunityWithIntegrations
 
 class Response(PendingResponse):
+    id: int
     pr_id: int
     banned: bool
     bm_ban_id: Optional[str] = None

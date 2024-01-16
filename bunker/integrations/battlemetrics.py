@@ -41,7 +41,7 @@ class BattlemetricsIntegration(Integration):
         if response.bm_ban_id:
             return
 
-        reason = self._get_ban_reason(response.community)
+        reason = self.get_ban_reason(response.community)
         ban_id = await self.add_ban(
             identifier=response.player_report.player_id,
             reason=reason,
@@ -51,12 +51,7 @@ class BattlemetricsIntegration(Integration):
             )
         )
         async with session_factory() as db:
-            stmt = update(schemas.Response).values(bm_ban_id=ban_id).where(
-                models.PlayerReportResponse.pr_id==response.pr_id,
-                models.PlayerReportResponse.community_id==response.community.id
-            )
-            await db.execute(stmt)
-            await db.commit()
+            await self.set_ban_id(db, response, ban_id)
 
     async def unban_player(self, response: schemas.Response):
         if not response.bm_ban_id:
@@ -64,19 +59,7 @@ class BattlemetricsIntegration(Integration):
 
         await self.remove_ban(response.bm_ban_id)
         async with session_factory() as db:
-            stmt = update(schemas.Response).values(bm_ban_id=response.bm_ban_id).where(
-                models.PlayerReportResponse.pr_id==response.pr_id,
-                models.PlayerReportResponse.community_id==response.community.id
-            )
-            await db.execute(stmt)
-            await db.commit()
-
-
-    def _get_ban_reason(self, community: schemas.Community) -> str:
-        return (
-            "Banned via shared HLL Bunker report. Appeal"
-            f" at {community.contact_url}"
-        )
+            await self.discard_ban_id(db, response)
 
     async def _make_request(self, method: str, url: str, data: dict = None) -> dict:
         """Make an API request.
@@ -193,7 +176,7 @@ class BattlemetricsIntegration(Integration):
                     "name": f"HLL Bunker Ban List - {community.name} (ID: {community.id})",
                     "action": "kick",
                     "defaultIdentifiers": ["steamID"],
-                    "defaultReasons": [self._get_ban_reason(community)],
+                    "defaultReasons": [self.get_ban_reason(community)],
                     "defaultAutoAddEnabled": True
                 },
                 "relationships": {

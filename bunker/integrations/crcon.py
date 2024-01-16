@@ -4,7 +4,7 @@ import pydantic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.db import models
+from bunker.db import models, session_factory
 from bunker.integrations.integration import Integration
 from bunker.web.security import generate_token_value, get_token_hash
 
@@ -16,6 +16,12 @@ class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
     community: schemas.CommunityBase
     remove_bans: bool = False
 
+class DoAddBanPayload(pydantic.BaseModel):
+    player_id: str
+    reason: str
+
+class DoRemoveBanPayload(pydantic.BaseModel):
+    player_id: str
 
 class CRCONIntegration(Integration):
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
@@ -77,10 +83,19 @@ class CRCONIntegration(Integration):
         await self.validate_api_access()
 
     async def ban_player(self, response: schemas.Response):
-        pass
+        await self.add_ban(DoAddBanPayload(
+            player_id=response.player_report.player_id,
+            reason=self.get_ban_reason(response.community)
+        ))
+        async with session_factory() as db:
+            await self.set_ban_id(db, response, response.player_report.player_id)
 
     async def unban_player(self, response: schemas.Response):
-        pass
+        await self.remove_ban(DoRemoveBanPayload(
+            player_id=response.player_report.player_id,
+        ))
+        async with session_factory() as db:
+            await self.discard_ban_id(db, response)
 
     
     async def _make_request(self, method: str, endpoint: str, data: dict = None) -> dict:
@@ -136,8 +151,13 @@ class CRCONIntegration(Integration):
             raise ValueError("Received unexpected API response")
 
     async def submit_api_key(self, data: DoEnableBunkerApiIntegrationPayload):
-        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data)
+        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data.model_dump())
     
     async def revoke_api_key(self, data: DoDisableBunkerApiIntegrationPayload):
-        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data)
+        await self._make_request(method="DELETE", endpoint="/do_disable_bunker_api_integration", data=data.model_dump())
 
+    async def add_ban(self, data: DoAddBanPayload):
+        await self._make_request(method="POST", endpoint="/do_add_bunker_blacklist", data=data.model_dump())
+
+    async def remove_ban(self, data: DoRemoveBanPayload):
+        await self._make_request(method="DELETE", endpoint="/do_remove_bunker_blacklist", data=data.model_dump())
