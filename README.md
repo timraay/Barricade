@@ -1,4 +1,7 @@
 <div align="center">
+
+## **THIS PROJECT IS CURRENTLY STILL UNDER ACTIVE DEVELOPMENT.<br>IN ITS CURRENT STATE IT IS INCOMPLETE, MESSY, BROKEN, AND INSECURE.**
+    
 <img align="right" src="assets/banner.png">
 
 # [![GitHub release](https://img.shields.io/github/release/timraay/Bunker.svg)](https://github.com/timraay/Bunker/releases) [![GitHub license](https://img.shields.io/github/license/timraay/Bunker.svg)](https://github.com/timraay/Bunker/blob/main/LICENSE) [![GitHub contributors](https://img.shields.io/github/contributors/timraay/Bunker.svg)](https://github.com/timraay/Bunker/graphs/contributors) [![GitHub issues](https://img.shields.io/github/issues/timraay/Bunker.svg)](https://github.com/timraay/Bunker/issues) [![GitHub pull requests](https://img.shields.io/github/issues-pr/timraay/Bunker.svg)](https://github.com/timraay/Bunker/pulls) [![GitHub stars](https://img.shields.io/github/stars/timraay/Bunker.svg)](https://github.com/timraay/Bunker/stargazers)
