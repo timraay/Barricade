@@ -7,7 +7,7 @@
 
 <img align="right" width="250" height="250" src="assets/icon.png">
 
-> For any issues or feature requests, please [open an Issue](https://github.com/timraay/Bunker/issues) here on GitHub, or [ask in Discord](https://discord.gg/Pm5WfhB).
+> For any issues or feature requests, please [open an Issue](https://github.com/timraay/Bunker/issues) here on GitHub, or [ask in Discord](https://discord.gg/Pm5WfhB). Bunker staff cannot unban you, see the FAQ below on where to appeal.
 
 The Hell Let Loose Bunker is a service by server admins for server admins, to protect their servers from cheaters and troublemakers through collaborative data sharing. Receive reports created by verified admins and apply bans with a single button press through seamless integration with your favorite admin tools.
 
@@ -31,8 +31,24 @@ Before setting up your community to receive reports, make sure you have the foll
 
     Use the `/set-reports-channel` command in your Discord server to assign a text channel. Make sure that it is a **private** channel. Anyone that is able to read the channel will be able to respond to reports and (un)ban players!
 
+3. #### Link up your admin tools.
+
+    Use the `/manage-integrations` command, then press the `Add integration...` button. Select the type of admin tool you're trying to integrate and fill in the required details.
+
 ## Frequently Asked Questions (FAQ)
 
-### I have been banned!
+### Who reviews reports?
 
-ok cool
+When a report is made, each community individually decides whether to ban the player or not. Players are never banned on your server without manual approval from your own admins. Do note that when a report is revoked, all subsequent bans will automatically be revoked - without requiring approval.
+
+### I have been banned! What now?
+
+If you have been banned as a result of a Bunker report (which the message should clearly state), it means a community has put forward evidence against you. The admins of the server you just tried to join has reviewed this evidence and decided to ban you. This means you are likely to be banned on multiple servers, and not just this one you tried to join.
+
+When appealing your ban, you should first reach out to the community that created the original report. If they accept your appeal, they can revoke the report and get all subsequent bans from the other servers removed.
+
+That being said, you can still reach out to each individual community. While they cannot remove your ban from other servers, if enough communities unban you, the report can also be revoked that way.
+
+### As an admin, can I transfer ownership to myself?
+
+In normal circumstances, only the existing owner can transfer ownership. Should the existing owner not be available to do so, please reach out to Bunker staff over on Discord.
