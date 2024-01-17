@@ -107,7 +107,7 @@ class IntegrationManagementView(View):
         self.clear_items()
 
         row = 0
-        enabled = 0
+        num_enabled = 0
         for row, integration in enumerate(self.get_integrations()):
             properties = INTEGRATION_PROPERTIES[integration.config.integration_type]
             enabled = integration.config.enabled
@@ -135,7 +135,7 @@ class IntegrationManagementView(View):
                     row=row
                 ))
 
-                enabled += 1
+                num_enabled += 1
 
             else:
                 embed.add_field(
@@ -165,7 +165,7 @@ class IntegrationManagementView(View):
             row=row + 1
         ))
 
-        embed.title = f"Connected integrations ({enabled})"
+        embed.title = f"Connected integrations ({num_enabled})"
         return embed
 
     async def send(self, interaction: Interaction):
@@ -229,7 +229,9 @@ class IntegrationManagementView(View):
             except Exception as e:
                 raise CustomException("Outdated integration configuration!", str(e), log_traceback=True)
             
-            self.community = await integration.enable(db, community)
+            await integration.enable(db)
+            await db.refresh(community)
+            self.community = community
 
         await interaction.response.send_message(embed=get_success_embed(
             f"Enabled {properties.name} integration!",
@@ -246,13 +248,16 @@ class IntegrationManagementView(View):
             config = properties.config_cls.model_validate(db_config)
             integration = properties.integration_cls(config)
 
+            remove_bans=False
             if properties.ask_remove_bans:
                 try:
                     remove_bans = await ask_remove_bans(interaction)
                 except asyncio.TimeoutError:
                     return
 
-            self.community = await integration.disable(db, community, remove_bans=remove_bans)
+            await integration.disable(db, remove_bans=remove_bans)
+            await db.refresh(community)
+            self.community = community
         
         embed = get_success_embed(
             f"Disabled {properties.name} integration!",
