@@ -66,9 +66,12 @@ class Integration(ABC):
             The integration config record
         """
         if self.config.id is None:
-            return await create_integration_config(db, self.config)
+            db_config = await create_integration_config(db, self.config)
         else:
-            return await update_integration_config(db, self.config)
+            db_config = await update_integration_config(db, self.config)
+
+        self.config = type(self.config).model_validate(db_config)
+        return db_config
     
     async def get_ban(self, db: AsyncSession, response: schemas.Response) -> models.PlayerBan | None:
         """Get a player ban.

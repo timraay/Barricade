@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import NoResultFound
-from typing import Optional
 
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
@@ -312,4 +311,5 @@ async def update_integration_config(
     if not db_integration:
         raise NotFoundError("Integration does not exist")
     
+    await db.commit()    
     return db_integration
