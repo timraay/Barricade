@@ -41,6 +41,8 @@ class CRCONIntegration(Integration):
         super().__init__(config)
         self.config: schemas.CRCONIntegrationConfigParams
 
+    # --- Extended parent methods
+
     async def enable(self, db: AsyncSession):
         # Generate token
         token_value = generate_token_value()
@@ -85,6 +87,12 @@ class CRCONIntegration(Integration):
 
         # Disable and save
         return await super().disable(db)
+
+    # --- Abstract method implementations
+
+    async def get_instance_name(self) -> str:
+        resp = await self._make_request(method="GET", endpoint="/public_info")
+        return resp["result"]["short_name"]
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:
@@ -157,7 +165,8 @@ class CRCONIntegration(Integration):
         async with session_factory() as db:
             await self.discard_multiple_ban_ids(db, responses)
 
-    
+    # --- CRCON API wrappers
+
     async def _make_request(self, method: str, endpoint: str, data: dict = None) -> dict:
         """Make an API request.
 

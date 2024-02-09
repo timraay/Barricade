@@ -25,8 +25,12 @@ class BattlemetricsIntegration(Integration):
         super().__init__(config)
         self.config: schemas.BattlemetricsIntegrationConfigParams
 
+    # --- Abstract method implementations
+
     async def get_instance_name(self) -> str:
-        return "NAME"
+        url = f"{self.BASE_URL}/organizations/{self.config.organization_id}"
+        resp = await self._make_request(method="GET", url=url)
+        return resp["data"]["attributes"]["name"]
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:
@@ -123,6 +127,7 @@ class BattlemetricsIntegration(Integration):
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to unban players")
 
+    # --- Battlemetrics API wrappers
 
     async def _make_request(self, method: str, url: str, data: dict = None) -> dict:
         """Make an API request.
@@ -166,24 +171,6 @@ class BattlemetricsIntegration(Integration):
 
         return response 
 
-
-    async def get_api_scopes(self) -> set[str]:
-        """Retrieves the tokens scopes from the oauth.
-        Documentation: None.
-        Returns:
-            dict: The tokens data.
-        """
-        url = f"https://www.battlemetrics.com/oauth/introspect"
-        data = {
-            "token": self.config.api_key
-        }
-        resp = await self._make_request(method="POST", url=url, data=data)
-
-        if resp["active"]:
-            return set(resp["scope"].split(" "))
-        else:
-            # TODO: Create more specific exception class
-            raise Exception("Invalid API key")
 
     async def add_ban(self, identifier: str, reason: str, note: str) -> str:
         identifier_type = get_player_id_type(identifier)
@@ -231,6 +218,23 @@ class BattlemetricsIntegration(Integration):
         url = f"{self.BASE_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url)
 
+    async def get_ban_list_bans(self) -> list:
+        data = {
+            "filter[banList]": str(self.config.banlist_id),
+            "page[size]": 100,
+            "filter[expired]": "true"
+        }
+
+        url = f"{self.BASE_URL}/bans"
+        resp = await self._make_request(method="GET", url=url, data=data)
+        responses: list = resp["data"]
+
+        while resp["links"].get("next"):
+            resp = await self._make_request(method="GET", url=resp["links"]["next"])
+            responses.extend(resp["data"])
+
+        return responses
+
 
     async def create_ban_list(self, community: schemas.Community):
         data = {
@@ -266,24 +270,6 @@ class BattlemetricsIntegration(Integration):
         assert resp["data"]["type"] == "banList"
         self.config.banlist_id = UUID(resp["data"]["id"])
 
-    async def get_ban_list_bans(self) -> list:
-        data = {
-            "filter[banList]": str(self.config.banlist_id),
-            "page[size]": 100,
-            "filter[expired]": "true"
-        }
-
-        url = f"{self.BASE_URL}/bans"
-        resp = await self._make_request(method="GET", url=url, data=data)
-        responses: list = resp["data"]
-
-        # while resp["links"].get("next"):
-        #     resp = await self._make_request(method="GET", url=resp["links"]["next"])
-        #     responses.extend(resp["data"])
-
-        return responses
-
-
     async def validate_ban_list(self):
         data = {"include": "owner"}
 
@@ -295,6 +281,24 @@ class BattlemetricsIntegration(Integration):
 
         assert resp["data"]["id"] == str(self.config.banlist_id)
         assert resp["data"]["relationships"]["owner"]["data"]["id"] == self.config.organization_id
+
+    async def get_api_scopes(self) -> set[str]:
+        """Retrieves the tokens scopes from the oauth.
+        Documentation: None.
+        Returns:
+            dict: The tokens data.
+        """
+        url = f"https://www.battlemetrics.com/oauth/introspect"
+        data = {
+            "token": self.config.api_key
+        }
+        resp = await self._make_request(method="POST", url=url, data=data)
+
+        if resp["active"]:
+            return set(resp["scope"].split(" "))
+        else:
+            # TODO: Create more specific exception class
+            raise Exception("Invalid API key")
 
     async def validate_scopes(self):
         try:
