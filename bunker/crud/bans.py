@@ -41,6 +41,13 @@ async def get_ban_by_player_and_integration(db: AsyncSession, player_id: str, in
         stmt = stmt.options(selectinload("*"))
     return await db.scalar(stmt)
 
+async def get_player_bans_for_community(db: AsyncSession, player_id: str, community_id: int):
+    stmt = select(models.PlayerBan).join(models.PlayerBan.integration).where(
+        models.PlayerBan.player_id == player_id,
+        models.Integration.community_id == community_id,
+    )
+    return await db.scalars(stmt)
+
 async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
     db_ban = models.PlayerBan(ban.model_dump())
     db.add(db_ban)
