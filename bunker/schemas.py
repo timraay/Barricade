@@ -207,3 +207,8 @@ class ReportSubmission(BaseModel):
     id: int
     timestamp: datetime
     data: ReportSubmissionData
+
+class ResponseStats(BaseModel):
+    num_banned: int
+    num_rejected: int
+    reject_reasons: dict[ReportRejectReason, int]
