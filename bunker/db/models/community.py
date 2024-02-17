@@ -23,9 +23,9 @@ class Community(ModelBase):
     forward_guild_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     forward_channel_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
-    admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id", lazy="selectin")
-    owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id], lazy="selectin")
+    admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id")
+    owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id])
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
-    integrations: Mapped[list['Integration']] = relationship(back_populates="community", lazy="selectin")
+    integrations: Mapped[list['Integration']] = relationship(back_populates="community")
     api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")

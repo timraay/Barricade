@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, ClassVar
 from uuid import UUID
 
-from bunker.db import models
-from bunker.enums import ReportRejectReason, IntegrationType
+from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
 
+class _ModelFromAttributes(BaseModel):
+    model_config=ConfigDict(from_attributes=True)
 
-class IntegrationConfigBase(BaseModel):
+class _IntegrationConfigBase(BaseModel):
     id: int | None
 
     community_id: int
@@ -17,13 +18,10 @@ class IntegrationConfigBase(BaseModel):
     api_key: str
     api_url: str
 
-class IntegrationConfig(IntegrationConfigBase):
+class BasicIntegrationConfig(_IntegrationConfigBase, _ModelFromAttributes):
     id: int
 
-    class Config:
-        from_attributes = True
-
-class BattlemetricsIntegrationConfigParams(IntegrationConfigBase):
+class BattlemetricsIntegrationConfigParams(_IntegrationConfigBase):
     id: int | None = None
     integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
     api_url: str = "https://api.battlemetrics.com"
@@ -31,33 +29,28 @@ class BattlemetricsIntegrationConfigParams(IntegrationConfigBase):
     organization_id: str
     banlist_id: Optional[UUID] = None
 
-class BattlemetricsIntegrationConfig(IntegrationConfig, BattlemetricsIntegrationConfigParams):
+class BattlemetricsIntegrationConfig(BasicIntegrationConfig, BattlemetricsIntegrationConfigParams):
     pass
 
-class CRCONIntegrationConfigParams(IntegrationConfigBase):
+class CRCONIntegrationConfigParams(_IntegrationConfigBase):
     id: int | None = None
     integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
 
     bunker_api_key_id: int
 
-class CRCONIntegrationConfig(IntegrationConfig, CRCONIntegrationConfigParams):
+class CRCONIntegrationConfig(BasicIntegrationConfig, CRCONIntegrationConfigParams):
     pass
 
+class IntegrationConfig(BattlemetricsIntegrationConfig, CRCONIntegrationConfig, BasicIntegrationConfig):
+    integration_type: IntegrationType
 
-class AdminBase(BaseModel):
+
+class _AdminBase(BaseModel):
     discord_id: int
     community_id: Optional[int]
     name: str
 
-class AdminCreateParams(AdminBase):
-    pass
-
-class Admin(AdminBase):
-    class Config:
-        from_attributes = True
-
-
-class CommunityBase(BaseModel):
+class _CommunityBase(BaseModel):
     name: str
     contact_url: str
     owner_id: int
@@ -65,163 +58,152 @@ class CommunityBase(BaseModel):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
 
-class CommunityCreateParams(CommunityBase):
-    owner_name: str
+class _PlayerBase(BaseModel):
+    id: str
+    bm_rcon_url: Optional[str]
 
-class Community(CommunityBase):
-    id: int
-    owner: Admin
-    admins: list[Admin]
-    
-    class Config:
-        from_attributes = True
-
-class CommunityWithIntegrations(Community):
-    integrations: list[BattlemetricsIntegrationConfig | CRCONIntegrationConfig]
-
-
-class TokenBase(BaseModel):
+class _ReportTokenBase(BaseModel):
     community_id: int
     admin_id: int
     expires_at: datetime
 
-class TokenCreateParams(TokenBase):
+class _ReportBase(BaseModel):
+    created_at: datetime
+    body: str
+    reasons_bitflag: ReportReasonFlag
+    reasons_custom: Optional[str]
+    attachment_urls: list[str]
+
+class _PlayerReportBase(BaseModel):
+    player_id: str
+    player_name: str
+
+class _ResponseBase(BaseModel):
+    pr_id: int
+    community_id: int
+    banned: bool
+    reject_reason: Optional[ReportRejectReason]
+
+class _PlayerBanBase(BaseModel):
+    player_id: int
+    integration_id: int
+    remote_id: str
+
+
+
+class AdminRef(_AdminBase, _ModelFromAttributes):
+    pass
+
+class CommunityRef(_CommunityBase, _ModelFromAttributes):
+    id: int
+
+class PlayerRef(_PlayerBase, _ModelFromAttributes):
+    pass
+
+class ReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
+    id: int
+    value: str
+
+    community: CommunityRef
+    admin: AdminRef
+
+class ReportRef(_ReportBase, _ModelFromAttributes):
+    id: int
+    message_id: int
+
+class PlayerBanRef(_PlayerBanBase, _ModelFromAttributes):
+    id: int
+
+
+
+class AdminCreateParams(_AdminBase):
+    pass
+
+class CommunityCreateParams(_CommunityBase):
+    owner_name: str
+
+class Admin(AdminRef):
+    community: Optional[CommunityRef]
+
+class Community(CommunityRef):
+    owner: AdminRef
+    admins: list[AdminRef]
+    integrations: list[IntegrationConfig]
+
+
+class ReportTokenCreateParams(_ReportTokenBase):
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=1))
 
-class Token(TokenBase):
-    id: int
-    token: str
-
-    class Config:
-        from_attributes = True
-
-class TokenWithRelations(Token):
-    community: Community
-    admin: Admin
+class ReportToken(ReportTokenRef):
+    report: Optional[ReportRef]
 
 
-class ReportBase(BaseModel):
-    timestamp: datetime
-    body: str
-
-class PlayerCreateParams(BaseModel):
-    id: str
-    bm_rcon_url: Optional[str]
-
-class ReportPlayerCreateParams(PlayerCreateParams):
-    name: str
-
-class ReportCreateParams(ReportBase):
-    token: TokenWithRelations
-    reasons: list[str]
-    players: list[ReportPlayerCreateParams]
-    attachment_urls: list[str] = Field(default_factory=list)
-
-class ReportReason(BaseModel):
-    report_id: int
-    reason: str
-
-    class Config:
-        from_attributes = True
-
-class Player(BaseModel):
-    id: str
-    bm_rcon_url: str | None
-
-class PlayerReport(BaseModel):
-    id: int
-    player_id: str
-    report_id: int
-    player_name: str
-    player: Player
-
-    class Config:
-        from_attributes = True
-
-class ReportAttachment(BaseModel):
+class ReportAttachment(_ModelFromAttributes):
     report_id: int
     url: str
 
-    class Config:
-        from_attributes = True
+class PlayerCreateParams(_PlayerBase):
+    pass
 
-class Report(ReportBase):
+class PlayerReportCreateParams(_PlayerReportBase):
+    bm_rcon_url: Optional[str]
+
+class PlayerReport(_PlayerReportBase, _ModelFromAttributes):
     id: int
-    message_id: int
-    token: Token
-    reasons: list[ReportReason]
+    report_id: int
+
+    player: PlayerRef
+    report: ReportRef
+
+class ReportCreateParams(_ReportBase):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    token: ReportTokenRef
+    players: list[PlayerReportCreateParams] = Field(min_length=1)
+    attachment_urls: list[str] = Field(default_factory=list)
+
+class Report(ReportRef):
     players: list[PlayerReport]
-    attachments: list[ReportAttachment]
+    attachment_urls: list[ReportAttachment]
 
-    class Config:
-        from_attributes = True
+class ReportWithToken(Report):
+    token: ReportTokenRef
 
-class ReportSubmissionPlayerData(ReportPlayerCreateParams):
+class ResponseCreateParams(_ResponseBase):
+    reject_reason: Optional[ReportRejectReason] = None
+
+class Response(_ResponseBase, _ModelFromAttributes):
+    id: int
+    player_report: PlayerReport
+    community: CommunityRef
+
+class PendingResponse(_ResponseBase):
+    player_report: PlayerReport
+    community: CommunityRef
+    banned: Optional[bool] = None
+
+
+class Player(PlayerRef):
+    reports: list[PlayerReport]
+    
+class PlayerBan(PlayerBanRef):
+    player: PlayerRef
+    integration: BasicIntegrationConfig
+
+class PlayerBanCreateParams(_PlayerBanBase):
+    pass
+
+class ReportSubmissionPlayerData(PlayerReportCreateParams):
     bm_rcon_url: Optional[str] = Field(alias="bmRconUrl")
 
 class ReportSubmissionData(BaseModel):
     token: str
     players: list[ReportSubmissionPlayerData]
     reasons: list[str]
-    description: str
-    attachments: list[str]
+    body: str
+    attachment_urls: list[str] = Field(alias="attachmentUrls")
 
 class ReportSubmission(BaseModel):
     id: int
     timestamp: datetime
     data: ReportSubmissionData
-
-class PlayerReport(BaseModel):
-    id: int
-    player_id: str
-    report_id: int
-    player_name: str
-
-    class Config:
-        from_attributes = True
-
-
-class ResponseReport(ReportBase):
-    id: int
-    message_id: int
-    token: Token
-    reasons: list[ReportReason]
-    attachments: list[ReportAttachment]
-
-    class Config:
-        from_attributes = True
-
-class ResponsePlayer(PlayerReport):
-    report: ResponseReport
-
-
-class ResponseBase(BaseModel):
-    banned: bool
-    reject_reason: Optional[ReportRejectReason] = None
-
-class ResponseCreateParams(ResponseBase):
-    pr_id: int
-    community_id: int
-
-class PendingResponse(ResponseBase):
-    banned: Optional[bool] = None
-
-    player_report: ResponsePlayer
-    community: CommunityWithIntegrations
-
-class Response(PendingResponse):
-    id: int
-    pr_id: int
-    banned: bool
-
-    class Config:
-        from_attributes = True
-
-
-class PlayerBan(BaseModel):
-    prr_id: int
-    integration_id: int
-    remote_id: str
-
-    class Config:
-        from_attributes = True

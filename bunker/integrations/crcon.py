@@ -15,11 +15,11 @@ from bunker.schemas import Response
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
-    community: schemas.CommunityBase
+    community: schemas._CommunityBase
     api_key: str
 
 class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
-    community: schemas.CommunityBase
+    community: schemas._CommunityBase
     remove_bans: bool = False
 
 class DoAddBanPayload(pydantic.BaseModel):

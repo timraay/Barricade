@@ -96,25 +96,30 @@ class Bot(commands.Bot):
         user = await self.get_or_fetch_user(user_id)
         await user.remove_roles(admin_role, owner_role)
 
-    async def get_report_embed(self, report: schemas.ReportCreateParams) -> discord.Embed:
+    async def get_report_embed(self, report: schemas.ReportCreateParams | schemas.ReportWithToken) -> discord.Embed:
         embed = discord.Embed(
             title="New report!",
-            description="**" + "**, **".join(report.reasons) + "**\n" + esc_md(report.body),
+            description="**" + "**\n**".join(report.reasons_bitflag.to_list(report.reasons_custom)) + "**\n" + esc_md(report.body),
             colour=discord.Colour.dark_theme()
         )
 
         for i, player in enumerate(report.players, 1):
-            value = f"*`{player.id}`*"
+            if isinstance(player, schemas.PlayerReportCreateParams):
+                bm_rcon_url = player.bm_rcon_url
+            else:
+                bm_rcon_url = player.player.bm_rcon_url
 
-            player_id_type = get_player_id_type(player.id)
+            value = f"*`{player.player_id}`*"
+
+            player_id_type = get_player_id_type(player.player_id)
             if player_id_type == PlayerIDType.STEAM_64_ID:
-                value += f"\n[**View on Steam** 🡥](https://steamcommunity.com/profiles/{player.id})"
+                value += f"\n[**View on Steam** 🡥](https://steamcommunity.com/profiles/{player.player_id})"
 
-            if player.bm_rcon_url:
-                value += f"\n[**View on Battlemetrics** 🡥]({player.bm_rcon_url})"
+            if bm_rcon_url:
+                value += f"\n[**View on Battlemetrics** 🡥]({bm_rcon_url})"
 
             embed.add_field(
-                name=f"**`{i}.`** {esc_md(player.name)}",
+                name=f"**`{i}.`** {esc_md(player.player_name)}",
                 value=value,
                 inline=True
             )

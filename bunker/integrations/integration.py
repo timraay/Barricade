@@ -1,17 +1,24 @@
 from abc import ABC, abstractmethod
-from sqlalchemy import delete
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError
+from functools import wraps
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Sequence
 
 from bunker import schemas
-from bunker.communities import create_integration_config, update_integration_config
+from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
+from bunker.crud.communities import create_integration_config, update_integration_config
 from bunker.exceptions import NotFoundError, AlreadyBannedError
 from bunker.db import models
 
+def is_saved(func):
+    @wraps(func)
+    async def decorator(integration: 'Integration', *args, **kwargs):
+        if integration.config.id is None:
+            raise RuntimeError("Integration is not saved")
+        return await func(integration, *args, **kwargs)
+    return decorator
+
 class Integration(ABC):
-    def __init__(self, config: schemas.IntegrationConfigBase):
+    def __init__(self, config: schemas._IntegrationConfigBase):
         self.config = config
     
     async def enable(self, db: AsyncSession) -> models.Integration:
@@ -73,6 +80,7 @@ class Integration(ABC):
         self.config = type(self.config).model_validate(db_config)
         return db_config
     
+    @is_saved
     async def get_ban(self, db: AsyncSession, response: schemas.Response) -> models.PlayerBan | None:
         """Get a player ban.
 
@@ -88,8 +96,12 @@ class Integration(ABC):
         models.PlayerBan | None
             This integration's ban associated with the report, if any
         """
-        return await db.get(models.PlayerBan, (response.id, self.config.id))
+        return await get_ban_by_player_and_integration(db,
+            player_id=response.player_report.player_id,
+            integration_id=self.config.id,
+        )
 
+    @is_saved
     async def set_ban_id(self, db: AsyncSession, response: schemas.Response, ban_id: str) -> models.PlayerBan:
         """Create a ban record
 
@@ -112,18 +124,18 @@ class Integration(ABC):
         AlreadyBannedError
             The player is already banned
         """
-        db_ban = models.PlayerBan(
-            prr_id=response.id,
+        ban = schemas.PlayerBanCreateParams(
+            player_id=response.player_report.player_id,
             integration_id=self.config.id,
             remote_id=ban_id,
         )
-        db.add(db_ban)
         try:
-            await db.commit()
-        except IntegrityError:
-            raise AlreadyBannedError(response, "Player is already banned")
+            db_ban = await create_ban(db, ban)
+        except Exception as e:
+            raise AlreadyBannedError(response, str(e))
         return db_ban
     
+    @is_saved
     async def set_multiple_ban_ids(self, db: AsyncSession, responses_banids: Sequence[tuple[schemas.Response, str]]):
         """Create multiple ban records.
 
@@ -138,19 +150,17 @@ class Integration(ABC):
             A sequence of player report responses with their
             associated ban identifier.
         """
-        stmt = insert(models.PlayerBan).values([
+        bans = [
             schemas.PlayerBan(
-                prr_id=response.id,
+                player_id=response.player_report.player_id,
                 integration_id=self.config.id,
                 remote_id=ban_id,
             ).model_dump()
             for response, ban_id in responses_banids
-        ]).on_conflict_do_nothing(
-            index_elements=["prr_id", "integration_id"]
-        )
-        await db.execute(stmt)
-        await db.commit()
+        ]
+        await bulk_create_bans(db, bans)
     
+    @is_saved
     async def discard_ban_id(self, db: AsyncSession, response: schemas.Response):
         """Delete a ban record
 
@@ -172,6 +182,7 @@ class Integration(ABC):
         await db.delete(db_ban)
         await db.commit()
 
+    @is_saved
     async def discard_multiple_ban_ids(self, db: AsyncSession, responses: Sequence[schemas.Response]):
         """Deletes all ban records that are associated
         with any of the given responses
@@ -183,12 +194,10 @@ class Integration(ABC):
         responses : Sequence[schemas.Response]
             A sequence of player report responses
         """
-        stmt = delete(models.PlayerBan).where(
-            models.PlayerBan.prr_id.in_([response.id for response in responses]),
+        await bulk_delete_bans(db,
+            models.PlayerBan.player_id.in_([response.player_report.player_id for response in responses]),
             models.PlayerBan.integration_id==self.config.id,
         )
-        await db.execute(stmt)
-        await db.commit()
     
     def get_ban_reason(self, community: schemas.Community) -> str:
         return (

@@ -15,14 +15,14 @@ class ReportToken(ModelBase):
     __tablename__ = "report_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    token: Mapped[str] = mapped_column(String, unique=True)
+    value: Mapped[str] = mapped_column(String, unique=True, index=True)
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     admin_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() - timedelta(days=1)))
 
-    community: Mapped['Community'] = relationship(back_populates="tokens")
-    admin: Mapped['Admin'] = relationship(back_populates="tokens")
-    report: Mapped[Optional['Report']] = relationship(back_populates="token", lazy="selectin")
+    community: Mapped['Community'] = relationship(back_populates="tokens", lazy="selectin")
+    admin: Mapped['Admin'] = relationship(back_populates="tokens", lazy="selectin")
+    report: Mapped[Optional['Report']] = relationship(back_populates="token")
 
     def is_expired(self):
         return datetime.now(tz=timezone.utc) >= self.expires_at

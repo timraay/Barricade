@@ -11,6 +11,7 @@ from bunker.db import models
 from bunker.web import schemas
 from bunker.web.scopes import Scopes
 from bunker.web.security import (
+    get_user_by_username,
     get_active_token_of_user,
     verify_password,
     get_password_hash,
@@ -60,13 +61,13 @@ async def create_new_web_user(
     await db.refresh(db_user)
     return db_user
 
-@router.delete("/users", response_model=schemas.WebUser)
+@router.delete("/users")
 async def delete_web_user(
         user: schemas.WebUserDelete,
         current_user: Annotated[schemas.WebUserBase, Security(get_active_token_of_user, scopes=Scopes.STAFF.to_list())],
         db: AsyncSession = Depends(get_db)
 ):
-    db_user = await db.get(models.WebUser, user.username)
+    db_user = await get_user_by_username(db, user.username)
     if db_user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

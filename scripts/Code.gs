@@ -28,8 +28,8 @@ function sendResponse(e) {
       token: token,
       players: players,
       reasons: reasons,
-      description: description,
-      attachments: attachmentUrls
+      body: description,
+      attachmentUrls: attachmentUrls
     }
   };
 

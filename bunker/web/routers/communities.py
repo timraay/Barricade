@@ -5,13 +5,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.communities import *
+from bunker.crud.communities import *
+from bunker.exceptions import AlreadyExistsError
 from bunker.db import models, get_db
 from bunker.web.scopes import Scopes
 
 router = APIRouter(prefix="/communities")
 
-@router.get("", response_model=list[schemas.Community])
+@router.get("", response_model=list[schemas.CommunityRef])
 async def get_all_communities(
         db: AsyncSession = Depends(get_db)
 ):
@@ -19,7 +20,7 @@ async def get_all_communities(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-@router.post("", response_model=schemas.Community)
+@router.post("", response_model=schemas.CommunityRef)
 async def create_community(
         community: schemas.CommunityCreateParams,
         db: AsyncSession = Depends(get_db)
@@ -27,7 +28,7 @@ async def create_community(
     # Create the community
     try:
         db_community = await create_new_community(db, community)
-    except AdminAlreadyAssociatedError:
+    except AlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admin is already owner of a community. Transfer ownership first."
@@ -57,7 +58,7 @@ async def create_community_admin(
 ):
     try:
         return await create_new_admin(db, admin)
-    except AdminAlreadyAssociatedError:
+    except AlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An admin with this ID already exists"

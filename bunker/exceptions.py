@@ -4,6 +4,10 @@ class NotFoundError(Exception):
     """Raised when a requested entity does not exist"""
     pass
 
+class AlreadyExistsError(Exception):
+    """Raised when attempting to create a row or relation which
+    already exists."""
+
 class AdminNotAssociatedError(Exception):
     """Raised when attempting to transfer ownership to
     an admin not part of the community"""
@@ -11,10 +15,6 @@ class AdminNotAssociatedError(Exception):
         self.admin = admin
         self.community = community
         super().__init__(*args)
-
-class AdminAlreadyAssociatedError(Exception):
-    """Raised when attempting to add an admin to more than
-    one community"""
 
 class AdminOwnsCommunityError(Exception):
     """Raised when attempting to remove an owner from a

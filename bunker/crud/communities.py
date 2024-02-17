@@ -1,16 +1,14 @@
 from sqlalchemy import update
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm.exc import NoResultFound
 
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
 from bunker.db import models
 from bunker.discord import bot
 from bunker.exceptions import (
-    AdminNotAssociatedError, AdminAlreadyAssociatedError, AdminOwnsCommunityError,
+    AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
 )
 
@@ -34,12 +32,9 @@ async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: boo
     if load_relations:
         options = (selectinload("*"),)
     else:
-        options = None
+        options = (selectinload(models.Admin.community), selectinload(models.Admin.owned_community))
 
-    try:
-        return await db.get_one(models.Admin, discord_id, options=options)
-    except NoResultFound:
-        return None
+    return await db.get(models.Admin, discord_id, options=options)
 
 async def get_community_by_id(db: AsyncSession, community_id: int, load_relations: bool = False):
     """Look up a community by its ID.
@@ -61,12 +56,9 @@ async def get_community_by_id(db: AsyncSession, community_id: int, load_relation
     if load_relations:
         options = (selectinload("*"),)
     else:
-        options = None
+        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
-    try:
-        return await db.get_one(models.Community, community_id, options=options)
-    except NoResultFound:
-        return None
+    return await db.get(models.Community, community_id, options=options)
     
 async def create_new_community(
         db: AsyncSession,
@@ -88,13 +80,13 @@ async def create_new_community(
 
     Raises
     ------
-    AdminAlreadyAssociatedError
+    AlreadyExistsError
         The owner already belongs to a community
     """
     # Look if the owner exists already
     db_owner = await get_admin_by_id(db, community.owner_id)
     if not db_owner:
-        # If no record exists, create new Member record
+        # If no record exists, create new Admin record
         # Add the community_id later once the Community is created
         owner = schemas.AdminCreateParams(
             discord_id=community.owner_id,
@@ -104,7 +96,7 @@ async def create_new_community(
         db_owner = await create_new_admin(db, owner)
     elif db_owner.community_id:
         # Owner is already part of a community
-        raise AdminAlreadyAssociatedError
+        raise AlreadyExistsError
     elif db_owner.name != community.owner_name:
         # Update saved name of owner
         db_owner.name = community.owner_name
@@ -140,7 +132,7 @@ async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
 
     Raises
     ------
-    AdminAlreadyAssociatedError
+    AlreadyExistsError
         This admin already exists
     TooManyAdminsError
         The community is not allowed any more admins
@@ -148,7 +140,7 @@ async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
         No community with the given ID exists
     """
     if await get_admin_by_id(db, admin.discord_id):
-        raise AdminAlreadyAssociatedError
+        raise AlreadyExistsError
     
     if admin.community_id:
         db_community = await get_community_by_id(db, admin.community_id)
@@ -217,7 +209,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
 
     Raises
     ------
-    AdminAlreadyAssociatedError
+    AlreadyExistsError
         The admin is already part of a community
     TooManyAdminsError
         The community is not allowed any more admins
@@ -228,7 +220,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         if admin.community_id == community.id:
             return admin
         else:
-            raise AdminAlreadyAssociatedError(admin)
+            raise AlreadyExistsError(admin)
         
     if len(await community.awaitable_attrs.admins) >= MAX_ADMIN_LIMIT:
         raise TooManyAdminsError
@@ -285,7 +277,7 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
 
 async def create_integration_config(
         db: AsyncSession,
-        params: schemas.IntegrationConfigBase,
+        params: schemas._IntegrationConfigBase,
 ):
     db_integration = models.Integration(
         **params.model_dump(),
@@ -298,7 +290,7 @@ async def create_integration_config(
 
 async def update_integration_config(
         db: AsyncSession,
-        config: schemas.IntegrationConfig,
+        config: schemas.BasicIntegrationConfig,
 ):
     stmt = update(models.Integration).values(
         **config.model_dump(),

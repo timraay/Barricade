@@ -7,8 +7,8 @@ from discord.ext import commands
 from discord.utils import escape_markdown as esc_md
 
 from bunker.db import session_factory
-from bunker.communities import get_admin_by_id
 from bunker.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
+from bunker.crud.communities import get_admin_by_id
 from bunker.discord.utils import CustomException, get_command_mention
 from bunker.discord.views.admin_confirmation import (
     AdminAddConfirmationView,

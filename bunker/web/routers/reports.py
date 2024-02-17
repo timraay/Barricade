@@ -4,7 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.reports import get_token_data, create_report, forward_report_to_communities
+from bunker.crud.reports import get_token_by_value, create_report, get_report_by_id
+from bunker.enums import ReportReasonFlag
+from bunker.forwarding import forward_report_to_communities
 from bunker.db import models, get_db
 
 router = APIRouter(prefix="/reports")
@@ -18,67 +20,53 @@ async def get_all_reports(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-@router.post("/submit", response_model=schemas.Report)
+@router.post("/submit", response_model=schemas.ReportWithToken)
 async def submit_report(
         submission: schemas.ReportSubmission,
         db: AsyncSession = Depends(get_db)
 ):
     # Validate the token
-    token_data = await get_token_data(db, submission.data.token, load_relations=True)
+    token = await get_token_by_value(db, submission.data.token)
     invalid_token_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid token"
     )
-    if not token_data:
+    if not token:
         logging.warn("Token not found")
         raise invalid_token_error
-    if token_data.is_expired():
+    if token.is_expired():
         logging.warn("Token has expired")
         raise invalid_token_error
-    if token_data.report:
+    if token.report:
         logging.warn("Token was already used")
         raise invalid_token_error
+    
+    reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
 
     # Create the report
     report = schemas.ReportCreateParams(
-        timestamp=submission.timestamp,
-        body=submission.data.description,
-        token=token_data,
-        reasons=submission.data.reasons,
-        players=submission.data.players,
-        attachment_urls=submission.data.attachments,
+        **submission.data.model_dump(exclude={"token", "reasons"}),
+        token=token,
+        reasons_bitflag=reasons_bitflag,
+        reasons_custom=reasons_custom,
     )
     db_report = await create_report(db, report)
+    db_report.token = token
     return db_report
         
-@router.get("/forward", response_model=schemas.Report)
+@router.get("/forward", response_model=schemas.ReportWithToken)
 async def forward_report(
         report_id: int,
         db: AsyncSession = Depends(get_db)
 ):
-    db_report = await db.get(models.Report, report_id)
+    db_report = await get_report_by_id(db, report_id, load_relations=True)
     if not db_report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report does not exist"
         )
     
-    db_token = await get_token_data(db, db_report.token.token, load_relations=True)
-    
-    params = schemas.ReportCreateParams(
-        timestamp=db_report.timestamp,
-        body=db_report.body,
-        token=db_token,
-        reasons=[reason.reason for reason in db_report.reasons],
-        players=[schemas.ReportPlayerCreateParams(
-            id=player.player_id,
-            name=player.player_name,
-            bm_rcon_url=player.player.bm_rcon_url
-        ) for player in db_report.players],
-        attachment_urls=[attachment.url for attachment in db_report.attachments],
-    )
-    
-    await forward_report_to_communities(db_report, params)
+    await forward_report_to_communities(db_report)
     return db_report
 
 

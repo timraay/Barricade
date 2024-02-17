@@ -10,13 +10,13 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bunker import schemas
+from bunker.crud.communities import get_community_by_id
+from bunker.crud.reports import get_report_by_id
+from bunker.crud.responses import set_report_response
 from bunker.db import models, session_factory
-from bunker.communities import get_community_by_id
 from bunker.discord.utils import handle_error
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.enums import ReportRejectReason
-from bunker.reports import get_report_by_id
-from bunker.responses import set_report_response
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -61,18 +61,21 @@ class ReportsCog(commands.Cog):
                 case "refresh":
                     # In this case, pr_id is actually the report ID, not the player report ID
                     await self.refresh_report_view(interaction, data.community_id, data.pr_id)
+
                 case "ban":
                     prr = schemas.ResponseCreateParams(
                         **data.model_dump(exclude={"command"}),
                         banned=True,
                     )
                     await self.set_response(interaction, prr)
+
                 case "unban":
                     prr = schemas.ResponseCreateParams(
                         **data.model_dump(exclude={"command"}),
                         banned=False,
                     )
                     await self.set_response(interaction, prr)
+
                 case _:
                     prr = schemas.ResponseCreateParams(
                         **data.model_dump(exclude={"command"}),
@@ -90,8 +93,10 @@ class ReportsCog(commands.Cog):
             players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players
             responses = {
                 player.id: schemas.PendingResponse(
+                    pr_id=player.id,
                     player_report=player,
-                    community=db_prr.community
+                    community_id=db_prr.community_id,
+                    community=db_prr.community,
                 ) for player in players
             }
             responses[prr.pr_id].banned = prr.banned
@@ -123,6 +128,15 @@ class ReportsCog(commands.Cog):
         async with session_factory() as db:
             report = await get_report_by_id(db, report_id)
             community = await get_community_by_id(db, report_id)
+
+            responses = {
+                player.id: schemas.PendingResponse(
+                    pr_id=player.id,
+                    player_report=player,
+                    community_id=community_id,
+                    community=community,
+                ) for player in report.players
+            }
             
             stmt = select(
                 models.PlayerReportResponse.pr_id,
@@ -137,17 +151,11 @@ class ReportsCog(commands.Cog):
                 )
             )
             result = await db.execute(stmt)
-            responses = [
-                schemas.PendingResponse(
-                    banned=row.banned,
-                    reject_reason=row.reject_reason,
-                    player_report=next(player for player in report.players if player.id == row.pr_id),
-                    community=community
-                )
-                for row in result
-            ]
+            for row in result:
+                responses[row.pr_id].banned = row.banned
+                responses[row.pr_id].reject_reason = row.reject_reason
 
-        view = PlayerReviewView(responses=responses)
+        view = PlayerReviewView(responses=list(responses.values()))
         await interaction.response.edit_message(view=view)
 
 async def setup(bot: 'Bot'):

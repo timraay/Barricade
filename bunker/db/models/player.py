@@ -7,7 +7,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .player_report import PlayerReport
-    from .player_report_response import PlayerReportResponse
+    from .player_ban import PlayerBan
 
 class Player(ModelBase):
     __tablename__ = "players"
@@ -16,3 +16,4 @@ class Player(ModelBase):
     bm_rcon_url: Mapped[Optional[str]]
 
     reports: Mapped[list['PlayerReport']] = relationship(back_populates="player")
+    bans: Mapped[list['PlayerBan']] = relationship(back_populates="player")

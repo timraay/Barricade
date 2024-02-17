@@ -16,4 +16,4 @@ class WebUser(ModelBase):
     hashed_password: Mapped[str]
     scopes: Mapped[int] = mapped_column(Integer, default=0)
 
-    tokens: Mapped[list['WebToken']] = relationship(back_populates="user")
+    tokens: Mapped[list['WebToken']] = relationship(back_populates="user", cascade="all, delete")

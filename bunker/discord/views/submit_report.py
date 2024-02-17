@@ -2,9 +2,9 @@ import discord
 from discord import ButtonStyle, Interaction
 
 from bunker import schemas
+from bunker.crud.communities import get_admin_by_id
+from bunker.crud.reports import create_token, get_form_url
 from bunker.db import session_factory
-from bunker.communities import get_admin_by_id
-from bunker.reports import create_token, get_form_url
 from bunker.discord.utils import View, CallableButton, CustomException
 
 class GetSubmissionURLView(View):
@@ -29,13 +29,13 @@ class GetSubmissionURLView(View):
             if admin.name != name:
                 admin.name = name
 
-            token = schemas.TokenCreateParams(
+            token = schemas.ReportTokenCreateParams(
                 admin_id=admin.discord_id,
                 community_id=admin.community_id
             )
             db_token = await create_token(db, token)
         
-        url = get_form_url(db_token.token)
+        url = get_form_url(db_token.value)
         view = OpenFormView(url)
         await view.send(interaction)
 
