@@ -16,7 +16,9 @@ from bunker.crud.responses import set_report_response
 from bunker.db import models, session_factory
 from bunker.discord.utils import handle_error
 from bunker.discord.views.player_review import PlayerReviewView
+from bunker.exceptions import NotFoundError
 from bunker.enums import ReportRejectReason
+from bunker.hooks import EventHooks
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -47,44 +49,62 @@ class ReportsCog(commands.Cog):
             return
         
         custom_id: str = interaction.data['custom_id']
-        if not custom_id.startswith("prr:"):
-            return
-        print("custom_id:", custom_id)
-        
+        try:
+            if custom_id.startswith("prr:"):
+                await self.handle_review_interaction(interaction, custom_id)
+            elif custom_id.startswith("rm:"):
+                await self.handle_management_interaction(interaction, custom_id)
+        except Exception as e:
+            await handle_error(interaction, e)
+
+    async def handle_review_interaction(self, interaction: Interaction, custom_id: str):
         match = RE_PRR_CUSTOM_ID.match(custom_id)
         if not match:
             return
             
-        try:
-            data = PRRCustomIDPayload(**match.groupdict())
-            match data.command:
-                case "refresh":
-                    # In this case, pr_id is actually the report ID, not the player report ID
-                    await self.refresh_report_view(interaction, data.community_id, data.pr_id)
+        data = PRRCustomIDPayload(**match.groupdict())
+        match data.command:
+            case "refresh":
+                # In this case, pr_id is actually the report ID, not the player report ID
+                await self.refresh_report_view(interaction, data.community_id, data.pr_id)
 
-                case "ban":
-                    prr = schemas.ResponseCreateParams(
-                        **data.model_dump(exclude={"command"}),
-                        banned=True,
-                    )
-                    await self.set_response(interaction, prr)
+            case "ban":
+                prr = schemas.ResponseCreateParams(
+                    **data.model_dump(exclude={"command"}),
+                    banned=True,
+                )
+                await self.set_response(interaction, prr)
 
-                case "unban":
-                    prr = schemas.ResponseCreateParams(
-                        **data.model_dump(exclude={"command"}),
-                        banned=False,
-                    )
-                    await self.set_response(interaction, prr)
+            case "unban":
+                prr = schemas.ResponseCreateParams(
+                    **data.model_dump(exclude={"command"}),
+                    banned=False,
+                )
+                await self.set_response(interaction, prr)
 
-                case _:
-                    prr = schemas.ResponseCreateParams(
-                        **data.model_dump(exclude={"command"}),
-                        banned=False,
-                    )
-                    await self.set_response(interaction, prr)
+            case _:
+                prr = schemas.ResponseCreateParams(
+                    **data.model_dump(exclude={"command"}),
+                    banned=False,
+                )
+                await self.set_response(interaction, prr)
 
-        except Exception as e:
-            await handle_error(interaction, e)
+    
+    async def handle_management_interaction(self, interaction: Interaction, custom_id: str):
+        if not custom_id.startswith("rm:del:"):
+            return
+        
+        report_id = int(custom_id[7:])
+        async with session_factory() as db:
+            db_report = get_report_by_id(db, report_id)
+            if not db_report:
+                raise NotFoundError("This report no longer exists")
+            
+            # TODO? Only allow admins to delete
+            await db.delete(db_report)
+            await db.commit()
+
+            EventHooks.invoke_report_delete(db_report)
 
     async def set_response(self, interaction: Interaction, prr: schemas.ResponseCreateParams):
         async with session_factory() as db:

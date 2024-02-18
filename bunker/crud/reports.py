@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 import secrets
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +9,7 @@ from bunker import schemas
 from bunker.constants import REPORT_FORM_URL
 from bunker.db import models
 from bunker.discord import bot
+from bunker.discord.reports import get_report_embed
 from bunker.exceptions import NotFoundError, AlreadyExistsError
 from bunker.hooks import EventHooks
 
@@ -159,7 +159,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db_report = models.Report(**report_payload)
     db.add(db_report)
 
-    embed = await bot.get_report_embed(report)
+    embed = await get_report_embed(report)
     message = await bot.send_report(embed)
     db_report.message_id = message.id
 

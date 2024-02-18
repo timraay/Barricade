@@ -43,8 +43,8 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
         models.PlayerReportResponse.banned,
         models.PlayerReportResponse.reject_reason,
     ).having(or_(
-        models.PlayerReportResponse.banned is True,
-        models.PlayerReportResponse.reject_reason is not None,
+        models.PlayerReportResponse.banned.is_(True),
+        models.PlayerReportResponse.reject_reason.is_not(None),
     ))
 
     results = await db.execute(stmt)

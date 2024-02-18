@@ -40,13 +40,13 @@ DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 # Path to directory with discord.py cogs
 DISCORD_COGS_PATH = Path("./bunker/discord/cogs")
 # Main Discord guild's ID
-DISCORD_GUILD_ID = int(os.getenv('DISCORD_GUILD_ID', 0))
+DISCORD_GUILD_ID = int(os.getenv('DISCORD_GUILD_ID') or 0)
 # ID of the Server Admin role
-DISCORD_ADMIN_ROLE_ID = int(os.getenv('DISCORD_ADMIN_ROLE_ID', 0))
+DISCORD_ADMIN_ROLE_ID = int(os.getenv('DISCORD_ADMIN_ROLE_ID') or 0)
 # ID of the Server Owner role
-DISCORD_OWNER_ROLE_ID = int(os.getenv('DISCORD_OWNER_ROLE_ID', 0))
+DISCORD_OWNER_ROLE_ID = int(os.getenv('DISCORD_OWNER_ROLE_ID') or 0)
 # ID of the main report channel
-DISCORD_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_REPORTS_CHANNEL_ID', 0))
+DISCORD_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_REPORTS_CHANNEL_ID') or 0)
 
 # How many admins each community is allowed to have (including the owner)
 MAX_ADMIN_LIMIT = 4

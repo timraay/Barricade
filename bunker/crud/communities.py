@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
 from bunker.db import models
-from bunker.discord import bot
+from bunker.discord.communities import grant_admin_role, grant_owner_role, revoke_admin_roles
 from bunker.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
@@ -186,7 +186,7 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
     await db.commit()
     await db.refresh(admin)
 
-    await bot.revoke_admin_roles(admin.discord_id)
+    await revoke_admin_roles(admin.discord_id)
 
     return admin
 
@@ -232,7 +232,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         raise NotFoundError(admin)
     await db.refresh(admin)
 
-    await bot.grant_admin_role(admin.discord_id)
+    await grant_admin_role(admin.discord_id)
 
     return admin
 
@@ -269,8 +269,8 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     await db.commit()
     await db.refresh(community)
 
-    await bot.grant_admin_role(old_owner_id)
-    await bot.grant_owner_role(community.owner_id)
+    await grant_admin_role(old_owner_id)
+    await grant_owner_role(community.owner_id)
 
     return True
 

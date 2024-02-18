@@ -11,7 +11,7 @@ from bunker import schemas
 from bunker.db import models
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.utils import handle_error
-from bunker.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID, DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID, DISCORD_REPORTS_CHANNEL_ID
+from bunker.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
 from bunker.utils import get_player_id_type, PlayerIDType
 
 __all__ = (
@@ -66,101 +66,12 @@ class Bot(commands.Bot):
             return member
         else:
             return await guild.fetch_member(user_id)
-    
-    def get_admin_roles(self):
-        admin_role = self.primary_guild.get_role(DISCORD_ADMIN_ROLE_ID)
-        if not admin_role:
-            raise RuntimeError("Admin role not found")
-        owner_role = self.primary_guild.get_role(DISCORD_OWNER_ROLE_ID)
-        if not owner_role:
-            raise RuntimeError("Owner role not found")
-        return admin_role, owner_role
-    
-    def get_report_channel(self):
-        return self.primary_guild.get_channel(DISCORD_REPORTS_CHANNEL_ID)
-
-    async def grant_admin_role(self, user_id: int):
-        admin_role, owner_role = self.get_admin_roles()
-        user = await self.get_or_fetch_user(user_id)
-        await user.add_roles(admin_role)
-        await user.remove_roles(owner_role)
-
-    async def grant_owner_role(self, user_id: int):
-        admin_role, owner_role = self.get_admin_roles()
-        user = await self.get_or_fetch_user(user_id)
-        await user.add_roles(owner_role)
-        await user.remove_roles(admin_role)
-
-    async def revoke_admin_roles(self, user_id: int):
-        admin_role, owner_role = self.get_admin_roles()
-        user = await self.get_or_fetch_user(user_id)
-        await user.remove_roles(admin_role, owner_role)
-
-    async def get_report_embed(self, report: schemas.ReportCreateParams | schemas.ReportWithToken) -> discord.Embed:
-        embed = discord.Embed(
-            title="New report!",
-            description="**" + "**\n**".join(report.reasons_bitflag.to_list(report.reasons_custom)) + "**\n" + esc_md(report.body),
-            colour=discord.Colour.dark_theme()
-        )
-
-        for i, player in enumerate(report.players, 1):
-            if isinstance(player, schemas.PlayerReportCreateParams):
-                bm_rcon_url = player.bm_rcon_url
-            else:
-                bm_rcon_url = player.player.bm_rcon_url
-
-            value = f"*`{player.player_id}`*"
-
-            player_id_type = get_player_id_type(player.player_id)
-            if player_id_type == PlayerIDType.STEAM_64_ID:
-                value += f"\n[**View on Steam** 🡥](https://steamcommunity.com/profiles/{player.player_id})"
-
-            if bm_rcon_url:
-                value += f"\n[**View on Battlemetrics** 🡥]({bm_rcon_url})"
-
-            embed.add_field(
-                name=f"**`{i}.`** {esc_md(player.player_name)}",
-                value=value,
-                inline=True
-            )
-
-        try:
-            user = await self.get_or_fetch_user(report.token.admin_id)
-            admin_name = user.nick or user.display_name
-        except:
-            admin_name = report.token.admin.name
-
-        embed.set_footer(
-            text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
-            icon_url=user.avatar.url
-        )
-
-        return embed
 
     async def send_report(self, embed: discord.Embed):
         channel = self.get_report_channel()
         message = await channel.send(embed=embed)
         return message
 
-    async def forward_report_to_community(self,
-            report: models.Report,
-            community: schemas.Community,
-            embed: discord.Embed
-    ):
-        guild = self.get_guild(community.forward_guild_id)
-        if not guild:
-            return
-        channel = guild.get_channel(community.forward_channel_id)
-        if not channel:
-            return
-        
-        responses = [schemas.PendingResponse(
-            player_report=player,
-            community=community
-        ) for player in report.players]
-
-        view = PlayerReviewView(responses=responses)
-        await channel.send(embed=embed, view=view)
 
 def command_prefix(bot: Bot, message: discord.Message):
     return bot.user.mention + " "
