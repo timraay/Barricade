@@ -212,3 +212,9 @@ class ResponseStats(BaseModel):
     num_banned: int
     num_rejected: int
     reject_reasons: dict[ReportRejectReason, int]
+
+
+class IntegrationBanPlayerParams(BaseModel):
+    player_id: str
+    reasons: list[str]
+    community: CommunityRef

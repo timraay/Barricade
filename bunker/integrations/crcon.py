@@ -103,67 +103,67 @@ class CRCONIntegration(Integration):
         
         await self.validate_api_access()
 
-    async def ban_player(self, response: schemas.Response):
+    async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
         async with session_factory() as db:
-            db_ban = await self.get_ban(db, response)
+            db_ban = await self.get_ban(db, params.player_id)
             if db_ban is not None:
-                raise AlreadyBannedError(response, "Player is already banned")
+                raise AlreadyBannedError(params.player_id, "Player is already banned")
 
             try:
                 await self.add_ban(DoAddBanPayload(
-                    player_id=response.player_report.player_id,
-                    reason=self.get_ban_reason(response.community)
+                    player_id=params.player_id,
+                    reason=self.get_ban_reason(params.community)
                 ))
             except Exception as e:
-                raise IntegrationBanError(response, "Failed to ban player") from e
+                raise IntegrationBanError(params.player_id, "Failed to ban player") from e
 
-            await self.set_ban_id(db, response, response.player_report.player_id)
+            await self.set_ban_id(db, params.player_id, params.player_id)
 
-    async def unban_player(self, response: schemas.Response):
+    async def unban_player(self, player_id: str):
         async with session_factory() as db:
-            db_ban = await self.get_ban(db, response)
+            db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
 
             try:
                 await self.remove_ban(DoRemoveBanPayload(
-                    player_id=response.player_report.player_id,
+                    player_id=player_id,
                 ))
             except Exception as e:
-                raise IntegrationBanError(response, "Failed to unban player") from e
+                raise IntegrationBanError(player_id, "Failed to unban player") from e
 
             await db.delete(db_ban)
             await db.commit()
     
-    async def bulk_ban_players(self, responses: Sequence[Response]):
+    async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
         try:
             await self.add_multiple_bans(DoAddMultipleBansPayload(bans=[
                 DoAddBanPayload(
-                    player_id=response.player_report.player_id,
-                    reason=self.get_ban_reason(response.community)
+                    player_id=param.player_id,
+                    reason=self.get_ban_reason(param.community)
                 )
-                for response in responses
+                for param in params
             ]))
         except Exception as e:
-            raise IntegrationBulkBanError(responses, "Failed to ban players") from e
+            raise IntegrationBulkBanError(
+                [param.player_id for param in params],
+                "Failed to ban players"
+            ) from e
 
         async with session_factory() as db:
             await self.set_multiple_ban_ids(db, [
-                (response, response.player_report.player_id)
-                for response in responses
+                (param.player_id, param.player_id)
+                for param in params
             ])
 
-    async def bulk_unban_players(self, responses: Sequence[Response]):
+    async def bulk_unban_players(self, player_ids: Sequence[str]):
         try:
-            await self.remove_multiple_bans(DoRemoveMultipleBansPayload(player_ids=[
-                response.player_report.player_id
-                for response in responses
-            ]))
+            await self.remove_multiple_bans(DoRemoveMultipleBansPayload(player_ids=player_ids))
         except Exception as e:
-            raise IntegrationBulkBanError(responses, "Failed to unban players") from e
+            raise IntegrationBulkBanError(player_ids, "Failed to unban players") from e
 
         async with session_factory() as db:
-            await self.discard_multiple_ban_ids(db, responses)
+            await self.discard_multiple_ban_ids(db, player_ids)
 
     # --- CRCON API wrappers
 

@@ -22,19 +22,19 @@ class EventHooks(Enum):
 
     @staticmethod
     def invoke_report_create(report: schemas.ReportWithToken):
-        EventHooks._invoke(EventHooks.report_create, report)
+        return EventHooks._invoke(EventHooks.report_create, report)
 
     @staticmethod
     def invoke_report_delete(report: schemas.Report):
-        EventHooks._invoke(EventHooks.report_delete, report)
+        return EventHooks._invoke(EventHooks.report_delete, report)
 
     @staticmethod
     def invoke_player_ban(response: schemas.Response):
-        EventHooks._invoke(EventHooks.player_ban, response)
+        return EventHooks._invoke(EventHooks.player_ban, response)
 
     @staticmethod
     def invoke_player_unban(response: schemas.Response):
-        EventHooks._invoke(EventHooks.player_unban, response)
+        return EventHooks._invoke(EventHooks.player_unban, response)
 
 def add_hook(hook_type: EventHooks):
     def _add_hook_inner(func: Callable[[Any], Coroutine]):

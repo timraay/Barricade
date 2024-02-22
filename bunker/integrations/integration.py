@@ -81,38 +81,38 @@ class Integration(ABC):
         return db_config
     
     @is_saved
-    async def get_ban(self, db: AsyncSession, response: schemas.Response) -> models.PlayerBan | None:
+    async def get_ban(self, db: AsyncSession, player_id: str) -> models.PlayerBan | None:
         """Get a player ban.
 
         Parameters
         ----------
         db : AsyncSession
             An asynchronous database session
-        response : schemas.Response
-            A player report response
+        player_id : str
+            The ID of a player
 
         Returns
         -------
         models.PlayerBan | None
-            This integration's ban associated with the report, if any
+            This integration's ban associated with the player, if any
         """
         return await get_ban_by_player_and_integration(db,
-            player_id=response.player_report.player_id,
+            player_id=player_id,
             integration_id=self.config.id,
         )
 
     @is_saved
-    async def set_ban_id(self, db: AsyncSession, response: schemas.Response, ban_id: str) -> models.PlayerBan:
+    async def set_ban_id(self, db: AsyncSession, player_id: str, ban_id: str) -> models.PlayerBan:
         """Create a ban record
 
         Parameters
         ----------
         db : AsyncSession
             An asynchronous database session
-        response : schemas.Response
-            A player report response
+        player_id : str
+            The ID of a player
         ban_id : str
-            The ban identifier
+            The ID of the ban this player received
 
         Returns
         -------
@@ -125,18 +125,18 @@ class Integration(ABC):
             The player is already banned
         """
         ban = schemas.PlayerBanCreateParams(
-            player_id=response.player_report.player_id,
+            player_id=player_id,
             integration_id=self.config.id,
             remote_id=ban_id,
         )
         try:
             db_ban = await create_ban(db, ban)
         except Exception as e:
-            raise AlreadyBannedError(response, str(e))
+            raise AlreadyBannedError(player_id, str(e))
         return db_ban
     
     @is_saved
-    async def set_multiple_ban_ids(self, db: AsyncSession, responses_banids: Sequence[tuple[schemas.Response, str]]):
+    async def set_multiple_ban_ids(self, db: AsyncSession, *playerids_banids: tuple[str, str]):
         """Create multiple ban records.
 
         In case a player is already banned and a conflict
@@ -146,44 +146,44 @@ class Integration(ABC):
         ----------
         db : AsyncSession
             An asynchronous database session
-        responses_banids : Sequence[tuple[schemas.Response, str]]
-            A sequence of player report responses with their
-            associated ban identifier.
+        playerids_banids : tuple[schemas.Response, str]
+            A sequence of player IDs with their associated
+            ban IDs.
         """
         bans = [
             schemas.PlayerBan(
-                player_id=response.player_report.player_id,
+                player_id=player_id,
                 integration_id=self.config.id,
                 remote_id=ban_id,
             ).model_dump()
-            for response, ban_id in responses_banids
+            for player_id, ban_id in playerids_banids
         ]
         await bulk_create_bans(db, bans)
     
     @is_saved
-    async def discard_ban_id(self, db: AsyncSession, response: schemas.Response):
+    async def discard_ban_id(self, db: AsyncSession, player_id: str):
         """Delete a ban record
 
         Parameters
         ----------
         db : AsyncSession
             An asynchronous database session
-        response : schemas.Response
-            A player report response
+        player_id : str
+            The ID of a player
 
         Raises
         ------
         NotFoundError
             No ban record could be found
         """
-        db_ban = await self.get_ban(db, response)
+        db_ban = await self.get_ban(db, player_id)
         if not db_ban:
             raise NotFoundError("Ban does not exist")
         await db.delete(db_ban)
         await db.commit()
 
     @is_saved
-    async def discard_multiple_ban_ids(self, db: AsyncSession, responses: Sequence[schemas.Response]):
+    async def discard_multiple_ban_ids(self, db: AsyncSession, player_ids: Sequence[str]):
         """Deletes all ban records that are associated
         with any of the given responses
 
@@ -191,11 +191,11 @@ class Integration(ABC):
         ----------
         db : AsyncSession
             An asynchronous database session
-        responses : Sequence[schemas.Response]
-            A sequence of player report responses
+        player_ids : Sequence[str]
+            A sequence of player IDs
         """
         await bulk_delete_bans(db,
-            models.PlayerBan.player_id.in_([response.player_report.player_id for response in responses]),
+            models.PlayerBan.player_id.in_(player_ids),
             models.PlayerBan.integration_id==self.config.id,
         )
     

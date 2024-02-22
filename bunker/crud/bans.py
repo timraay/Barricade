@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, not_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,3 +68,40 @@ async def bulk_delete_bans(db: AsyncSession, *where_clauses):
     stmt = delete(models.PlayerBan).where(*where_clauses)
     await db.execute(stmt)
     await db.commit()
+
+async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[str]):
+    """
+    SELECT pb.*
+    FROM player_bans pb
+    INNER JOIN integrations i
+    ON pb.integration_id = i.id
+    WHERE
+        pb.player_id IN $player_ids
+        AND NOT EXISTS (
+            SELECT pr.id
+            FROM player_reports pr
+            INNER JOIN player_report_responses prr
+            ON
+                pr.id = prr.pr_id
+                AND prr.community_id = i.community_id
+                AND prr.banned IS true
+            WHERE
+                pr.player_id = pb.player_id
+        )
+    """
+    stmt = select(models.PlayerBan) \
+        .join(models.PlayerBan.integration) \
+        .where(
+            models.PlayerBan.player_id.in_(player_ids),
+            not_(
+                select(models.PlayerReportResponse)
+                    .join(models.PlayerReport)
+                    .where(
+                        models.PlayerReport.player_id == models.PlayerBan.player_id,
+                        models.PlayerReportResponse.community_id == models.Integration.community_id,
+                        models.PlayerReportResponse.banned.is_(True),
+                    )
+            )
+        )
+    return await db.scalars(stmt)
+

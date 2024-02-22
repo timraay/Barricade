@@ -46,60 +46,53 @@ class BattlemetricsIntegration(Integration):
         else:
             await self.validate_ban_list()
 
-    async def ban_player(self, response: schemas.Response):
+    async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
         async with session_factory() as db:
-            db_ban = await self.get_ban(db, response)
+            db_ban = await self.get_ban(db, params.player_id)
             if db_ban is not None:
-                raise IntegrationBanError(response, "Player is already banned")
+                raise IntegrationBanError(params.player_id, "Player is already banned")
 
-            reason = self.get_ban_reason(response.community)
+            reason = self.get_ban_reason(params.community)
             ban_id = await self.add_ban(
-                identifier=response.player_report.player_id,
+                identifier=params.player_id,
                 reason=reason,
-                note=(
-                    f"Originally reported for {', '.join([reason.reason for reason in response.player_report.report.reasons])}\n"
-                    f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
-                )
+                note=f"Originally reported for {', '.join(params.reasons)}"
             )
-            await self.set_ban_id(db, response, ban_id)
+            await self.set_ban_id(db, params.player_id, ban_id)
 
-    async def unban_player(self, response: schemas.Response):
+    async def unban_player(self, player_id: str):
         async with session_factory() as db:
-            db_ban = await self.get_ban(db, response)
+            db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
 
             try:
                 await self.remove_ban(db_ban.remote_id)
             except:
-                raise IntegrationBanError(response, "Failed to unban player")
+                raise IntegrationBanError(player_id, "Failed to unban player")
 
             await db.delete(db_ban)
             await db.commit()
 
-    async def bulk_ban_players(self, responses: Sequence[Response]):
+    async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
         ban_ids = []
         failed = []
-        for response in responses:
-            db_ban = await self.get_ban(db, response)
+        for param in params:
+            db_ban = await self.get_ban(db, param.player_id)
             if db_ban is not None:
                 continue
 
-            reason = self.get_ban_reason(response.community)
-            identifier = response.player_report.player_id
+            reason = self.get_ban_reason(param.community)
             try:
                 ban_id = await self.add_ban(
-                    identifier=identifier,
+                    identifier=param.player_id,
                     reason=reason,
-                    note=(
-                        f"Originally reported for {', '.join([reason.reason for reason in response.player_report.report.reasons])}\n"
-                        f"https://discord.com/channels/{DISCORD_GUILD_ID}/{DISCORD_REPORTS_CHANNEL_ID}/{response.player_report.report.message_id}"
-                    )
+                    note=f"Originally reported for {', '.join(param.reasons)}"
                 )
             except IntegrationBanError:
-                failed.append(response)
+                failed.append(param.player_id)
             else:
-                ban_ids.append((response, ban_id))
+                ban_ids.append((param.player_id, ban_id))
         
         async with session_factory() as db:
             await self.set_multiple_ban_ids(db)
