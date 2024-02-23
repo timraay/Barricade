@@ -22,7 +22,7 @@ class ReportToken(ModelBase):
 
     community: Mapped['Community'] = relationship(back_populates="tokens", lazy="selectin")
     admin: Mapped['Admin'] = relationship(back_populates="tokens", lazy="selectin")
-    report: Mapped[Optional['Report']] = relationship(back_populates="token")
+    report: Mapped[Optional['Report']] = relationship(back_populates="token", cascade="all, delete")
 
     def is_expired(self):
         return datetime.now(tz=timezone.utc) >= self.expires_at

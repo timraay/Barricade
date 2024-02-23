@@ -22,5 +22,5 @@ class Report(ModelBase):
     body: Mapped[str]
     attachment_urls: Mapped[list[str]] = mapped_column(ARRAY(String))
 
-    token: Mapped['ReportToken'] = relationship(back_populates="report")
-    players: Mapped[list['PlayerReport']] = relationship(back_populates="report")
+    token: Mapped['ReportToken'] = relationship(back_populates="report", cascade="all, delete")
+    players: Mapped[list['PlayerReport']] = relationship(back_populates="report", cascade="all, delete")
