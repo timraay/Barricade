@@ -100,7 +100,7 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: boo
 
     return await db.get(models.Report, report_id, options=options)
 
-async def get_reports_for_player(db: AsyncSession, player_id: str):
+async def get_reports_for_player(db: AsyncSession, player_id: str, load_relations: bool = False):
     """Get all reports of a player
 
     Parameters
@@ -109,16 +109,25 @@ async def get_reports_for_player(db: AsyncSession, player_id: str):
         An asynchronous database session
     player_id : str
         The ID of the player
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
 
     Returns
     -------
-    ScalarResult[Report]
+    List[Report]
         A sequence of report models
     """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Report.players),)
+    
     stmt = select(models.Report) \
+        .join(models.Report.players) \
         .where(models.PlayerReport.player_id == player_id) \
-        .options(selectinload(models.Report.players))
-    return await db.scalars(stmt)
+        .options(*options)
+    result = await db.scalars(stmt)
+    return result.all()
 
 async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     """Create a new report.

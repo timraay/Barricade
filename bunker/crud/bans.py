@@ -46,7 +46,8 @@ async def get_player_bans_for_community(db: AsyncSession, player_id: str, commun
         models.PlayerBan.player_id == player_id,
         models.Integration.community_id == community_id,
     )
-    return await db.scalars(stmt)
+    result = await db.scalars(stmt)
+    return result.all()
 
 async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
     db_ban = models.PlayerBan(ban.model_dump())
@@ -103,5 +104,6 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[s
                     )
             )
         )
-    return await db.scalars(stmt)
+    result = await db.scalars(stmt)
+    return result.all()
 
