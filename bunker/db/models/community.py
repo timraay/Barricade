@@ -20,7 +20,7 @@ class Community(ModelBase):
     contact_url: Mapped[str]
     owner_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
 
-    forward_guild_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    forward_guild_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     forward_channel_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
     admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id")

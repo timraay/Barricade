@@ -1,4 +1,4 @@
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
@@ -59,6 +59,33 @@ async def get_community_by_id(db: AsyncSession, community_id: int, load_relation
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
     return await db.get(models.Community, community_id, options=options)
+    
+async def get_community_by_guild_id(db: AsyncSession, guild_id: int, load_relations: bool = False):
+    """Look up a community by its forward Guild ID.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    guild_id : int
+        The ID of the forward guild
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+
+    Returns
+    -------
+    Community | None
+        The community model, or None if it does not exist
+    """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+
+    stmt = select(models.Community).where(
+        models.Community.forward_guild_id == guild_id
+    ).options(*options)
+    return await db.scalar(stmt)
     
 async def create_new_community(
         db: AsyncSession,
