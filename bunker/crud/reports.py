@@ -8,8 +8,7 @@ from sqlalchemy.orm import selectinload
 from bunker import schemas
 from bunker.constants import REPORT_FORM_URL
 from bunker.db import models
-from bunker.discord import bot
-from bunker.discord.reports import get_report_embed
+from bunker.discord.reports import get_report_embed, get_report_channel
 from bunker.exceptions import NotFoundError, AlreadyExistsError
 from bunker.hooks import EventHooks
 
@@ -169,11 +168,12 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db.add(db_report)
 
     embed = await get_report_embed(report)
-    message = await bot.send_report(embed)
+    channel = get_report_channel()
+    message = await channel.send(embed=embed)
     db_report.message_id = message.id
 
     await db.commit()
-    db_report = await get_report_by_id(db_report.id, load_relations=True)
+    db_report = await get_report_by_id(db, db_report.id, load_relations=True)
 
     EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
 

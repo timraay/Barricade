@@ -67,12 +67,6 @@ class Bot(commands.Bot):
         else:
             return await guild.fetch_member(user_id)
 
-    async def send_report(self, embed: discord.Embed):
-        channel = self.get_report_channel()
-        message = await channel.send(embed=embed)
-        return message
-
-
 def command_prefix(bot: Bot, message: discord.Message):
     return bot.user.mention + " "
 
