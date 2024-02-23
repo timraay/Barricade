@@ -7,7 +7,7 @@ from bunker.utils import log_task_error
 
 class EventHooks(Enum):
     report_create: list[Callable[[schemas.ReportWithToken], Coroutine]] = list()
-    report_delete: list[Callable[[schemas.Report], Coroutine]] = list()
+    report_delete: list[Callable[[schemas.ReportWithToken], Coroutine]] = list()
     player_ban: list[Callable[[schemas.Response], Coroutine]] = list()
     player_unban: list[Callable[[schemas.Response], Coroutine]] = list()
 
@@ -25,7 +25,7 @@ class EventHooks(Enum):
         return EventHooks._invoke(EventHooks.report_create, report)
 
     @staticmethod
-    def invoke_report_delete(report: schemas.Report):
+    def invoke_report_delete(report: schemas.ReportWithToken):
         return EventHooks._invoke(EventHooks.report_delete, report)
 
     @staticmethod
