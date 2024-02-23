@@ -171,6 +171,7 @@ class CommunitiesCog(commands.Cog):
                     "You need to be a community owner to do this!"
                 )
             
+            await owner.community.awaitable_attrs.integrations
             view = IntegrationManagementView(owner.community)
             await view.send(interaction)
 

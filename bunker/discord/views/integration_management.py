@@ -18,19 +18,14 @@ from bunker.integrations import Integration, BattlemetricsIntegration, CRCONInte
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 
-INTEGRATION_TYPES: tuple[type[schemas.BasicIntegrationConfig]] = (
-    schemas.BattlemetricsIntegrationConfig,
-    schemas.CRCONIntegrationConfig,
-)
-
 class IntegrationProperties(BaseModel):
-    config_cls: type[schemas.BasicIntegrationConfig]
+    config_cls: type[schemas.IntegrationConfig]
     integration_cls: type[Integration]
-    configure_func: Callable[[schemas.BasicIntegrationConfig | None], Coroutine[Any, Any, None]]
+    configure_func: Callable[[schemas.IntegrationConfig | None], Coroutine[Any, Any, None]]
     ask_remove_bans: bool
     name: str
     emoji: str
-    url_func: Callable[[schemas.BasicIntegrationConfig], str]
+    url_func: Callable[[schemas.IntegrationConfigParams], str]
 
 
 async def configure_battlemetrics_integration(interaction: Interaction, view: 'IntegrationManagementView', config: schemas.BattlemetricsIntegrationConfig | None):

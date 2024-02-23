@@ -18,7 +18,7 @@ def is_saved(func):
     return decorator
 
 class Integration(ABC):
-    def __init__(self, config: schemas._IntegrationConfigBase):
+    def __init__(self, config: schemas.IntegrationConfigParams):
         self.config = config
     
     async def enable(self, db: AsyncSession) -> models.Integration:

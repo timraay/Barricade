@@ -8,7 +8,7 @@ from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
 class _ModelFromAttributes(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 
-class _IntegrationConfigBase(BaseModel):
+class IntegrationConfigParams(_ModelFromAttributes):
     id: int | None
 
     community_id: int
@@ -17,32 +17,33 @@ class _IntegrationConfigBase(BaseModel):
 
     api_key: str
     api_url: str
+    
+    organization_id: Optional[str]
+    banlist_id: Optional[UUID]
+    bunker_api_key_id: Optional[int]
 
-class BasicIntegrationConfig(_IntegrationConfigBase, _ModelFromAttributes):
-    id: int
-
-class BattlemetricsIntegrationConfigParams(_IntegrationConfigBase):
+class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
-    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
     api_url: str = "https://api.battlemetrics.com"
 
-    organization_id: str
-    banlist_id: Optional[UUID] = None
+    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
+    bunker_api_key_id: ClassVar[Optional[int]] = None
 
-class BattlemetricsIntegrationConfig(BasicIntegrationConfig, BattlemetricsIntegrationConfigParams):
-    pass
-
-class CRCONIntegrationConfigParams(_IntegrationConfigBase):
+class CRCONIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
+
     integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
+    organization_id: ClassVar[Optional[str]] = None
+    banlist_id: ClassVar[Optional[UUID]] = None
 
-    bunker_api_key_id: int
+class IntegrationConfig(IntegrationConfigParams):
+    id: int
 
-class CRCONIntegrationConfig(BasicIntegrationConfig, CRCONIntegrationConfigParams):
+class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, IntegrationConfig):
     pass
 
-class IntegrationConfig(BattlemetricsIntegrationConfig, CRCONIntegrationConfig, BasicIntegrationConfig):
-    integration_type: IntegrationType
+class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):
+    pass
 
 
 class _AdminBase(BaseModel):
@@ -188,7 +189,7 @@ class Player(PlayerRef):
     
 class PlayerBan(PlayerBanRef):
     player: PlayerRef
-    integration: BasicIntegrationConfig
+    integration: IntegrationConfig
 
 class PlayerBanCreateParams(_PlayerBanBase):
     pass

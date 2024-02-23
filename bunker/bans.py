@@ -3,12 +3,12 @@ import asyncio
 from bunker import schemas
 from bunker.crud.bans import get_player_bans_for_community, get_player_bans_without_responses
 from bunker.crud.communities import get_community_by_id
-from bunker.db import models, session_factory
-from bunker.enums import IntegrationType, ReportReasonFlag
+from bunker.db import session_factory
+from bunker.enums import IntegrationType
 from bunker.hooks import EventHooks, add_hook
 from bunker.integrations import BattlemetricsIntegration, CRCONIntegration
 
-def get_integration(config: schemas.BasicIntegrationConfig):
+def get_integration(config: schemas.IntegrationConfigParams):
     if config.integration_type == IntegrationType.BATTLEMETRICS:
        return BattlemetricsIntegration(config)
     elif config.integration_type == IntegrationType.COMMUNITY_RCON:

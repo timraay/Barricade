@@ -304,7 +304,7 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
 
 async def create_integration_config(
         db: AsyncSession,
-        params: schemas._IntegrationConfigBase,
+        params: schemas.IntegrationConfigParams,
 ):
     db_integration = models.Integration(
         **params.model_dump(),
@@ -317,7 +317,7 @@ async def create_integration_config(
 
 async def update_integration_config(
         db: AsyncSession,
-        config: schemas.BasicIntegrationConfig,
+        config: schemas.IntegrationConfig,
 ):
     stmt = update(models.Integration).values(
         **config.model_dump(),
