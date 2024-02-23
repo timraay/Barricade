@@ -5,6 +5,7 @@ from bunker import schemas
 from bunker.constants import DISCORD_REPORTS_CHANNEL_ID
 from bunker.discord.bot import bot
 from bunker.discord.communities import get_admin_name
+from bunker.enums import ReportReasonFlag
 from bunker.utils import get_player_id_type, PlayerIDType
 
 def get_report_channel():
@@ -13,8 +14,8 @@ def get_report_channel():
 
 async def get_report_embed(report: schemas.ReportCreateParams | schemas.ReportWithToken, with_footer: bool = True) -> discord.Embed:
     embed = discord.Embed(
-        description="**" + "**\n**".join(report.reasons_bitflag.to_list(report.reasons_custom)) + "**\n" + esc_md(report.body),
-        colour=discord.Colour.dark_theme()
+        colour=discord.Colour.dark_theme(),
+        title=", ".join(ReportReasonFlag(report.reasons_bitflag).to_list(report.reasons_custom)),
     )
 
     for i, player in enumerate(report.players, 1):
@@ -37,6 +38,14 @@ async def get_report_embed(report: schemas.ReportCreateParams | schemas.ReportWi
             value=value,
             inline=True
         )
+
+    embed.add_field(
+        inline=False,
+        # name="╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸╸",
+        # name="⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯",
+        name="⠀",
+        value=esc_md(report.body),
+    )
 
     if with_footer:
         try:

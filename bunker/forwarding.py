@@ -25,7 +25,6 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             return
 
         embed = await get_report_embed(report)
-        embed.title = "New report!"
         
         for community in communities:
             guild = bot.get_guild(community.forward_guild_id)
@@ -36,6 +35,8 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
                 return
             
             responses = [schemas.PendingResponse(
+                pr_id=player.id,
+                community_id=community.id,
                 player_report=player,
                 community=community
             ) for player in report.players]
@@ -48,7 +49,6 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     community = report.token.community
 
     embed = await get_report_embed(report, with_footer=False)
-    embed.title = "Report submitted!"
     embed.color = discord.Color.blurple()
 
     view = ReportManagementView(report)
@@ -60,8 +60,9 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
             if channel := guild.get_channel(community.forward_channel_id):
                 try:
                     await channel.send(
-                        content=user.mention,
+                        content=f"{user.mention} your report was submitted! (ID: #{report.id})",
                         embed=embed,
+                        view=view,
                     )
                 except discord.HTTPException:
                     pass
