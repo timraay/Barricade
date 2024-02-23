@@ -4,21 +4,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.crud.reports import get_token_by_value, create_report, get_report_by_id
+from bunker.crud.reports import get_token_by_value, create_report, get_report_by_id, get_all_reports
 from bunker.enums import ReportReasonFlag
-from bunker.forwarding import forward_report_to_communities
+from bunker.forwarding import forward_report_to_communities, forward_report_to_token_owner
 from bunker.db import models, get_db
 
 router = APIRouter(prefix="/reports")
 
-
 @router.get("", response_model=list[schemas.Report])
-async def get_all_reports(
+async def get_reports(
         db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(models.Report)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    return await get_all_reports(db)
 
 @router.post("/submit", response_model=schemas.ReportWithToken)
 async def submit_report(
@@ -67,7 +64,22 @@ async def forward_report(
         )
     
     await forward_report_to_communities(db_report)
+    await forward_report_to_token_owner(db_report)
     return db_report
+
+
+@router.get("/{report_id}", response_model=schemas.ReportWithToken)
+async def get_reports(
+        report_id: int,
+        db: AsyncSession = Depends(get_db),
+):
+    report = await get_report_by_id(db, report_id=report_id, load_relations=True)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No report with this ID"
+        )
+    return report
 
 
 def setup(app: FastAPI):

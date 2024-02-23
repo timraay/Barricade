@@ -101,6 +101,12 @@ class CommunityRef(_CommunityBase, _ModelFromAttributes):
 class PlayerRef(_PlayerBase, _ModelFromAttributes):
     pass
 
+class PlayerReportRef(_PlayerReportBase, _ModelFromAttributes):
+    id: int
+    report_id: int
+
+    player: PlayerRef
+
 class ReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
     id: int
     value: str
@@ -149,11 +155,7 @@ class PlayerCreateParams(_PlayerBase):
 class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: Optional[str]
 
-class PlayerReport(_PlayerReportBase, _ModelFromAttributes):
-    id: int
-    report_id: int
-
-    player: PlayerRef
+class PlayerReport(PlayerReportRef):
     report: ReportRef
 
 class ReportCreateParams(_ReportBase):
@@ -164,7 +166,7 @@ class ReportCreateParams(_ReportBase):
     attachment_urls: list[str] = Field(default_factory=list)
 
 class Report(ReportRef):
-    players: list[PlayerReport]
+    players: list[PlayerReportRef]
     attachment_urls: list[ReportAttachment]
 
 class ReportWithToken(Report):
@@ -182,7 +184,7 @@ class PendingResponse(_ResponseBase):
     player_report: PlayerReport
     community: CommunityRef
     banned: Optional[bool] = None
-
+    reject_reason: Optional[ReportRejectReason] = None
 
 class Player(PlayerRef):
     reports: list[PlayerReport]

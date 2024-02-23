@@ -205,7 +205,7 @@ async def get_active_token(
 
     return db_token
 
-async def get_active_token_of_user(
+async def get_active_token_user(
         token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token)],
 ):
     if not token.user:
@@ -214,7 +214,7 @@ async def get_active_token_of_user(
             detail="Token not associated with user",
         )
 
-    return token
+    return token.user
 
 
 async def get_active_token_of_community(

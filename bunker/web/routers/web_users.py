@@ -12,7 +12,7 @@ from bunker.web import schemas
 from bunker.web.scopes import Scopes
 from bunker.web.security import (
     get_user_by_username,
-    get_active_token_of_user,
+    get_active_token_user,
     verify_password,
     get_password_hash,
     authenticate_user,
@@ -39,7 +39,7 @@ async def login_for_access_token(
 
 @router.get("/users", response_model=list[schemas.WebUser])
 async def get_all_web_users(
-        current_user: Annotated[schemas.WebUserBase, Security(get_active_token_of_user, scopes=Scopes.STAFF.to_list())],
+        current_user: Annotated[schemas.TokenWithHash, Security(get_active_token_user, scopes=Scopes.STAFF.to_list())],
         db: AsyncSession = Depends(get_db)
 ):
     stmt = select(models.WebUser)
@@ -49,7 +49,7 @@ async def get_all_web_users(
 @router.post("/users", response_model=schemas.WebUser)
 async def create_new_web_user(
     user: schemas.WebUserCreateParams,
-        current_user: Annotated[schemas.WebUserBase, Security(get_active_token_of_user, scopes=Scopes.STAFF.to_list())],
+        current_user: Annotated[schemas.TokenWithHash, Security(get_active_token_user, scopes=Scopes.STAFF.to_list())],
         db: AsyncSession = Depends(get_db)
 ):
     db_user = models.WebUser(
@@ -64,7 +64,7 @@ async def create_new_web_user(
 @router.delete("/users")
 async def delete_web_user(
         user: schemas.WebUserDelete,
-        current_user: Annotated[schemas.WebUserBase, Security(get_active_token_of_user, scopes=Scopes.STAFF.to_list())],
+        current_user: Annotated[schemas.WebUserBase, Security(get_active_token_user, scopes=Scopes.STAFF.to_list())],
         db: AsyncSession = Depends(get_db)
 ):
     db_user = await get_user_by_username(db, user.username)
@@ -80,7 +80,7 @@ async def delete_web_user(
 
 @router.get("/users/me", response_model=schemas.WebUserBase)
 async def read_current_user(
-        current_user: Annotated[schemas.WebUser, Depends(get_active_token_of_user)]
+        current_user: Annotated[schemas.WebUserBase, Depends(get_active_token_user)]
 ):
     return current_user
 
@@ -88,7 +88,7 @@ async def read_current_user(
 async def update_current_user_password(
         old_password: str,
         new_password: Annotated[str, Query(min_length=8, max_length=64)],
-        current_user: Annotated[models.WebUser, Depends(get_active_token_of_user)],
+        current_user: Annotated[models.WebUser, Depends(get_active_token_user)],
         db: AsyncSession = Depends(get_db)
 ):
     if not verify_password(old_password, current_user.hashed_password):
