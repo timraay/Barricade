@@ -75,6 +75,33 @@ async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams)
     await db.refresh(db_token)
     return db_token
 
+
+
+async def get_all_reports(db: AsyncSession, load_relations: bool = False):
+    """Retrieve all reports.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+
+    Returns
+    -------
+    List[Report]
+        A sequence of all reports
+    """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Report.players),)
+
+    stmt = select(models.Report).options(*options)
+    result = await db.scalars(stmt)
+    return result.all()
+
+
 async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: bool = False):
     """Look up a report by its ID.
 

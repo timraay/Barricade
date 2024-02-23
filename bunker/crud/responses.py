@@ -32,6 +32,16 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
 
     return db_prr
 
+async def get_community_responses_to_report(db: AsyncSession, report: schemas.Report, community_id: int):
+    stmt = select(models.PlayerReportResponse).where(
+        models.PlayerReportResponse.community_id == community_id,
+        models.PlayerReportResponse.player_report.in_([
+            pr.id for pr in report.players
+        ])
+    )
+    result = await db.scalars(stmt)
+    return result.all()
+
 async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReport):
     stmt = select(
         models.PlayerReportResponse.banned,

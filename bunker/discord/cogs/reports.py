@@ -4,18 +4,20 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 import discord
-from discord import Interaction
+from discord import app_commands, Interaction
 from discord.ext import commands
 
 from sqlalchemy import select
 
 from bunker import schemas
-from bunker.crud.communities import get_community_by_id
-from bunker.crud.reports import get_report_by_id
+from bunker.crud.communities import get_community_by_id, get_community_by_guild_id, get_admin_by_id
+from bunker.crud.reports import get_report_by_id, get_reports_for_player
 from bunker.crud.responses import set_report_response
 from bunker.db import models, session_factory
-from bunker.discord.utils import handle_error
+from bunker.discord.reports import get_report_embed
+from bunker.discord.utils import handle_error, CustomException
 from bunker.discord.views.player_review import PlayerReviewView
+from bunker.discord.views.report_paginator import ReportPaginator
 from bunker.exceptions import NotFoundError
 from bunker.enums import ReportRejectReason
 from bunker.hooks import EventHooks
@@ -24,6 +26,7 @@ if TYPE_CHECKING:
     from bunker.discord.bot import Bot
 
 RE_PRR_CUSTOM_ID = re.compile(r"^prr:(?P<command>\w+):(?P<community_id>\d+):(?P<pr_id>\d+)(?::(?P<reject_reason>[\w_]+))?$")
+RE_RM_CUSTOM_ID = re.compile(r"^rm:(?P<command>\w+):(?P<report_id>\d+)$")
 
 class PRRCustomIDPayload(pydantic.BaseModel):
     command: str
@@ -37,6 +40,10 @@ class PRRCustomIDPayload(pydantic.BaseModel):
         if isinstance(value, str):
             return ReportRejectReason[value]
         return value
+
+class RMCustomIDPayload(pydantic.BaseModel):
+    command: str
+    report_id: int
 
 class ReportsCog(commands.Cog):
     def __init__(self, bot: 'Bot'):
@@ -91,20 +98,34 @@ class ReportsCog(commands.Cog):
 
     
     async def handle_management_interaction(self, interaction: Interaction, custom_id: str):
-        if not custom_id.startswith("rm:del:"):
+        match = RE_RM_CUSTOM_ID.match(custom_id)
+        if not match:
             return
         
-        report_id = int(custom_id[7:])
+        data = RMCustomIDPayload(**match.groupdict())
+
         async with session_factory() as db:
-            db_report = get_report_by_id(db, report_id)
+            db_report = await get_report_by_id(db, data.report_id, load_relations=True)
             if not db_report:
                 raise NotFoundError("This report no longer exists")
-            
-            # TODO? Only allow admins to delete
-            await db.delete(db_report)
-            await db.commit()
+        
+            match data.command:
+                case "del":
+                    # TODO? Only allow admins to delete
+                    await db.delete(db_report)
+                    await db.commit()
 
-            EventHooks.invoke_report_delete(db_report)
+                    EventHooks.invoke_report_delete(db_report)
+
+                case "edit":
+                    await interaction.response.send_message(
+                        content="It is currently not yet possible to edit reports.",
+                        ephemeral=True
+                    )
+
+                case _:
+                    raise ValueError("Unknown command %s" % data.command)
+
 
     async def set_response(self, interaction: Interaction, prr: schemas.ResponseCreateParams):
         async with session_factory() as db:
@@ -177,6 +198,34 @@ class ReportsCog(commands.Cog):
 
         view = PlayerReviewView(responses=list(responses.values()))
         await interaction.response.edit_message(view=view)
+
+
+    @app_commands.command(name="reports", description="See all Bunker reports made against a player")
+    async def get_reports(self, interaction: Interaction, player_id: str):
+        async with session_factory() as db:
+            admin = await get_admin_by_id(db, discord_id=interaction.user.id)
+            if admin and admin.community:
+                community = admin.community
+            else:
+                community = await get_community_by_guild_id(db, guild_id=interaction.guild_id)
+
+            if not community:
+                raise CustomException(
+                    "Access denied!",
+                    "Only admins of verified servers can use this command."
+                )
+
+            reports = await get_reports_for_player(db, player_id=player_id, load_relations=True)
+            if not reports:
+                await interaction.response.send_message(
+                    embed=discord.Embed(color=discord.Color.dark_theme()) \
+                        .set_author(name="There are no reports made against this player!"),
+                    ephemeral=True
+                )
+                return
+
+            view = ReportPaginator(community, reports)
+            await view.send(interaction)
 
 async def setup(bot: 'Bot'):
     await bot.add_cog(ReportsCog(bot))
