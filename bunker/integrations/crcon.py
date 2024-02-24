@@ -11,7 +11,6 @@ from bunker.exceptions import (
     AlreadyBannedError, IntegrationValidationError
 )
 from bunker.integrations.integration import Integration
-from bunker.schemas import Response
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):

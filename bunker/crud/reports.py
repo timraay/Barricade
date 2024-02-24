@@ -77,7 +77,7 @@ async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams)
 
 
 
-async def get_all_reports(db: AsyncSession, load_relations: bool = False):
+async def get_all_reports(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
     """Retrieve all reports.
 
     Parameters
@@ -86,6 +86,10 @@ async def get_all_reports(db: AsyncSession, load_relations: bool = False):
         An asynchronous database session
     load_relations : bool, optional
         Whether to also load relational properties, by default False
+    limit : int, optional
+        The amount of results to return, by default 100
+    offset : int, optional
+        Offset where from to start returning results, by default 0
 
     Returns
     -------
@@ -97,7 +101,7 @@ async def get_all_reports(db: AsyncSession, load_relations: bool = False):
     else:
         options = (selectinload(models.Report.players),)
 
-    stmt = select(models.Report).options(*options)
+    stmt = select(models.Report).limit(limit).offset(offset).options(*options)
     result = await db.scalars(stmt)
     return result.all()
 

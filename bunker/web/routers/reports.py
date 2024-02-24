@@ -1,29 +1,34 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import FastAPI, APIRouter, HTTPException, status
 import logging
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.crud.reports import get_token_by_value, create_report, get_report_by_id, get_all_reports
+from bunker.web.paginator import PaginatedResponse, PaginatorDep
+from bunker.crud import reports
 from bunker.enums import ReportReasonFlag
 from bunker.forwarding import forward_report_to_communities, forward_report_to_token_owner
-from bunker.db import models, get_db
+from bunker.db import DatabaseDep
 
 router = APIRouter(prefix="/reports")
 
-@router.get("", response_model=list[schemas.Report])
+@router.get("", response_model=PaginatedResponse[schemas.Report])
 async def get_reports(
-        db: AsyncSession = Depends(get_db)
+        db: DatabaseDep,
+        paginator: PaginatorDep,
 ):
-    return await get_all_reports(db)
+    result = await reports.get_all_reports(db,
+        limit=paginator.limit,
+        offset=paginator.offset
+    )
+    return paginator.paginate(result)
+    
 
 @router.post("/submit", response_model=schemas.ReportWithToken)
 async def submit_report(
         submission: schemas.ReportSubmission,
-        db: AsyncSession = Depends(get_db)
+        db: DatabaseDep,
 ):
     # Validate the token
-    token = await get_token_by_value(db, submission.data.token)
+    token = await reports.get_token_by_value(db, submission.data.token)
     invalid_token_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid token"
@@ -47,16 +52,16 @@ async def submit_report(
         reasons_bitflag=reasons_bitflag,
         reasons_custom=reasons_custom,
     )
-    db_report = await create_report(db, report)
+    db_report = await reports.create_report(db, report)
     db_report.token = token
     return db_report
         
 @router.get("/forward", response_model=schemas.ReportWithToken)
 async def forward_report(
         report_id: int,
-        db: AsyncSession = Depends(get_db)
+        db: DatabaseDep,
 ):
-    db_report = await get_report_by_id(db, report_id, load_relations=True)
+    db_report = await reports.get_report_by_id(db, report_id, load_relations=True)
     if not db_report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -71,9 +76,9 @@ async def forward_report(
 @router.get("/{report_id}", response_model=schemas.ReportWithToken)
 async def get_reports(
         report_id: int,
-        db: AsyncSession = Depends(get_db),
+        db: DatabaseDep,
 ):
-    report = await get_report_by_id(db, report_id=report_id, load_relations=True)
+    report = await reports.get_report_by_id(db, report_id=report_id, load_relations=True)
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

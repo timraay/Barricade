@@ -1,5 +1,7 @@
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from typing import Annotated
 
 from bunker.constants import DB_URL
 
@@ -34,6 +36,7 @@ async def get_db():
         yield db
     finally:
         await db.close()
+DatabaseDep = Annotated[AsyncSession, Depends(get_db)]
 
 async def create_tables():
     """Create all tables if they do not exist

@@ -1,33 +1,60 @@
-from fastapi import FastAPI, APIRouter, Depends, Security, HTTPException, status
-
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI, APIRouter, HTTPException, status, Depends
+from typing import Annotated
 
 from bunker import schemas
-from bunker.crud.communities import *
-from bunker.exceptions import AlreadyExistsError
-from bunker.db import models, get_db
-from bunker.web.scopes import Scopes
+from bunker.crud import communities
+from bunker.exceptions import AlreadyExistsError, AdminNotAssociatedError
+from bunker.db import models, DatabaseDep
+from bunker.web.paginator import PaginatorDep, PaginatedResponse
 
 router = APIRouter(prefix="/communities")
 
-@router.get("", response_model=list[schemas.CommunityRef])
+def get_community_dependency(load_relations: bool):
+    async def inner(db: DatabaseDep, community_id: int):
+        result = await communities.get_community_by_id(db, community_id, load_relations=load_relations)
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Community does not exist"
+            )
+        return result
+    return inner
+CommunityDep = Annotated[models.Community, Depends(get_community_dependency(False))]
+CommunityWithRelationsDep = Annotated[models.Community, Depends(get_community_dependency(True))]
+
+def get_admin_dependency(load_relations: bool):
+    async def inner(db: DatabaseDep, admin_id: int):
+        result = await communities.get_admin_by_id(db, admin_id, load_relations=load_relations)
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Admin does not exist"
+            )
+        return result
+    return inner
+AdminDep = Annotated[models.Admin, Depends(get_admin_dependency(False))]
+AdminWithRelationsDep = Annotated[models.Admin, Depends(get_admin_dependency(True))]
+
+
+@router.get("", response_model=PaginatedResponse[schemas.Community])
 async def get_all_communities(
-        db: AsyncSession = Depends(get_db)
+        db: DatabaseDep,
+        paginator: PaginatorDep,
 ):
-    stmt = select(models.Community)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    result = await communities.get_all_communities(db,
+        limit=paginator.limit,
+        offset=paginator.offset,
+    )
+    return paginator.paginate(result)
 
 @router.post("", response_model=schemas.CommunityRef)
 async def create_community(
+        db: DatabaseDep,
         community: schemas.CommunityCreateParams,
-        db: AsyncSession = Depends(get_db)
 ):
     # Create the community
     try:
-        db_community = await create_new_community(db, community)
+        db_community = await communities.create_new_community(db, community)
     except AlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -36,61 +63,20 @@ async def create_community(
 
     return db_community
 
-# TODO: Join/leave endpoints
-
-@router.get("/{community_id}", response_model=schemas.Community)
+@router.get("/{community_id}", response_model=schemas.CommunityWithRelations)
 async def get_community(
-        community_id: int,
-        db: AsyncSession = Depends(get_db)
+        community: CommunityWithRelationsDep,
 ):
-    db_community = await get_community_by_id(db, community_id, load_relations=True)
-    if db_community is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community does not exist"
-        )
-    return db_community
-
-@router.post("/{community_id}/admins", response_model=schemas.Admin)
-async def create_community_admin(
-        admin: schemas.AdminCreateParams,
-        db: AsyncSession = Depends(get_db)
-):
-    try:
-        return await create_new_admin(db, admin)
-    except AlreadyExistsError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An admin with this ID already exists"
-        )
-    except NotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community does not exist"
-        )
+    return community
 
 @router.put("/{community_id}/owner")
 async def transfer_community_ownership(
-        community_id: int,
-        admin_id: int,
-        db: AsyncSession = Depends(get_db)
-):
-    db_community = await get_community_by_id(db, community_id)
-    if db_community is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community does not exist"
-        )
-    
-    db_admin = await get_admin_by_id(db, admin_id)
-    if db_admin is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Admin does not exist"
-        )
-
+        db: DatabaseDep,
+        community: CommunityDep,
+        admin: AdminDep,
+) -> bool:
     try:
-        return await transfer_ownership(db, db_community, db_admin)
+        return await communities.transfer_ownership(db, community, admin)
     except AdminNotAssociatedError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -12,6 +12,34 @@ from bunker.exceptions import (
     TooManyAdminsError, NotFoundError
 )
 
+async def get_all_admins(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
+    """Retrieve all admins.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+    limit : int, optional
+        The amount of results to return, by default 100
+    offset : int, optional
+        Offset where from to start returning results, by default 0
+
+    Returns
+    -------
+    List[Admin]
+        A sequence of all admins
+    """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Admin.community), selectinload(models.Admin.owned_community))
+
+    stmt = select(models.Admin).limit(limit).offset(offset).options(*options)
+    result = await db.scalars(stmt)
+    return result.all()
+
 async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
     """Look up an admin by their discord ID.
 
@@ -35,6 +63,35 @@ async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: boo
         options = (selectinload(models.Admin.community), selectinload(models.Admin.owned_community))
 
     return await db.get(models.Admin, discord_id, options=options)
+
+
+async def get_all_communities(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
+    """Retrieve all communities.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+    limit : int, optional
+        The amount of results to return, by default 100
+    offset : int, optional
+        Offset where from to start returning results, by default 0
+
+    Returns
+    -------
+    List[Community]
+        A sequence of all communities
+    """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+
+    stmt = select(models.Community).limit(limit).offset(offset).options(*options)
+    result = await db.scalars(stmt)
+    return result.all()
 
 async def get_community_by_id(db: AsyncSession, community_id: int, load_relations: bool = False):
     """Look up a community by its ID.
@@ -199,11 +256,13 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
 
     Raises
     ------
+    NotFoundError
+        The admin is not part of a community
     AdminOwnsCommunityError
         The admin is a community owner
     """
     if admin.community_id is None:
-        return admin
+        raise NotFoundError
     
     owned_community = await admin.awaitable_attrs.owned_community
     if owned_community:
@@ -226,7 +285,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         An asynchronous database session
     admin : models.Admin
         The admin to add
-    community_id : int
+    community : models.Community
         The community to add the admin to
 
     Returns
@@ -240,8 +299,6 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         The admin is already part of a community
     TooManyAdminsError
         The community is not allowed any more admins
-    NotFoundError
-        No community exists for the given ID
     """
     if admin.community_id:
         if admin.community_id == community.id:
@@ -253,10 +310,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         raise TooManyAdminsError
         
     admin.community_id = community.id
-    try:
-        await db.commit()
-    except IntegrityError:
-        raise NotFoundError(admin)
+    await db.commit()
     await db.refresh(admin)
 
     await grant_admin_role(admin.discord_id)

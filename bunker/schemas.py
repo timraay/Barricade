@@ -137,7 +137,6 @@ class Community(CommunityRef):
     admins: list[AdminRef]
     integrations: list[IntegrationConfig]
 
-
 class ReportTokenCreateParams(_ReportTokenBase):
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=1))
 
@@ -217,7 +216,13 @@ class ResponseStats(BaseModel):
     reject_reasons: dict[ReportRejectReason, int]
 
 
+class CommunityWithRelations(Community):
+    tokens: list[ReportTokenRef]
+    responses: list[Response]
+
+
 class IntegrationBanPlayerParams(BaseModel):
     player_id: str
     reasons: list[str]
     community: CommunityRef
+
