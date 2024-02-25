@@ -34,7 +34,7 @@ class PRRCustomIDPayload(pydantic.BaseModel):
     pr_id: int
     reject_reason: Optional[ReportRejectReason] = None
 
-    @pydantic.field_validator("reject_reason")
+    @pydantic.field_validator("reject_reason", mode="before")
     @classmethod
     def _validate_reject_reason(cls, value):
         if isinstance(value, str):

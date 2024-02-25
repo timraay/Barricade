@@ -180,7 +180,7 @@ class Response(_ResponseBase, _ModelFromAttributes):
     community: CommunityRef
 
 class PendingResponse(_ResponseBase):
-    player_report: PlayerReport
+    player_report: PlayerReportRef
     community: CommunityRef
     banned: Optional[bool] = None
     reject_reason: Optional[ReportRejectReason] = None
