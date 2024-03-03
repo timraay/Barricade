@@ -1,8 +1,9 @@
 import discord
 from discord import Interaction
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.crud.responses import get_community_responses_to_report
+from bunker.crud.responses import get_community_responses_to_report, get_response_stats
 from bunker.db import session_factory
 from bunker.discord.reports import get_report_embed
 from bunker.discord.utils import View, CallableButton
@@ -18,14 +19,15 @@ class ReportPaginator(View):
         self.community = community
         self.reports = reports
         self.page = 0
+        self.stats = dict[int, schemas.ResponseStats] = {}
 
     async def send(self, interaction: Interaction):
         await self.load_page(0)
-        embed = await get_report_embed(self.reports[self.page])
+        embed = await get_report_embed(self.reports[self.page], stats=self.stats)
         await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
     
     async def edit(self, interaction: Interaction):
-        embed = await get_report_embed(self.reports[self.page])
+        embed = await get_report_embed(self.reports[self.page], stats=self.stats)
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def go_first_page(self, interaction: Interaction):
@@ -61,16 +63,22 @@ class ReportPaginator(View):
                 self.add_item(CallableButton(self.go_page_forward, style=discord.ButtonStyle.gray, label=">", row=0))
                 self.add_item(CallableButton(self.go_last_page, style=discord.ButtonStyle.gray, label=">>", row=0))
 
-            # Get default view
             self.page = page
             report = self.reports[page]
+            missing_stats = {pr for pr in report.players if pr.id not in self.stats}
+            
+            # Get default view
             if report.token.community_id == self.community.id:
                 view = ReportManagementView(report)
+                if missing_stats:
+                    async with session_factory() as db:
+                        await self.fetch_response_stats(db, *missing_stats)
             else:
                 async with session_factory() as db:
                     # Load responses
                     db_responses = await get_community_responses_to_report(db, report, self.community.id)
                     responses = self.get_pending_responses(db_responses)
+                    await self.fetch_response_stats(db, *missing_stats)
                 view = PlayerReviewView(responses)
             
             # Add items from default view to paginator
@@ -80,6 +88,11 @@ class ReportPaginator(View):
         except:
             self.page = old_page
             raise
+
+    async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReport):
+        for pr in player_reports:
+            stats = await get_response_stats(db, pr)
+            self.stats[pr.id] = stats
 
     def get_pending_responses(self, responses: list[schemas.Response]):
         pending = {

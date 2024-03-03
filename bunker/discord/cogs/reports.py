@@ -12,7 +12,7 @@ from sqlalchemy import select
 from bunker import schemas
 from bunker.crud.communities import get_community_by_id, get_community_by_guild_id, get_admin_by_id
 from bunker.crud.reports import get_report_by_id, get_reports_for_player
-from bunker.crud.responses import set_report_response
+from bunker.crud.responses import set_report_response, get_response_stats
 from bunker.db import models, session_factory
 from bunker.discord.reports import get_report_embed
 from bunker.discord.utils import handle_error, CustomException
@@ -162,13 +162,23 @@ class ReportsCog(commands.Cog):
                     responses[row.pr_id].banned = row.banned
                     responses[row.pr_id].reject_reason = row.reject_reason
 
+            stats: dict[int, schemas.ResponseStats] = {}
+            report = db_prr.player_report.report
+            for player in report.players:
+                stats[player.id] = await get_response_stats(db, player)
+
         view = PlayerReviewView(responses=list(responses.values()))
-        await interaction.response.edit_message(view=view)
+        embed = PlayerReviewView.get_embed(report, stats=stats)
+        await interaction.response.edit_message(embed=embed, view=view)
     
     async def refresh_report_view(self, interaction: Interaction, community_id: int, report_id: int):
         async with session_factory() as db:
             report = await get_report_by_id(db, report_id)
             community = await get_community_by_id(db, report_id)
+
+            stats: dict[int, schemas.ResponseStats] = {}
+            for player in report.players:
+                stats[player.id] = await get_response_stats(db, player)
 
             responses = {
                 player.id: schemas.PendingResponse(
@@ -197,7 +207,8 @@ class ReportsCog(commands.Cog):
                 responses[row.pr_id].reject_reason = row.reject_reason
 
         view = PlayerReviewView(responses=list(responses.values()))
-        await interaction.response.edit_message(view=view)
+        embed = PlayerReviewView.get_embed(report, stats=stats)
+        await interaction.response.edit_message(embed=embed, view=view)
 
 
     @app_commands.command(name="reports", description="See all Bunker reports made against a player")

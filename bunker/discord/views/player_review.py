@@ -3,6 +3,7 @@ from discord import ButtonStyle
 
 from bunker import schemas
 from bunker.discord.utils import View
+from bunker.discord.reports import get_report_embed
 from bunker.enums import ReportRejectReason
 
 class PlayerReviewView(View):
@@ -50,3 +51,10 @@ class PlayerReviewView(View):
                     custom_id=f"prr:reject:{response.community.id}:{response.player_report.id}:{reason.name}",
                     row=row
                 ))
+
+    @staticmethod
+    async def get_embed(
+        report: schemas.ReportWithToken,
+        stats: dict[int, schemas.ResponseStats] = None
+    ):
+        return await get_report_embed(report, stats)

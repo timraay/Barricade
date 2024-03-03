@@ -1,6 +1,7 @@
 import discord
 
 from bunker import schemas
+from bunker.discord.reports import get_report_embed
 from bunker.discord.utils import View
 
 class ReportManagementView(View):
@@ -17,4 +18,12 @@ class ReportManagementView(View):
             custom_id=f"rm:del:{report.id}"
         ))
 
+    @staticmethod
+    async def get_embed(
+        report: schemas.ReportWithToken,
+        stats: dict[int, schemas.ResponseStats] = None
+    ):
+        embed = await get_report_embed(report, stats=stats, with_footer=False)
+        embed.color = discord.Color.blurple()
+        return embed
     

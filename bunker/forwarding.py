@@ -24,7 +24,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         if not communities:
             return
 
-        embed = await get_report_embed(report)
+        embed = await PlayerReviewView.get_embed(report)
         
         for community in communities:
             guild = bot.get_guild(community.forward_guild_id)
@@ -48,9 +48,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
 async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     community = report.token.community
 
-    embed = await get_report_embed(report, with_footer=False)
-    embed.color = discord.Color.blurple()
-
+    embed = await ReportManagementView.get_embed(report)
     view = ReportManagementView(report)
 
     user = await bot.get_or_fetch_user(report.token.admin.discord_id)

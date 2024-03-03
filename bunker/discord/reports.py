@@ -12,7 +12,11 @@ def get_report_channel():
     return bot.primary_guild.get_channel(DISCORD_REPORTS_CHANNEL_ID)
 
 
-async def get_report_embed(report: schemas.ReportCreateParams | schemas.ReportWithToken, with_footer: bool = True) -> discord.Embed:
+async def get_report_embed(
+        report: schemas.ReportCreateParams | schemas.ReportWithToken,
+        stats: dict[int, schemas.ResponseStats] = None,
+        with_footer: bool = True
+) -> discord.Embed:
     embed = discord.Embed(
         colour=discord.Colour.dark_theme(),
         title=", ".join(ReportReasonFlag(report.reasons_bitflag).to_list(report.reasons_custom)),
@@ -25,6 +29,20 @@ async def get_report_embed(report: schemas.ReportCreateParams | schemas.ReportWi
             bm_rcon_url = player.player.bm_rcon_url
 
         value = f"*`{player.player_id}`*"
+
+        if stats and (stat := stats.get(player.id)):
+            num_responses = stat.num_banned + stat.num_rejected
+            rate = stat.num_banned / num_responses
+            if rate >= 0.9:
+                emoji = "👍"
+            elif rate >= 0.7:
+                emoji = "😬"
+            elif rate >= 0.5:
+                emoji = "👎"
+            else:
+                emoji = "💀"
+
+            value += f"\nBanned by **{rate:.0%}** \{emoji} ({num_responses})"
 
         player_id_type = get_player_id_type(player.player_id)
         if player_id_type == PlayerIDType.STEAM_64_ID:
