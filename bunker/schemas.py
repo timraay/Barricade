@@ -86,7 +86,7 @@ class _ResponseBase(BaseModel):
     reject_reason: Optional[ReportRejectReason]
 
 class _PlayerBanBase(BaseModel):
-    player_id: int
+    player_id: str
     integration_id: int
     remote_id: str
 

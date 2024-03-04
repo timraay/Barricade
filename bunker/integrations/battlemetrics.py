@@ -1,3 +1,4 @@
+import logging
 from typing import Sequence
 import aiohttp
 from uuid import UUID
@@ -68,6 +69,11 @@ class BattlemetricsIntegration(Integration):
 
             try:
                 await self.remove_ban(db_ban.remote_id)
+            except aiohttp.ClientResponseError as e:
+                if e.status == 404:
+                    logging.error("Battlemetrics Ban with ID %s for player %s not found", db_ban.remote_id, player_id)
+                else:
+                    raise IntegrationBanError(player_id, "Failed to unban player")
             except:
                 raise IntegrationBanError(player_id, "Failed to unban player")
 
@@ -122,7 +128,7 @@ class BattlemetricsIntegration(Integration):
 
     # --- Battlemetrics API wrappers
 
-    async def _make_request(self, method: str, url: str, data: dict = None) -> dict:
+    async def _make_request(self, method: str, url: str, data: dict = None) -> dict | None:
         """Make an API request.
 
         Parameters
@@ -159,6 +165,8 @@ class BattlemetricsIntegration(Integration):
                     response = await r.json()
                 elif "text/html" in content_type:
                     response = (await r.content.read()).decode()
+                elif not content_type:
+                    response = None
                 else:
                     raise Exception(f"Unsupported content type: {content_type}")
 

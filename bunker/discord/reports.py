@@ -32,17 +32,18 @@ async def get_report_embed(
 
         if stats and (stat := stats.get(player.id)):
             num_responses = stat.num_banned + stat.num_rejected
-            rate = stat.num_banned / num_responses
-            if rate >= 0.9:
-                emoji = "👍"
-            elif rate >= 0.7:
-                emoji = "😬"
-            elif rate >= 0.5:
-                emoji = "👎"
-            else:
-                emoji = "💀"
+            if num_responses:
+                rate = stat.num_banned / num_responses
+                if rate >= 0.9:
+                    emoji = "👍"
+                elif rate >= 0.7:
+                    emoji = "😬"
+                elif rate >= 0.5:
+                    emoji = "👎"
+                else:
+                    emoji = "💀"
 
-            value += f"\nBanned by **{rate:.0%}** ({num_responses}) \{emoji}"
+                value += f"\nBanned by **{rate:.0%}** ({num_responses}) \{emoji}"
 
         player_id_type = get_player_id_type(player.player_id)
         if player_id_type == PlayerIDType.STEAM_64_ID:

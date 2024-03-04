@@ -2,7 +2,7 @@ from sqlalchemy import select, delete, not_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from bunker import schemas
 from bunker.db import models
@@ -45,12 +45,12 @@ async def get_player_bans_for_community(db: AsyncSession, player_id: str, commun
     stmt = select(models.PlayerBan).join(models.PlayerBan.integration).where(
         models.PlayerBan.player_id == player_id,
         models.Integration.community_id == community_id,
-    )
+    ).options(joinedload(models.PlayerBan.integration))
     result = await db.scalars(stmt)
     return result.all()
 
 async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
-    db_ban = models.PlayerBan(ban.model_dump())
+    db_ban = models.PlayerBan(**ban.model_dump())
     db.add(db_ban)
     try:
         await db.commit()
@@ -59,7 +59,9 @@ async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
     return db_ban
 
 async def bulk_create_bans(db: AsyncSession, bans: list[schemas.PlayerBanCreateParams]):
-    stmt = insert(models.PlayerBan).values(bans).on_conflict_do_nothing(
+    stmt = insert(models.PlayerBan).values(
+        [ban.model_dump() for ban in bans]
+    ).on_conflict_do_nothing(
         index_elements=["player_id", "integration_id"]
     )
     await db.execute(stmt)
