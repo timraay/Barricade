@@ -162,19 +162,21 @@ class ReportsCog(commands.Cog):
                     responses[row.pr_id].banned = row.banned
                     responses[row.pr_id].reject_reason = row.reject_reason
 
-            stats: dict[int, schemas.ResponseStats] = {}
             report = db_prr.player_report.report
+            await report.awaitable_attrs.token
+
+            stats: dict[int, schemas.ResponseStats] = {}
             for player in report.players:
                 stats[player.id] = await get_response_stats(db, player)
 
         view = PlayerReviewView(responses=list(responses.values()))
-        embed = PlayerReviewView.get_embed(report, stats=stats)
+        embed = await PlayerReviewView.get_embed(report, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
     
     async def refresh_report_view(self, interaction: Interaction, community_id: int, report_id: int):
         async with session_factory() as db:
-            report = await get_report_by_id(db, report_id)
-            community = await get_community_by_id(db, report_id)
+            report = await get_report_by_id(db, report_id, load_relations=True)
+            community = await get_community_by_id(db, community_id)
 
             stats: dict[int, schemas.ResponseStats] = {}
             for player in report.players:
@@ -207,7 +209,7 @@ class ReportsCog(commands.Cog):
                 responses[row.pr_id].reject_reason = row.reject_reason
 
         view = PlayerReviewView(responses=list(responses.values()))
-        embed = PlayerReviewView.get_embed(report, stats=stats)
+        embed = await PlayerReviewView.get_embed(report, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
 

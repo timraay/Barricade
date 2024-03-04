@@ -1,10 +1,10 @@
 import discord
+import logging
 from sqlalchemy import select
 
 from bunker import schemas
 from bunker.db import models, session_factory
 from bunker.discord import bot
-from bunker.discord.reports import get_report_embed
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.views.report_management import ReportManagementView
 from bunker.hooks import EventHooks, add_hook
@@ -47,11 +47,12 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
 @add_hook(EventHooks.report_create)
 async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     community = report.token.community
+    admin = report.token.admin
 
     embed = await ReportManagementView.get_embed(report)
     view = ReportManagementView(report)
 
-    user = await bot.get_or_fetch_user(report.token.admin.discord_id)
+    user = await bot.get_or_fetch_user(admin.discord_id)
 
     if community.forward_channel_id:
         if guild := bot.get_guild(community.forward_guild_id):
@@ -67,8 +68,10 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
                 else:
                     return
     
-    await user.send(
-        content=user.mention,
-        embed=embed,
-    )
-    
+    try:
+        await user.send(
+            content=user.mention,
+            embed=embed,
+        )
+    except discord.errors.HTTPException:
+        logging.error("Could not send report confirmation to %s (ID: %s)", admin.name, admin.discord_id)

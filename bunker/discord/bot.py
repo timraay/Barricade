@@ -5,14 +5,9 @@ from pathlib import Path
 
 import discord
 from discord.ext import commands
-from discord.utils import escape_markdown as esc_md
 
-from bunker import schemas
-from bunker.db import models
-from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.utils import handle_error
 from bunker.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
-from bunker.utils import get_player_id_type, PlayerIDType
 
 __all__ = (
     "bot",

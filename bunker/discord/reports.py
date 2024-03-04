@@ -42,7 +42,7 @@ async def get_report_embed(
             else:
                 emoji = "💀"
 
-            value += f"\nBanned by **{rate:.0%}** \{emoji} ({num_responses})"
+            value += f"\nBanned by **{rate:.0%}** ({num_responses}) \{emoji}"
 
         player_id_type = get_player_id_type(player.player_id)
         if player_id_type == PlayerIDType.STEAM_64_ID:

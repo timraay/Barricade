@@ -27,6 +27,7 @@ class EventHooks(str, Enum):
     
     def register(self, func: Callable[[Any], Coroutine]):
         self.get().append(func)
+        return func
 
     @staticmethod
     def invoke_report_create(report: schemas.ReportWithToken):
