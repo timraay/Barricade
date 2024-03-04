@@ -169,8 +169,9 @@ class ReportsCog(commands.Cog):
             for player in report.players:
                 stats[player.id] = await get_response_stats(db, player)
 
-        view = PlayerReviewView(responses=list(responses.values()))
-        embed = await PlayerReviewView.get_embed(report, stats=stats)
+        responses = list(responses.values())
+        view = PlayerReviewView(responses=responses)
+        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
     
     async def refresh_report_view(self, interaction: Interaction, community_id: int, report_id: int):
@@ -208,8 +209,9 @@ class ReportsCog(commands.Cog):
                 responses[row.pr_id].banned = row.banned
                 responses[row.pr_id].reject_reason = row.reject_reason
 
-        view = PlayerReviewView(responses=list(responses.values()))
-        embed = await PlayerReviewView.get_embed(report, stats=stats)
+        responses = list(responses.values())
+        view = PlayerReviewView(responses=responses)
+        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
 

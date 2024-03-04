@@ -20,4 +20,4 @@ class PlayerReport(ModelBase):
 
     report: Mapped['Report'] = relationship(back_populates="players", lazy="selectin")
     player: Mapped['Player'] = relationship(back_populates="reports", lazy="selectin")
-    responses: Mapped['PlayerReportResponse'] = relationship(back_populates="player_report")
+    responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="player_report")

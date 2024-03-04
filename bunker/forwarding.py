@@ -24,8 +24,6 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         if not communities:
             return
 
-        embed = await PlayerReviewView.get_embed(report)
-        
         for community in communities:
             guild = bot.get_guild(community.forward_guild_id)
             if not guild:
@@ -42,6 +40,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             ) for player in report.players]
 
             view = PlayerReviewView(responses=responses)
+            embed = await PlayerReviewView.get_embed(report)
             await channel.send(embed=embed, view=view)
 
 @add_hook(EventHooks.report_create)

@@ -22,7 +22,7 @@ class PlayerReviewView(View):
                 self.add_item(discord.ui.Button(
                     label="Unban player",
                     style=ButtonStyle.blurple,
-                    disabled=True,
+                    disabled=False,
                     custom_id=f"prr:unban:{response.community.id}:{response.player_report.id}",
                     row=row
                 ))
@@ -55,6 +55,13 @@ class PlayerReviewView(View):
     @staticmethod
     async def get_embed(
         report: schemas.ReportWithToken,
+        responses: list[schemas.PendingResponse],
         stats: dict[int, schemas.ResponseStats] = None
     ):
-        return await get_report_embed(report, stats)
+        embed = await get_report_embed(report, stats)
+        if len(responses) == len(report.players):
+            if any(response.banned for response in responses):
+                embed.color = discord.Colour.brand_red()
+            else:
+                embed.color = discord.Colour.brand_green()
+        return embed
