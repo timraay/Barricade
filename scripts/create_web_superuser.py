@@ -5,9 +5,9 @@ from bunker.web.schemas import WebUserCreateParams
 from bunker.web.scopes import Scopes
 from bunker.web.security import create_user
 
-async def main():
-    username = input("Username: ")
-    password = input("Password: ")
+async def main(username: str = None, password: str = None):
+    username = username or input("Username: ")
+    password = password or input("Password: ")
 
     await create_tables()
     async with session_factory() as db:

@@ -35,7 +35,7 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
 async def get_community_responses_to_report(db: AsyncSession, report: schemas.Report, community_id: int):
     stmt = select(models.PlayerReportResponse).where(
         models.PlayerReportResponse.community_id == community_id,
-        models.PlayerReportResponse.player_report.in_([
+        models.PlayerReportResponse.pr_id.in_([
             pr.id for pr in report.players
         ])
     )

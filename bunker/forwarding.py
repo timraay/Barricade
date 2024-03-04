@@ -40,7 +40,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             ) for player in report.players]
 
             view = PlayerReviewView(responses=responses)
-            embed = await PlayerReviewView.get_embed(report)
+            embed = await PlayerReviewView.get_embed(report, responses)
             await channel.send(embed=embed, view=view)
 
 @add_hook(EventHooks.report_create)

@@ -11,7 +11,7 @@ from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
 
 from bunker import schemas
-from bunker.crud.communities import get_admin_by_id
+from bunker.crud.communities import get_admin_by_id, get_community_by_owner_id
 from bunker.db import models, session_factory
 from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed, get_question_embed, only_once
 from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration
@@ -59,14 +59,15 @@ INTEGRATION_PROPERTIES = {
 }
 
 async def get_owned_community(db: AsyncSession, user_id: int):
-    owner = await get_admin_by_id(db, user_id)
-    if not owner or not owner.owned_community:
+    community = await get_community_by_owner_id(db, user_id)
+    if not community:
         raise CustomException(
             "You need to be a community owner to do this!",
         )
-    return owner.community
+    schemas.Community.model_validate(community)
+    return community
 
-async def get_config_from_community(community: models.Community, integration_id: int):
+def get_config_from_community(community: models.Community, integration_id: int):
     for integration in community.integrations:
         if integration.id == integration_id:
             return integration
@@ -203,7 +204,7 @@ class IntegrationManagementView(View):
             community = await get_owned_community(db, interaction.user.id)
 
         if integration_id:
-            config = await get_config_from_community(community, integration_id)
+            config = get_config_from_community(community, integration_id)
         else:
             config = None
 
@@ -212,7 +213,7 @@ class IntegrationManagementView(View):
     async def enable_integration(self, integration_id: int, interaction: Interaction):
         async with session_factory() as db:
             community = await get_owned_community(db, interaction.user.id)
-            db_config = await get_config_from_community(community, integration_id)
+            db_config = get_config_from_community(community, integration_id)
 
             properties = INTEGRATION_PROPERTIES[db_config.integration_type]
             config = properties.config_cls.model_validate(db_config)
@@ -237,7 +238,7 @@ class IntegrationManagementView(View):
     async def disable_integration(self, integration_id: int, interaction: Interaction):
         async with session_factory() as db:
             community = await get_owned_community(db, interaction.user.id)
-            db_config = await get_config_from_community(community, integration_id)
+            db_config = get_config_from_community(community, integration_id)
 
             properties = INTEGRATION_PROPERTIES[db_config.integration_type]
             config = properties.config_cls.model_validate(db_config)
@@ -320,12 +321,7 @@ async def submit_integration_config(interaction: Interaction, integration: Integ
 
     async with session_factory() as db:
         # Make sure user is owner
-        owner = await get_admin_by_id(db, interaction.user.id)
-        if not owner or not owner.owned_community:
-            raise CustomException(
-                "You need to be a community owner to do this!",
-            )
-        community = owner.community
+        community = await get_owned_community(db, interaction.user.id)
 
         # Validate config
         integration.config.community_id = community.id

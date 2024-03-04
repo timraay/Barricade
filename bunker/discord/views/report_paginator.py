@@ -19,7 +19,7 @@ class ReportPaginator(View):
         self.community = community
         self.reports = reports
         self.page = 0
-        self.stats = dict[int, schemas.ResponseStats] = {}
+        self.stats: dict[int, schemas.ResponseStats] = {}
 
     async def send(self, interaction: Interaction):
         await self.load_page(0)
