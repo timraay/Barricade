@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Optional, ClassVar
 from uuid import UUID
 
@@ -51,6 +51,11 @@ class _AdminBase(BaseModel):
     community_id: Optional[int]
     name: str
 
+    # Convert to str to avoid precision loss when sending via REST API
+    @field_serializer('discord_id', when_used='json-unless-none')
+    def convert_large_int_to_str(value: int):
+        return str(value)
+
 class _CommunityBase(BaseModel):
     name: str
     contact_url: str
@@ -58,6 +63,13 @@ class _CommunityBase(BaseModel):
 
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
+
+    @field_serializer(
+            'owner_id', 'forward_guild_id', 'forward_channel_id',
+            when_used='json-unless-none'
+    )
+    def convert_large_int_to_str(value: int):
+        return str(value)
 
 class _PlayerBase(BaseModel):
     id: str
@@ -67,6 +79,10 @@ class _ReportTokenBase(BaseModel):
     community_id: int
     admin_id: int
     expires_at: datetime
+
+    @field_serializer('admin_id', when_used='json-unless-none')
+    def convert_large_int_to_str(value: int):
+        return str(value)
 
 class _ReportBase(BaseModel):
     created_at: datetime
