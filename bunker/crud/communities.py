@@ -222,9 +222,13 @@ async def create_new_community(
 
     # Update the owner's community
     db_owner.community_id = db_community.id
-    await db.commit()
+    await db.flush()
     await db.refresh(db_community)
-    
+
+    # Grant role to the owner
+    await grant_owner_role(db_owner.discord_id)
+
+    await db.commit()
     return db_community
 
 async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
@@ -258,7 +262,8 @@ async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
         db_community = await get_community_by_id(db, admin.community_id)
         if not db_community:
             raise NotFoundError("Community does not exist")
-        elif len(db_community.admins) >= MAX_ADMIN_LIMIT:
+        elif len(db_community.admins) > MAX_ADMIN_LIMIT:
+            # -1 to exclude owner, +1 to include the new admin
             raise TooManyAdminsError
 
     db_admin = models.Admin(**admin.model_dump())
@@ -297,10 +302,12 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
         raise AdminOwnsCommunityError(admin)
 
     admin.community_id = None
-    await db.commit()
-    await db.refresh(admin)
+    await db.flush()
 
     await revoke_admin_roles(admin.discord_id)
+
+    await db.commit()
+    await db.refresh(admin)
 
     return admin
 
@@ -334,14 +341,17 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
         else:
             raise AlreadyExistsError(admin)
         
-    if len(await community.awaitable_attrs.admins) >= MAX_ADMIN_LIMIT:
+    if len(await community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
+        # -1 to exclude owner, +1 to include the new admin
         raise TooManyAdminsError
         
     admin.community_id = community.id
-    await db.commit()
-    await db.refresh(admin)
+    await db.flush()
 
     await grant_admin_role(admin.discord_id)
+
+    await db.commit()
+    await db.refresh(admin)
 
     return admin
 
@@ -375,12 +385,14 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     
     old_owner_id = community.owner_id
     community.owner_id = admin.discord_id
-    await db.commit()
+    await db.flush()
     await db.refresh(community)
 
+    print(old_owner_id, community.owner_id, admin.discord_id)
     await grant_admin_role(old_owner_id)
     await grant_owner_role(community.owner_id)
 
+    await db.commit()
     return True
 
 

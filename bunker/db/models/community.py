@@ -17,6 +17,7 @@ class Community(ModelBase):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
+    tag: Mapped[str]
     contact_url: Mapped[str]
     owner_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
 

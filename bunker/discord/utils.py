@@ -22,6 +22,7 @@ class CallableButton(ui.Button):
         url: Optional[str] = None,
         emoji: Optional[str | Emoji | PartialEmoji] = None,
         row: Optional[int] = None,
+        single_use: bool = False,
         **kwargs: Any
     ):
         super().__init__(
@@ -37,8 +38,18 @@ class CallableButton(ui.Button):
         self._args = args
         self._kwargs = kwargs
 
+        self.single_use = single_use
+        self._has_been_used = False
+
     async def callback(self, interaction: Interaction):
-        await self._callback(interaction, *self._args, **self._kwargs)
+        if self.single_use:
+            if self._has_been_used:
+                raise ExpiredButtonError
+            await self._callback(interaction, *self._args, **self._kwargs)
+            self._has_been_used = True
+        
+        else:
+            await self._callback(interaction, *self._args, **self._kwargs)
 
 class CallableSelect(ui.Select):
     def __init__(self,
@@ -167,16 +178,6 @@ class View(ui.View):
 class Modal(ui.Modal):
     async def on_error(self, interaction: Interaction, error: Exception, /) -> None:
         await handle_error(interaction, error)
-
-def only_once(func):
-    func.__has_been_ran_once = False
-    async def decorated(*args, **kwargs):
-        if func.__has_been_ran_once:
-            raise ExpiredButtonError
-        res = await func(*args, **kwargs)
-        func.__has_been_ran_once = True
-        return res
-    return decorated
 
 @async_ttl_cache(size=100, seconds=60*60*24)
 async def get_command_mention(tree: discord.app_commands.CommandTree, name: str, subcommands: str = None, guild_only: bool = False):

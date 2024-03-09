@@ -58,6 +58,7 @@ class _AdminBase(BaseModel):
 
 class _CommunityBase(BaseModel):
     name: str
+    tag: str
     contact_url: str
     owner_id: int
 

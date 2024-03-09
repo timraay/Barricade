@@ -21,19 +21,25 @@ async def get_admin_name(admin: schemas.AdminRef):
 
 
 async def grant_admin_role(user_id: int):
-    admin_role, owner_role = bot.get_admin_roles()
+    admin_role, owner_role = get_admin_roles()
     user = await bot.get_or_fetch_user(user_id)
     await user.add_roles(admin_role)
     await user.remove_roles(owner_role)
 
 async def grant_owner_role(user_id: int):
-    admin_role, owner_role = bot.get_admin_roles()
+    admin_role, owner_role = get_admin_roles()
     user = await bot.get_or_fetch_user(user_id)
     await user.add_roles(owner_role)
     await user.remove_roles(admin_role)
 
 async def revoke_admin_roles(user_id: int):
-    admin_role, owner_role = bot.get_admin_roles()
+    admin_role, owner_role = get_admin_roles()
     user = await bot.get_or_fetch_user(user_id)
     await user.remove_roles(admin_role, owner_role)
 
+def get_forward_channel(community: schemas.CommunityRef):
+    guild = bot.get_guild(community.forward_guild_id)
+    if not guild:
+        return
+    channel = guild.get_channel(community.forward_channel_id)
+    return channel

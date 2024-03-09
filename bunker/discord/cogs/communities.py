@@ -8,7 +8,8 @@ from discord.utils import escape_markdown as esc_md
 
 from bunker.db import session_factory
 from bunker.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
-from bunker.crud.communities import get_admin_by_id
+from bunker.crud.communities import get_admin_by_id, get_community_by_id
+from bunker.discord.autocomplete import atcp_community
 from bunker.discord.utils import CustomException, get_command_mention
 from bunker.discord.views.admin_confirmation import (
     AdminAddConfirmationView,
@@ -16,6 +17,7 @@ from bunker.discord.views.admin_confirmation import (
     OwnershipTransferConfirmationView,
     LeaveCommunityConfirmationView
 )
+from bunker.discord.views.community_overview import CommunityOverviewView
 from bunker.discord.views.integration_management import IntegrationManagementView
 
 if TYPE_CHECKING:
@@ -54,17 +56,17 @@ class CommunitiesCog(commands.Cog):
                         )
                     )
             
-            if len(await owner.owned_community.awaitable_attrs.admins) >= MAX_ADMIN_LIMIT:
+            if len(await owner.owned_community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
                 raise CustomException(
                     "You've hit the limit of admins allowed per community!",
                     (
                         f"Each community is only allowed up to {MAX_ADMIN_LIMIT} admins,"
-                        " including yourself. You need to remove an existing admin before"
+                        " excluding the owner. You need to remove an existing admin before"
                         " you can add a new one."
                     )
                 )
             
-            view = AdminAddConfirmationView(admin.community, user)
+            view = AdminAddConfirmationView(owner.community, user)
             await view.send(interaction)
 
     @app_commands.command(name="remove-admin", description="Remove an admin's access from the Bunker")
@@ -133,7 +135,7 @@ class CommunitiesCog(commands.Cog):
                     f"{esc_md(user.nick or user.display_name)} already is part of another community!"
                 )
             
-            view = OwnershipTransferConfirmationView(admin.community, user, owner)
+            view = OwnershipTransferConfirmationView(owner.community, user)
             await view.send(interaction)
 
     @app_commands.command(name="leave-community", description="Remove your admin access from the Bunker")
@@ -175,6 +177,19 @@ class CommunitiesCog(commands.Cog):
             view = IntegrationManagementView(owner.community)
             await view.send(interaction)
 
+    @app_commands.command(name="community", description="Get information about a community")
+    @app_commands.guilds(DISCORD_GUILD_ID)
+    @app_commands.autocomplete(community=atcp_community)
+    @app_commands.describe(community="The name of a community")
+    async def get_community_overview(self, interaction: Interaction, community: int):
+        async with session_factory() as db:
+            db_community = await get_community_by_id(db, community)
+            if not db_community:
+                raise CustomException(
+                    "This community does not exist!"
+                )
+        view = CommunityOverviewView(db_community, interaction.user)
+        await view.send(interaction)
 
 async def setup(bot: 'Bot'):
     await bot.add_cog(CommunitiesCog(bot))

@@ -5,7 +5,7 @@ from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
 
 from bunker import schemas
-from bunker.crud.communities import admin_join_community, admin_leave_community, transfer_ownership, get_admin_by_id, create_new_admin
+from bunker.crud.communities import admin_join_community, admin_leave_community, get_community_by_id, transfer_ownership, get_admin_by_id, create_new_admin
 from bunker.db import models, session_factory
 from bunker.constants import MAX_ADMIN_LIMIT
 from bunker.discord.utils import View, CallableButton, only_once, CustomException, get_question_embed, get_danger_embed, get_success_embed
@@ -25,7 +25,7 @@ class BaseConfirmationView(View, ABC):
         self.member = member
         self.member_name = self.member.nick or self.member.display_name
         
-        self.confirm_button = CallableButton(self.confirm, style=self.get_button_style(), label="Confirm")
+        self.confirm_button = CallableButton(self.confirm, style=self.get_button_style(), label="Confirm", single_use=True)
         self.add_item(self.confirm_button)
     
     @staticmethod
@@ -50,15 +50,14 @@ class AdminAddConfirmationView(BaseConfirmationView):
     async def send(self, interaction: Interaction):
         await interaction.response.send_message(embed=get_question_embed(
             title=esc_md(f"Do you want to add {self.member_name} as admin for {self.community.name}?"),
-            description=f"Each community is allowed up to {MAX_ADMIN_LIMIT} admins, including yourself."
-        ))
+            description=f"Each community is allowed up to {MAX_ADMIN_LIMIT} admins, excluding the owner."
+        ), view=self, ephemeral=True)
 
-    @only_once
     async def confirm(self, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if admin:
-                await admin_join_community(db, admin, self.community.id)
+                await admin_join_community(db, admin, self.community)
             else:
                 await create_new_admin(db, schemas.AdminCreateParams(
                     discord_id=self.member.id,
@@ -78,9 +77,8 @@ class AdminRemoveConfirmationView(BaseConfirmationView):
     async def send(self, interaction: Interaction):
         await interaction.response.send_message(embed=get_question_embed(
             title=esc_md(f"Do you want to remove {self.member_name} as admin for {self.community.name}?"),
-        ))
+        ), view=self, ephemeral=True)
 
-    @only_once
     async def confirm(self, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, self.member.id)
@@ -103,15 +101,18 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
         await interaction.response.send_message(embed=get_danger_embed(
             title=esc_md(f"Are you sure you want to transfer ownership of {self.community.name} to {self.member_name}?"),
             description="You will still remain an admin for the community, but can no longer add or remove admins."
-        ))
+        ), view=self, ephemeral=True)
 
-    @only_once
     async def confirm(self, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")
-            await transfer_ownership(db, self.community, admin)
+            community = await get_community_by_id(db, self.community.id)
+            if not community:
+                raise CustomException("Community not found!")
+            await transfer_ownership(db, community, admin)
+            self.community = community
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"Transfered ownership of {self.community.name} to {self.member_name}!")
@@ -126,9 +127,8 @@ class LeaveCommunityConfirmationView(BaseConfirmationView):
         await interaction.response.send_message(embed=get_danger_embed(
             title=esc_md(f"Are you sure you want to unassociate yourself with {self.community.name}?"),
             description="You will lose your server admin role and access to private server admin channels."
-        ))
+        ), view=self, ephemeral=True)
 
-    @only_once
     async def confirm(self, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, self.member.id)

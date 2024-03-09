@@ -5,6 +5,7 @@ from sqlalchemy import select
 from bunker import schemas
 from bunker.db import models, session_factory
 from bunker.discord import bot
+from bunker.discord.communities import get_forward_channel
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.views.report_management import ReportManagementView
 from bunker.hooks import EventHooks, add_hook
@@ -25,10 +26,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             return
 
         for community in communities:
-            guild = bot.get_guild(community.forward_guild_id)
-            if not guild:
-                return
-            channel = guild.get_channel(community.forward_channel_id)
+            channel = get_forward_channel(community)
             if not channel:
                 return
             
@@ -54,18 +52,18 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     user = await bot.get_or_fetch_user(admin.discord_id)
 
     if community.forward_channel_id:
-        if guild := bot.get_guild(community.forward_guild_id):
-            if channel := guild.get_channel(community.forward_channel_id):
-                try:
-                    await channel.send(
-                        content=f"{user.mention} your report was submitted! (ID: #{report.id})",
-                        embed=embed,
-                        view=view,
-                    )
-                except discord.HTTPException:
-                    pass
-                else:
-                    return
+        channel = get_forward_channel(community)
+        if channel:
+            try:
+                await channel.send(
+                    content=f"{user.mention} your report was submitted! (ID: #{report.id})",
+                    embed=embed,
+                    view=view,
+                )
+            except discord.HTTPException:
+                pass
+            else:
+                return
     
     try:
         await user.send(

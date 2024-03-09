@@ -23,7 +23,8 @@ async def main():
     await create_tables()
     async with session_factory() as db:
         c1 = await communities.create_new_community(db, schemas.CommunityCreateParams(
-            name="WTH",
+            name="Wolves of War",
+            tag="(WTH)",
             contact_url="discord.gg/WTH",
             owner_id=425249228185534485,
             forward_guild_id=695232527123742742,
@@ -31,7 +32,8 @@ async def main():
             owner_name="Abu"
         ))
         c2 = await communities.create_new_community(db, schemas.CommunityCreateParams(
-            name="C2",
+            name="Community 2",
+            tag="[C2]",
             contact_url="C2 url",
             owner_id=999254478274441277,
             forward_guild_id=None,
@@ -39,7 +41,8 @@ async def main():
             owner_name="C2 owner"
         ))
         c3 = await communities.create_new_community(db, schemas.CommunityCreateParams(
-            name="C3",
+            name="Community 3",
+            tag="[C3]",
             contact_url="C3 url",
             owner_id=1018259047947960320,
             forward_guild_id=None,

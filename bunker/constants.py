@@ -48,8 +48,8 @@ DISCORD_OWNER_ROLE_ID = int(os.getenv('DISCORD_OWNER_ROLE_ID') or 0)
 # ID of the main report channel
 DISCORD_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_REPORTS_CHANNEL_ID') or 0)
 
-# How many admins each community is allowed to have (including the owner)
-MAX_ADMIN_LIMIT = 4
+# How many admins each community is allowed to have (excluding the owner)
+MAX_ADMIN_LIMIT = 3
 
 # The URL of the report form
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?entry.1804901355={access_token}"
