@@ -11,9 +11,9 @@ from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
 
 from bunker import schemas
-from bunker.crud.communities import get_admin_by_id, get_community_by_owner_id
+from bunker.crud.communities import get_community_by_owner_id
 from bunker.db import models, session_factory
-from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed, get_question_embed, only_once
+from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed, get_question_embed
 from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
@@ -286,10 +286,9 @@ class IntegrationManagementView(View):
 class AskRemoveBansView(View):
     def __init__(self, fut: asyncio.Future):
         self.fut = fut
-        self.add_item(CallableButton(partial(self.submit, True), label="Yes", style=ButtonStyle.blurple))
-        self.add_item(CallableButton(partial(self.submit, False), label="No", style=ButtonStyle.blurple))
+        self.add_item(CallableButton(partial(self.submit, True), label="Yes", style=ButtonStyle.blurple, single_use=True))
+        self.add_item(CallableButton(partial(self.submit, False), label="No", style=ButtonStyle.blurple, single_use=True))
 
-    @only_once
     async def submit(self, remove_bans: bool, interaction: Interaction):
         await interaction.response.defer()
         self.fut.set_result(remove_bans)

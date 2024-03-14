@@ -8,7 +8,7 @@ from bunker import schemas
 from bunker.crud.communities import admin_join_community, admin_leave_community, get_community_by_id, transfer_ownership, get_admin_by_id, create_new_admin
 from bunker.db import models, session_factory
 from bunker.constants import MAX_ADMIN_LIMIT
-from bunker.discord.utils import View, CallableButton, only_once, CustomException, get_question_embed, get_danger_embed, get_success_embed
+from bunker.discord.utils import View, CallableButton, CustomException, get_question_embed, get_danger_embed, get_success_embed
 
 __all__ = (
     "AdminAddConfirmationView",
