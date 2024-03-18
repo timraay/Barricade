@@ -47,6 +47,8 @@ DISCORD_ADMIN_ROLE_ID = int(os.getenv('DISCORD_ADMIN_ROLE_ID') or 0)
 DISCORD_OWNER_ROLE_ID = int(os.getenv('DISCORD_OWNER_ROLE_ID') or 0)
 # ID of the main report channel
 DISCORD_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_REPORTS_CHANNEL_ID') or 0)
+# ID of the channel to send community create requests to
+DISCORD_ENROLL_CHANNEL_ID = int(os.getenv('DISCORD_ENROLL_CHANNEL_ID') or 0)
 
 # How many admins each community is allowed to have (excluding the owner)
 MAX_ADMIN_LIMIT = 3

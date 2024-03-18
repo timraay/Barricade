@@ -13,7 +13,7 @@ from discord.utils import escape_markdown as esc_md
 from bunker import schemas
 from bunker.crud.communities import get_community_by_owner_id
 from bunker.db import models, session_factory
-from bunker.discord.utils import View, Modal, CallableButton, CustomException, get_success_embed, get_question_embed
+from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
@@ -81,7 +81,7 @@ async def get_name_hyperlink(integration: Integration):
     except:
         name = "*Name unknown*"
 
-    return f"[**{name}** 🡥]({properties.url_func(integration.config)})"
+    return format_url(name, properties.url_func(integration.config))
 
 
 class IntegrationManagementView(View):

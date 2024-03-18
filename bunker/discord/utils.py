@@ -190,3 +190,6 @@ async def get_command_mention(tree: discord.app_commands.CommandTree, name: str,
         return f"</{command.name} {subcommands}:{command.id}>"
     else:
         return f"</{command.name}:{command.id}>"
+
+def format_url(text: str, url: str):
+    return f"[**{text}** 🡥]({url})"

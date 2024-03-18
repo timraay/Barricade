@@ -145,6 +145,8 @@ class AdminCreateParams(_AdminBase):
 
 class CommunityCreateParams(_CommunityBase):
     owner_name: str
+    forward_guild_id: Optional[int] = None
+    forward_channel_id: Optional[int] = None
 
 class Admin(AdminRef):
     community: Optional[CommunityRef]

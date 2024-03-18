@@ -5,6 +5,7 @@ from bunker import schemas
 from bunker.constants import DISCORD_REPORTS_CHANNEL_ID
 from bunker.discord.bot import bot
 from bunker.discord.communities import get_admin_name
+from bunker.discord.utils import format_url
 from bunker.enums import ReportReasonFlag
 from bunker.utils import get_player_id_type, PlayerIDType
 
@@ -47,10 +48,10 @@ async def get_report_embed(
 
         player_id_type = get_player_id_type(player.player_id)
         if player_id_type == PlayerIDType.STEAM_64_ID:
-            value += f"\n[**View on Steam** 🡥](https://steamcommunity.com/profiles/{player.player_id})"
+            value += f"\n" + format_url("View on Steam", f"https://steamcommunity.com/profiles/{player.player_id}")
 
         if bm_rcon_url:
-            value += f"\n[**View on Battlemetrics** 🡥]({bm_rcon_url})"
+            value += f"\n" + format_url("View on Battlemetrics", bm_rcon_url)
 
         embed.add_field(
             name=f"**`{i}.`** {esc_md(player.player_name)}",

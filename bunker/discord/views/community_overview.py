@@ -75,11 +75,7 @@ class CommunityOverviewView(View):
         )
 
     async def get_embed(self, interaction: Interaction):
-        embed = Embed(
-            title=f"Community: {self.community.tag} {self.community.name}",
-            color=Color.blurple(),
-            description=f"**Name:** `{self.community.name}` - **Tag:** `{self.community.tag}`\n**Contact:** {self.community.contact_url}"
-        )
+        embed = get_community_embed(self.community)
 
         embed.add_field(
             name="Owner",
@@ -113,9 +109,9 @@ class CommunityOverviewView(View):
             embed.set_thumbnail(url=channel.guild.icon.url)
         if self.is_admin or self.is_owner:
             if not self.community.forward_channel_id:
-                channel_mention = "\⚠ No channel set"
+                channel_mention = "⚠ No channel set"
             elif not channel:
-                channel_mention = "\⚠ Unknown channel"
+                channel_mention = "⚠ Unknown channel"
             else:
                 channel_mention = channel.mention
             embed.description += f"\n**Reports channel:**\n{channel_mention}"
@@ -155,7 +151,8 @@ class CommunityOverviewView(View):
         )
 
 
-class CommunityEditModal(Modal):
+class CommunityBaseModal(Modal):
+    # Also used by EnrollModal
     name = TextInput(
         label="Name",
         placeholder='eg. "My Community"',
@@ -177,6 +174,7 @@ class CommunityEditModal(Modal):
         max_length=64,
     )
 
+class CommunityEditModal(CommunityBaseModal):
     def __init__(self, view: 'CommunityOverviewView'):
         self.view = view
         community = view.community
@@ -188,3 +186,9 @@ class CommunityEditModal(Modal):
     async def on_submit(self, interaction: Interaction):
         await self.view.submit_edit_modal(interaction, self)
         
+def get_community_embed(community: schemas.CommunityRef | schemas.CommunityCreateParams):
+    return Embed(
+        title=f"Community: {community.tag} {community.name}",
+        color=Color.blurple(),
+        description=f"**Name:** `{community.name}` - **Tag:** `{community.tag}`\n**Contact:** {community.contact_url}"
+    )

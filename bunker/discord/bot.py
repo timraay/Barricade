@@ -44,7 +44,10 @@ class Bot(commands.Bot):
         await load_all_cogs()
         await sync_commands()
         # TODO: this is lazy and ugly
+        from bunker.discord.views.enroll import EnrollView, EnrollAcceptView
         from bunker.discord.views.submit_report import GetSubmissionURLView
+        self.add_view(EnrollView())
+        self.add_view(EnrollAcceptView())
         self.add_view(GetSubmissionURLView())
 
     @property

@@ -208,7 +208,7 @@ async def create_new_community(
         db_owner = await create_new_admin(db, owner)
     elif db_owner.community_id:
         # Owner is already part of a community
-        raise AlreadyExistsError
+        raise AlreadyExistsError("Owner is already part of a community")
     elif db_owner.name != community.owner_name:
         # Update saved name of owner
         db_owner.name = community.owner_name
