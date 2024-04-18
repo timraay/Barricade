@@ -10,18 +10,8 @@ from bunker.db import session_factory
 from bunker.discord.communities import get_forward_channel
 from bunker.discord.utils import get_error_embed
 from bunker.discord.views.retry_error import RetryErrorView
-from bunker.enums import IntegrationType
 from bunker.hooks import EventHooks, add_hook
-from bunker.integrations import BattlemetricsIntegration, CRCONIntegration
-
-def get_integration(config: schemas.IntegrationConfigParams):
-    if config.integration_type == IntegrationType.BATTLEMETRICS:
-       return BattlemetricsIntegration(config)
-    elif config.integration_type == IntegrationType.COMMUNITY_RCON:
-       return CRCONIntegration(config)
-    else:
-        raise TypeError("Missing implementation for integration type %r" % config.integration_type)
-
+from bunker.integrations.manager import IntegrationManager
 
 async def forward_errors(
         callable: Coroutine,
@@ -67,6 +57,7 @@ async def on_player_ban(response: schemas.Response):
     banned_by = set(ban.integration_id for ban in bans)
     report = response.player_report.report
     reasons = report.reasons_bitflag.to_list(report.reasons_custom)
+    manager = IntegrationManager()
     
     embed = get_error_embed(
         "Integration failed to ban player!",
@@ -78,7 +69,7 @@ async def on_player_ban(response: schemas.Response):
         if config.id in banned_by:
             continue
 
-        integration = get_integration(config)
+        integration = manager.load(schemas.IntegrationConfig.model_validate(config))
         coro = forward_errors(
             integration.ban_player,
             schemas.IntegrationBanPlayerParams(
@@ -100,6 +91,7 @@ async def on_player_unban(response: schemas.Response):
     async with session_factory() as db:
         bans = await get_player_bans_for_community(db, response.player_report.player_id, response.community_id)
 
+    manager = IntegrationManager()
     embed = get_error_embed(
         "Integration failed to unban player!",
         "Either manually delete the ban or retry using the button below."
@@ -107,7 +99,7 @@ async def on_player_unban(response: schemas.Response):
         
     coros = []
     for ban in bans:
-        integration = get_integration(ban.integration)
+        integration = manager.load(schemas.IntegrationConfig.model_validate(ban.integration))
         player_id = response.player_report.player_id
         coro = forward_errors(
             integration.unban_player,
@@ -125,6 +117,7 @@ async def on_report_delete(report: schemas.Report):
     player_ids = [player.player_id for player in report.players]
     async with session_factory() as db:
         bans = await get_player_bans_without_responses(db, player_ids)
+        manager = IntegrationManager()
         embed = get_error_embed(
             "Integration failed to unban player after a report was deleted!",
             "Either manually delete the ban or retry using the button below."
@@ -132,7 +125,7 @@ async def on_report_delete(report: schemas.Report):
 
         coros = []
         for ban in bans:
-            integration = get_integration(ban.integration)
+            integration = manager.load(schemas.IntegrationConfig.model_validate(ban.integration))
             community = await ban.integration.awaitable_attrs.community
             coro = forward_errors(
                 integration.unban_player,

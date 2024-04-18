@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from functools import wraps
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Sequence
 
 from bunker import schemas
 from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
-from bunker.crud.communities import create_integration_config, update_integration_config
+from bunker.enums import IntegrationType
 from bunker.exceptions import NotFoundError, AlreadyBannedError
 from bunker.db import models
 
@@ -17,7 +18,17 @@ def is_saved(func):
         return await func(integration, *args, **kwargs)
     return decorator
 
+class IntegrationMetaData(BaseModel):
+    name: str
+    config_cls: type[schemas.IntegrationConfig]
+    type: IntegrationType
+    ask_remove_bans: bool
+    emoji: str
+
 class Integration(ABC):
+    # TODO: Check if defined in subclasses using __init_subclass__?
+    meta: IntegrationMetaData
+
     def __init__(self, config: schemas.IntegrationConfigParams):
         self.config = config
     
@@ -73,8 +84,13 @@ class Integration(ABC):
             The integration config record
         """
         if self.config.id is None:
+            # I've pondered for a literal hour trying to figure out how to
+            # avoid this circular import and I couldn't figure out an easy
+            # solution here. Please forgive me.
+            from bunker.crud.integrations import create_integration_config
             db_config = await create_integration_config(db, self.config)
         else:
+            from bunker.crud.integrations import update_integration_config
             db_config = await update_integration_config(db, self.config)
 
         self.config = type(self.config).model_validate(db_config)
@@ -216,6 +232,16 @@ class Integration(ABC):
             The name of the connected instance.
         """
         raise NotImplementedError
+    
+    @abstractmethod
+    def get_instance_url(self) -> str:
+        """Get a URL to the specific instance that this
+        integration connects to.
+
+        Returns
+        -------
+        str
+            The URL of the connected instance."""
 
     @abstractmethod
     async def validate(self, community: schemas.Community):

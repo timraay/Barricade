@@ -93,8 +93,8 @@ async def main():
             token=t2,
             players=[
                 schemas.PlayerReportCreateParams(
-                    player_id="22222222222222222",
-                    player_name="Player 2",
+                    player_id="76561199023367826",
+                    player_name="Abu",
                     bm_rcon_url=None,
                 ),
             ]

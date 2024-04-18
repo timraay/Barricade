@@ -6,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
 from bunker.db import models, session_factory
+from bunker.enums import IntegrationType
 from bunker.exceptions import (
     IntegrationBanError, IntegrationBulkBanError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
-from bunker.integrations.integration import Integration
+from bunker.integrations.integration import Integration, IntegrationMetaData
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
@@ -36,6 +37,14 @@ class DoRemoveMultipleBansPayload(pydantic.BaseModel):
     player_ids: list[str]
 
 class CRCONIntegration(Integration):
+    meta = IntegrationMetaData(
+        name="Community RCON",
+        config_cls=schemas.CRCONIntegrationConfig,
+        type=IntegrationType.COMMUNITY_RCON,
+        ask_remove_bans=False,
+        emoji="🤩",
+    )
+
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.CRCONIntegrationConfigParams
@@ -92,6 +101,9 @@ class CRCONIntegration(Integration):
     async def get_instance_name(self) -> str:
         resp = await self._make_request(method="GET", endpoint="/public_info")
         return resp["result"]["short_name"]
+    
+    def get_instance_url(self) -> str:
+        return self.config.api_url.removesuffix("/api")
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:

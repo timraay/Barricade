@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
-from typing import Optional, ClassVar
+from typing import Literal, Optional, ClassVar
 from uuid import UUID
 
 from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
@@ -26,18 +26,24 @@ class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
     api_url: str = "https://api.battlemetrics.com"
 
-    integration_type: ClassVar[IntegrationType] = IntegrationType.BATTLEMETRICS
-    bunker_api_key_id: ClassVar[Optional[int]] = None
+    integration_type: Literal[IntegrationType.BATTLEMETRICS] = IntegrationType.BATTLEMETRICS
+    bunker_api_key_id: None = None
 
 class CRCONIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
 
-    integration_type: ClassVar[IntegrationType] = IntegrationType.COMMUNITY_RCON
-    organization_id: ClassVar[Optional[str]] = None
-    banlist_id: ClassVar[Optional[UUID]] = None
+    integration_type: Literal[IntegrationType.COMMUNITY_RCON] = IntegrationType.COMMUNITY_RCON
+    organization_id: None = None
+    banlist_id: None = None
 
 class IntegrationConfig(IntegrationConfigParams):
     id: int
+
+    def __eq__(self, value: object) -> bool:
+        # Existing __eq__ only works consistently if both are explicitly the same class
+        if isinstance(value, IntegrationConfig):
+            return self.model_dump() == value.model_dump()
+        return super().__eq__(value)
 
 class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, IntegrationConfig):
     pass

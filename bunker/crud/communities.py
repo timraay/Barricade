@@ -1,7 +1,6 @@
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
 
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
@@ -394,35 +393,3 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
 
     await db.commit()
     return True
-
-
-async def create_integration_config(
-        db: AsyncSession,
-        params: schemas.IntegrationConfigParams,
-):
-    db_integration = models.Integration(
-        **params.model_dump(),
-        integration_type=params.integration_type # may be ClassVar
-    )
-    db.add(db_integration)
-    await db.commit()
-    # await db.refresh(db_integration)
-    return db_integration
-
-async def update_integration_config(
-        db: AsyncSession,
-        config: schemas.IntegrationConfig,
-):
-    stmt = update(models.Integration).values(
-        **config.model_dump(),
-        integration_type=config.integration_type # may be ClassVar
-    ).where(
-        models.Integration.id == config.id
-    ).returning(models.Integration)
-    db_integration = await db.scalar(stmt)
-
-    if not db_integration:
-        raise NotFoundError("Integration does not exist")
-    
-    await db.commit()    
-    return db_integration

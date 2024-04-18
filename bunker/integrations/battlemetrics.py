@@ -6,8 +6,9 @@ from uuid import UUID
 from bunker import schemas
 from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
 from bunker.db import session_factory
+from bunker.enums import IntegrationType
 from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
-from bunker.integrations.integration import Integration
+from bunker.integrations.integration import Integration, IntegrationMetaData
 from bunker.schemas import Response
 from bunker.utils import get_player_id_type
 
@@ -22,6 +23,14 @@ REQUIRED_SCOPES = [
 class BattlemetricsIntegration(Integration):
     BASE_URL = "https://api.battlemetrics.com"
 
+    meta = IntegrationMetaData(
+        name="Battlemetrics",
+        config_cls=schemas.BattlemetricsIntegrationConfig,
+        type=IntegrationType.BATTLEMETRICS,
+        ask_remove_bans=False,
+        emoji="🤕",
+    )
+
     def __init__(self, config: schemas.BattlemetricsIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.BattlemetricsIntegrationConfigParams
@@ -32,6 +41,9 @@ class BattlemetricsIntegration(Integration):
         url = f"{self.BASE_URL}/organizations/{self.config.organization_id}"
         resp = await self._make_request(method="GET", url=url)
         return resp["data"]["attributes"]["name"]
+    
+    def get_instance_url(self) -> str:
+        return f"https://battlemetrics.com/rcon/orgs/{self.config.organization_id}/edit"
 
     async def validate(self, community: schemas.Community):
         if community.id != self.config.community_id:

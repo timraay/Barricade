@@ -4,7 +4,7 @@ import uvicorn
 import logging
 
 from bunker.constants import DISCORD_BOT_TOKEN, DISCORD_GUILD_ID
-from bunker.web import app
+from bunker.web.app import app
 
 logging.basicConfig(
     format="[%(asctime)s][%(levelname)7s][%(module)s.%(funcName)s:%(lineno)s] %(message)s",
