@@ -104,7 +104,7 @@ class ReportsCog(commands.Cog):
         
         data = RMCustomIDPayload(**match.groupdict())
 
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_report = await get_report_by_id(db, data.report_id, load_relations=True)
             if not db_report:
                 raise NotFoundError("This report no longer exists")
@@ -113,7 +113,7 @@ class ReportsCog(commands.Cog):
                 case "del":
                     # TODO? Only allow admins to delete
                     await db.delete(db_report)
-                    await db.commit()
+                    await db.flush()
 
                     EventHooks.invoke_report_delete(db_report)
 
@@ -128,7 +128,7 @@ class ReportsCog(commands.Cog):
 
 
     async def set_response(self, interaction: Interaction, prr: schemas.ResponseCreateParams):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_prr = await set_report_response(db, prr)
 
             players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players

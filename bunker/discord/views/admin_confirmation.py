@@ -54,7 +54,7 @@ class AdminAddConfirmationView(BaseConfirmationView):
         ), view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if admin:
                 await admin_join_community(db, admin, self.community)
@@ -80,7 +80,7 @@ class AdminRemoveConfirmationView(BaseConfirmationView):
         ), view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")
@@ -104,7 +104,7 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
         ), view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")
@@ -130,7 +130,7 @@ class LeaveCommunityConfirmationView(BaseConfirmationView):
         ), view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")

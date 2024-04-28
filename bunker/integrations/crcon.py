@@ -12,6 +12,7 @@ from bunker.exceptions import (
     AlreadyBannedError, IntegrationValidationError
 )
 from bunker.integrations.integration import Integration, IntegrationMetaData
+from bunker.integrations.websocket import Websocket
 from bunker.web.security import generate_token_value, get_token_hash
 
 class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
@@ -48,53 +49,20 @@ class CRCONIntegration(Integration):
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.CRCONIntegrationConfigParams
+        self.ws = Websocket(address=config.api_url, token=config.api_key)
 
     # --- Extended parent methods
 
-    async def enable(self, db: AsyncSession):
-        # Generate token
-        token_value = generate_token_value()
-        hashed_token_value = get_token_hash(token_value)
-        db_token = models.WebToken(
-            hashed_token=hashed_token_value,
-            scopes=0,
-            expires=None,
-            user_id=None,
-            community_id=self.config.community_id
-        )
-        db.add(db_token)
-        await db.flush()
-        await db.refresh(db_token)
-
-        # Submit token
-        await self.submit_api_key(self, DoEnableBunkerApiIntegrationPayload(
-            community=db_token.community,
-            api_key=token_value,
-        ))
-
-        # Enable and save
-        self.config.bunker_api_key_id = db_token.id
-        return await super().enable(db)
+    def start_connection(self):
+        self.ws.start()
     
-    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Integration:
-        if self.config.bunker_api_key_id:
-            # Delete token
-            db_token = await db.get_one(models.WebToken, self.config.bunker_api_key_id)
-            db_community = db_token.community
-            db.delete(db_token)
-            await db.flush()
-
-            # Notify CRCON
-            try:
-                await self.revoke_api_key(DoDisableBunkerApiIntegrationPayload(
-                    community=db_community,
-                    remove_bans=remove_bans
-                ))
-            except:
-                logging.error("Failed to notify server of disabled CRCON integration")
-
-        # Disable and save
-        return await super().disable(db)
+    def stop_connection(self):
+        self.ws.stop()
+    
+    def update_connection(self):
+        self.ws.address = self.config.api_url
+        self.ws.token = self.config.api_key
+        self.ws.update_connection()
 
     # --- Abstract method implementations
 
@@ -115,7 +83,7 @@ class CRCONIntegration(Integration):
         await self.validate_api_access()
 
     async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, params.player_id)
             if db_ban is not None:
                 raise AlreadyBannedError(params.player_id, "Player is already banned")
@@ -131,7 +99,7 @@ class CRCONIntegration(Integration):
             await self.set_ban_id(db, params.player_id, params.player_id)
 
     async def unban_player(self, player_id: str):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
@@ -144,7 +112,6 @@ class CRCONIntegration(Integration):
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
 
             await db.delete(db_ban)
-            await db.commit()
     
     async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
         try:
@@ -161,7 +128,7 @@ class CRCONIntegration(Integration):
                 "Failed to ban players"
             ) from e
 
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             await self.set_multiple_ban_ids(db, [
                 (param.player_id, param.player_id)
                 for param in params
@@ -173,7 +140,7 @@ class CRCONIntegration(Integration):
         except Exception as e:
             raise IntegrationBulkBanError(player_ids, "Failed to unban players") from e
 
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             await self.discard_multiple_ban_ids(db, player_ids)
 
     # --- CRCON API wrappers

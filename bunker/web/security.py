@@ -37,7 +37,7 @@ async def create_user(db: AsyncSession, user: web_schemas.WebUserCreateParams) -
         hashed_password=get_password_hash(user.password),
     )
     db.add(db_user)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_user)
     return db_user
 
@@ -66,7 +66,7 @@ async def create_token(
         community_id=community_id
     )
     db.add(db_token)
-    await db.commit()
+    await db.flush()
     return db_token, token_value
 
 
@@ -185,7 +185,7 @@ async def get_active_token(
     
     if db_token.expires and db_token.expires < datetime.now(tz=timezone.utc):
         await db.delete(db_token)
-        await db.commit()
+        await db.flush()
         raise credentials_exception
 
     permitted_scopes = Scopes(

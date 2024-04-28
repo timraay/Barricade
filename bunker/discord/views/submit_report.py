@@ -19,7 +19,7 @@ class GetSubmissionURLView(View):
         ))
 
     async def start_submission(self, interaction: Interaction):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
             if not admin or not admin.community_id:
                 raise CustomException("Only verified server admins can create reports!")

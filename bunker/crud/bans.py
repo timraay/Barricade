@@ -41,6 +41,14 @@ async def get_ban_by_player_and_integration(db: AsyncSession, player_id: str, in
         stmt = stmt.options(selectinload("*"))
     return await db.scalar(stmt)
 
+async def get_bans_by_integration(db: AsyncSession, integration_id: int):
+    stmt = select(models.PlayerBan).where(
+        models.PlayerBan.integration_id == integration_id
+    )
+    result = await db.stream_scalars(stmt)
+    async for db_ban in result:
+        yield db_ban
+
 async def get_player_bans_for_community(db: AsyncSession, player_id: str, community_id: int):
     stmt = select(models.PlayerBan).join(models.PlayerBan.integration).where(
         models.PlayerBan.player_id == player_id,
@@ -53,7 +61,7 @@ async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
     db_ban = models.PlayerBan(**ban.model_dump())
     db.add(db_ban)
     try:
-        await db.commit()
+        await db.flush()
     except IntegrityError:
         raise AlreadyExistsError("Player is already banned")
     return db_ban
@@ -65,12 +73,12 @@ async def bulk_create_bans(db: AsyncSession, bans: list[schemas.PlayerBanCreateP
         index_elements=["player_id", "integration_id"]
     )
     await db.execute(stmt)
-    await db.commit()
+    await db.flush()
 
 async def bulk_delete_bans(db: AsyncSession, *where_clauses):
     stmt = delete(models.PlayerBan).where(*where_clauses)
     await db.execute(stmt)
-    await db.commit()
+    await db.flush()
 
 async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[str]):
     """

@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bunker import schemas
 from bunker.db import models
 from bunker.exceptions import NotFoundError
-from bunker.integrations.manager import IntegrationManager
 
 async def create_integration_config(
         db: AsyncSession,
@@ -20,13 +19,6 @@ async def create_integration_config(
     await db.flush()
     await db.refresh(db_integration)
 
-    # Add integration to factory
-    IntegrationManager().create(
-        schemas.IntegrationConfig.model_validate(db_integration)
-    )
-
-    # Commit changes
-    await db.commit()
     return db_integration
 
 
@@ -45,7 +37,4 @@ async def update_integration_config(
     if not db_integration:
         raise NotFoundError("Integration does not exist")
 
-    IntegrationManager().load(config)
-
-    await db.commit()
     return db_integration

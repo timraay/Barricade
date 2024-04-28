@@ -51,7 +51,7 @@ class CommunityOverviewView(View):
         await interaction.response.send_modal(modal)
     
     async def submit_edit_modal(self, interaction: Interaction, modal: 'CommunityEditModal'):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             community = await get_community_by_id(db, self.community.id)
 
             if community.owner_id != interaction.user.id:
@@ -62,7 +62,7 @@ class CommunityOverviewView(View):
             community.contact_url = modal.contact_url.value
 
             try:
-                await db.commit()
+                await db.flush()
             except IntegrityError:
                 raise CustomException("Another community with this name already exists")
 

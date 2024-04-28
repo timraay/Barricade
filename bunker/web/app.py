@@ -3,10 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import logging
 
+from bunker import integrations
 from bunker.db import create_tables
 from bunker.discord import bot
 from bunker.constants import DISCORD_BOT_TOKEN
-from bunker.integrations.manager import IntegrationManager
 from bunker.web import routers
 
 @asynccontextmanager
@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     await create_tables()
 
     # Load all integrations into the manager
-    await IntegrationManager().load_all()
+    await integrations.load_all()
 
     try:
         # Start the Discord bot

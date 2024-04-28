@@ -1,10 +1,9 @@
 import asyncio
 from functools import partial
 import logging
-from pydantic import BaseModel
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, Callable, Coroutine, Any
+from typing import Optional
 from uuid import UUID
 
 import discord
@@ -17,7 +16,7 @@ from bunker.db import models, session_factory
 from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from bunker.enums import IntegrationType
 from bunker.exceptions import IntegrationValidationError
-from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration
+from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
 from bunker.integrations.manager import IntegrationManager
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
@@ -67,7 +66,7 @@ class IntegrationManagementView(View):
         self.integrations: dict[int, Integration] = {}
         manager = IntegrationManager()
         for db_integration in self.community.integrations:
-            integration = manager.load(db_integration)
+            integration = manager.get_by_config(db_integration)
             self.integrations[integration.config.id] = integration
 
     # --- Sending and editing
@@ -163,8 +162,7 @@ class IntegrationManagementView(View):
             for integration, validation in zip(to_validate, validations):
                 if isinstance(validation, Exception):
                     if isinstance(validation, IntegrationValidationError):
-                        async with session_factory() as db:
-                            await integration.disable(db)
+                        await integration.disable(False)
                     else:
                         logging.error("Failed to validate integration with ID %s" % integration.config.id, exc_info=validation)
             
@@ -206,7 +204,7 @@ class IntegrationManagementView(View):
         # Defer the interaction in case below steps take longer than 3 seconds
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             # Make sure user is owner
             await self.validate_ownership(db, interaction.user.id)
 
@@ -217,7 +215,7 @@ class IntegrationManagementView(View):
                 raise CustomException("Failed to configure integration!", str(e))
             
             # Update config in DB
-            await integration.save_config(db)
+            await integration.update(db)
             await db.refresh(self.community)
 
         await interaction.followup.send(embed=get_success_embed(
@@ -256,7 +254,7 @@ class IntegrationManagementView(View):
             except Exception as e:
                 raise CustomException("Outdated integration configuration!", str(e), log_traceback=True)
             
-            await integration.enable(db)
+            await integration.enable()
             await db.refresh(self.community)
 
         await interaction.response.send_message(embed=get_success_embed(
@@ -277,7 +275,7 @@ class IntegrationManagementView(View):
                 except asyncio.TimeoutError:
                     return
 
-            await integration.disable(db, remove_bans=remove_bans)
+            await integration.disable(remove_bans=remove_bans)
             await db.refresh(self.community)
         
         embed = get_success_embed(
@@ -292,7 +290,7 @@ class IntegrationManagementView(View):
 
     async def add_integration(self, interaction: Interaction):
         self.clear_items()
-        for integration_cls in IntegrationManager.types:
+        for integration_cls in INTEGRATION_TYPES:
             self.add_item(CallableButton(
                 partial(self.configure_integration, integration_cls, None),
                 style=ButtonStyle.blurple,

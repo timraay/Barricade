@@ -71,7 +71,7 @@ async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams)
         value=secrets.token_urlsafe(16),
     )
     db.add(db_token)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_token)
     return db_token
 
@@ -174,28 +174,28 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     Report
         The report model
     """
-    db_reported_players = []
+    report_payload = report.model_dump(exclude={"token", "players"})
+    report_payload["id"] = report.token.id
+
+    db_players = []
     for player in report.players:
+        # This flushes, and since we don't want a partially initialized report
+        # flushed, we do this first.
         db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
             id=player.player_id,
             bm_rcon_url=player.bm_rcon_url
         ))
+        db_players.append(db_player)
+        # player.bm_rcon_url = db_player.bm_rcon_url
 
-        db_reported_player = models.PlayerReport(
+    db_report = models.Report(**report_payload)
+    for db_player in db_players:
+        models.PlayerReport(
+            report=db_report,
             player=db_player,
             player_name=player.player_name,
         )
-        db_reported_players.append(db_reported_player)
 
-        player.bm_rcon_url = db_player.bm_rcon_url
-
-    report_payload = report.model_dump(exclude={"report", "token"})
-    report_payload["players"] = db_reported_players
-    report_payload["id"] = report.token.id
-
-    print(report_payload)
-
-    db_report = models.Report(**report_payload)
     db.add(db_report)
 
     embed = await get_report_embed(report)
@@ -203,7 +203,8 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     message = await channel.send(embed=embed)
     db_report.message_id = message.id
 
-    await db.commit()
+    await db.flush()
+
     db_report = await get_report_by_id(db, db_report.id, load_relations=True)
 
     EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
@@ -247,11 +248,11 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
     if db_player:
         if player.bm_rcon_url and player.bm_rcon_url != db_player.bm_rcon_url:
             db_player.bm_rcon_url = player.bm_rcon_url
-            await db.commit()
+            await db.flush()
     else:
         db_player = models.Player(**player.model_dump())
         db.add(db_player)
-        await db.commit()
+        await db.flush()
         created = True
     
     return db_player, created

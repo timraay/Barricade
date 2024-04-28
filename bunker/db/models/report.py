@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class Report(ModelBase):
     __tablename__ = "reports"
 
-    id: Mapped[int] = mapped_column(ForeignKey("report_tokens.id"), primary_key=True)
+    id: Mapped[int] = mapped_column(ForeignKey("report_tokens.id", ondelete="CASCADE"), primary_key=True)
     message_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=func.now())
     reasons_bitflag: Mapped[int] = mapped_column(Integer)
@@ -23,4 +23,4 @@ class Report(ModelBase):
     attachment_urls: Mapped[list[str]] = mapped_column(ARRAY(String))
 
     token: Mapped['ReportToken'] = relationship(back_populates="report", cascade="all, delete")
-    players: Mapped[list['PlayerReport']] = relationship(back_populates="report", cascade="all, delete")
+    players: Mapped[list['PlayerReport']] = relationship(back_populates="report", cascade="all, delete-orphan")

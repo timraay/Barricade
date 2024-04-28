@@ -10,7 +10,7 @@ async def main(username: str = None, password: str = None):
     password = password or input("Password: ")
 
     await create_tables()
-    async with session_factory() as db:
+    async with session_factory.begin() as db:
         await create_user(db, WebUserCreateParams(
             username=username,
             password=password,

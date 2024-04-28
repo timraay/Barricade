@@ -69,7 +69,7 @@ async def on_player_ban(response: schemas.Response):
         if config.id in banned_by:
             continue
 
-        integration = manager.load(schemas.IntegrationConfig.model_validate(config))
+        integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(config))
         coro = forward_errors(
             integration.ban_player,
             schemas.IntegrationBanPlayerParams(
@@ -99,7 +99,7 @@ async def on_player_unban(response: schemas.Response):
         
     coros = []
     for ban in bans:
-        integration = manager.load(schemas.IntegrationConfig.model_validate(ban.integration))
+        integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
         player_id = response.player_report.player_id
         coro = forward_errors(
             integration.unban_player,
@@ -115,8 +115,10 @@ async def on_player_unban(response: schemas.Response):
 @add_hook(EventHooks.report_delete)
 async def on_report_delete(report: schemas.Report):
     player_ids = [player.player_id for player in report.players]
+
     async with session_factory() as db:
         bans = await get_player_bans_without_responses(db, player_ids)
+    
         manager = IntegrationManager()
         embed = get_error_embed(
             "Integration failed to unban player after a report was deleted!",
@@ -125,7 +127,7 @@ async def on_report_delete(report: schemas.Report):
 
         coros = []
         for ban in bans:
-            integration = manager.load(schemas.IntegrationConfig.model_validate(ban.integration))
+            integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
             community = await ban.integration.awaitable_attrs.community
             coro = forward_errors(
                 integration.unban_player,

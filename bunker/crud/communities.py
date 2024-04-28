@@ -227,7 +227,6 @@ async def create_new_community(
     # Grant role to the owner
     await grant_owner_role(db_owner.discord_id)
 
-    await db.commit()
     return db_community
 
 async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
@@ -267,7 +266,7 @@ async def create_new_admin(db: AsyncSession, admin: schemas.AdminCreateParams):
 
     db_admin = models.Admin(**admin.model_dump())
     db.add(db_admin)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_admin)
     return db_admin
 
@@ -305,7 +304,7 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
 
     await revoke_admin_roles(admin.discord_id)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(admin)
 
     return admin
@@ -349,7 +348,7 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
 
     await grant_admin_role(admin.discord_id)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(admin)
 
     return admin
@@ -387,9 +386,7 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     await db.flush()
     await db.refresh(community)
 
-    print(old_owner_id, community.owner_id, admin.discord_id)
     await grant_admin_role(old_owner_id)
     await grant_owner_role(community.owner_id)
 
-    await db.commit()
     return True

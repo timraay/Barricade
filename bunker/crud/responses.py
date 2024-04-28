@@ -16,13 +16,13 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
     if not db_prr:
         db_prr = models.PlayerReportResponse(**prr.model_dump())
         db.add(db_prr)
-        await db.commit()
+        await db.flush()
         await db.refresh(db_prr)
 
     else:
         db_prr.banned = prr.banned
         db_prr.reject_reason = prr.reject_reason
-        await db.commit()
+        await db.flush()
 
     prr = schemas.Response.model_validate(db_prr)
     if prr.banned:

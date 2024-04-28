@@ -111,7 +111,7 @@ class EnrollAcceptView(View):
         payload = content[8:-4] # Strip discord formatting
         params = schemas.CommunityCreateParams.model_validate_json(payload)
         
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             await create_new_community(db, params)
         
         self.button.disabled = True

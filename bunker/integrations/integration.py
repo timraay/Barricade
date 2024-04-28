@@ -1,20 +1,27 @@
 from abc import ABC, abstractmethod
+import asyncio
 from functools import wraps
 from pydantic import BaseModel
+import random
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Sequence
 
 from bunker import schemas
-from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
+from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans, get_bans_by_integration
+from bunker.crud.integrations import create_integration_config, update_integration_config
+from bunker.db import session_factory
 from bunker.enums import IntegrationType
 from bunker.exceptions import NotFoundError, AlreadyBannedError
 from bunker.db import models
+from bunker.integrations.manager import IntegrationManager
+
+manager = IntegrationManager()
 
 def is_saved(func):
     @wraps(func)
     async def decorator(integration: 'Integration', *args, **kwargs):
         if integration.config.id is None:
-            raise RuntimeError("Integration is not saved")
+            raise RuntimeError("Integration needs to be created first")
         return await func(integration, *args, **kwargs)
     return decorator
 
@@ -31,8 +38,28 @@ class Integration(ABC):
 
     def __init__(self, config: schemas.IntegrationConfigParams):
         self.config = config
+        self.task: asyncio.Task | None = None
+        self.lock = asyncio.Lock()
     
-    async def enable(self, db: AsyncSession) -> models.Integration:
+    # --- Integration state
+
+    async def create(self):
+        if self.config.id is not None:
+            raise RuntimeError("Integration was already created")
+        
+        async with session_factory.begin() as db:
+            db_config = await create_integration_config(db, self.config)
+            self.config = db_config
+            manager.add(self)
+    
+    @is_saved
+    async def update(self, db: AsyncSession):
+        db_config = await update_integration_config(db, self.config)
+        self.config = db_config
+        return db_config
+
+    @is_saved
+    async def enable(self) -> models.Integration:
         """Enable this integration.
 
         Updates and saves the config.
@@ -47,10 +74,23 @@ class Integration(ABC):
         models.Integration
             The integration config record
         """
-        self.config.enabled = True
-        return await self.save_config(db)
+        if self.config.enabled is True:
+            raise RuntimeError("Integration is already enabled")
 
-    async def disable(self, db: AsyncSession, remove_bans: bool) -> models.Integration:
+        try:
+            self.config.enabled = True
+            async with session_factory.begin() as db:
+                db_config = await self.update(db)
+                self.start_connection()
+                # self.task = asyncio.create_task(self._loop)
+                return db_config
+        except:
+            # Reset state
+            self.config.enabled = False
+            self.stop_connection()
+            raise
+
+    async def disable(self, remove_bans: bool) -> models.Integration:
         """Disable this integration.
 
         Updates and saves the config.
@@ -67,35 +107,54 @@ class Integration(ABC):
         models.Integration
             The integration config record
         """
-        self.config.enabled = False
-        return await self.save_config(db)
+        if self.config.enabled is False:
+            raise RuntimeError("Integration is already disabled")
+        
+        try:
+            self.config.enabled = False
+            async with session_factory.begin() as db:
+                db_config = await self.update(db)
+                self.stop_connection()
+                return db_config
+        except:
+            # Reset state
+            self.config.enabled = True
+            self.start_connection()
+            raise
 
-    async def save_config(self, db: AsyncSession) -> models.Integration:
-        """Save the integration's config.
+    async def _loop(self):
+        while True:
+            # Sleep 12 hours first
+            await asyncio.sleep(60 * 60 * 12)
 
-        Parameters
-        ----------
-        db : AsyncSession
-            An asynchronous database session
+            while True:
+                # Then sleep anywhere between 0 and 12 hours
+                await asyncio.sleep(60 * 60 * 12 * random.random())
 
-        Returns
-        -------
-        models.Integration
-            The integration config record
-        """
-        if self.config.id is None:
-            # I've pondered for a literal hour trying to figure out how to
-            # avoid this circular import and I couldn't figure out an easy
-            # solution here. Please forgive me.
-            from bunker.crud.integrations import create_integration_config
-            db_config = await create_integration_config(db, self.config)
-        else:
-            from bunker.crud.integrations import update_integration_config
-            db_config = await update_integration_config(db, self.config)
+                # If already busy, just come back at later stage
+                if self.lock.locked():
+                    continue
+                
+                async with session_factory() as db:
+                    async for db_ban in get_bans_by_integration(db, self.config.id):
+                        # TODO: Figure out how to implement
+                        # Also don't forget to uncomment task creation in enable method
+                        pass
 
-        self.config = type(self.config).model_validate(db_config)
-        return db_config
-    
+
+    # --- Connection hooks
+
+    def start_connection(self):
+        pass
+
+    def stop_connection(self):
+        pass
+
+    def update_connection(self):
+        pass
+
+    # --- Everything related to storing and retrieving bans
+
     @is_saved
     async def get_ban(self, db: AsyncSession, player_id: str) -> models.PlayerBan | None:
         """Get a player ban.
@@ -196,7 +255,7 @@ class Integration(ABC):
         if not db_ban:
             raise NotFoundError("Ban does not exist")
         await db.delete(db_ban)
-        await db.commit()
+        await db.flush()
 
     @is_saved
     async def discard_multiple_ban_ids(self, db: AsyncSession, player_ids: Sequence[str]):
@@ -220,6 +279,8 @@ class Integration(ABC):
             "Banned via shared HLL Bunker report. Appeal"
             f" at {community.contact_url}"
         )
+
+    # --- Commands to implement
 
     @abstractmethod
     async def get_instance_name(self) -> str:

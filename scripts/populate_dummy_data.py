@@ -14,14 +14,13 @@ async def main():
     await bot.wait_until_ready()
 
     schema_name = "public"
-    async with session_factory() as db:
+    async with session_factory.begin() as db:
         input("Are you sure you want to drop all current data?")
         await db.execute(DropSchema(schema_name, cascade=True, if_exists=True))
         await db.execute(CreateSchema(schema_name))
-        await db.commit()
 
     await create_tables()
-    async with session_factory() as db:
+    async with session_factory.begin() as db:
         c1 = await communities.create_new_community(db, schemas.CommunityCreateParams(
             name="Wolves of War",
             tag="(WTH)",
@@ -50,7 +49,7 @@ async def main():
             owner_name="C3 owner"
         ))
 
-    async with session_factory() as db:
+    async with session_factory.begin() as db:
         await communities.create_new_admin(db, schemas.AdminCreateParams(
             discord_id=446731539611648001,
             community_id=c1.id,

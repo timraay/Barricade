@@ -60,7 +60,7 @@ class BattlemetricsIntegration(Integration):
             await self.validate_ban_list()
 
     async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, params.player_id)
             if db_ban is not None:
                 raise IntegrationBanError(params.player_id, "Player is already banned")
@@ -74,7 +74,7 @@ class BattlemetricsIntegration(Integration):
             await self.set_ban_id(db, params.player_id, ban_id)
 
     async def unban_player(self, player_id: str):
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
@@ -90,7 +90,6 @@ class BattlemetricsIntegration(Integration):
                 raise IntegrationBanError(player_id, "Failed to unban player")
 
             await db.delete(db_ban)
-            await db.commit()
 
     async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
         ban_ids = []
@@ -112,15 +111,15 @@ class BattlemetricsIntegration(Integration):
             else:
                 ban_ids.append((param.player_id, ban_id))
         
-        async with session_factory() as db:
-            await self.set_multiple_ban_ids(db)
+        async with session_factory.begin() as db:
+            await self.set_multiple_ban_ids(db, *ban_ids)
         
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to ban players")
 
     async def bulk_unban_players(self, responses: Sequence[Response]):
         failed = []
-        async with session_factory() as db:
+        async with session_factory.begin() as db:
             for response in responses:
                 db_ban = await self.get_ban(db, response)
                 if not db_ban:
@@ -132,8 +131,6 @@ class BattlemetricsIntegration(Integration):
                     failed.append(response.player_report.player_id)
                 else:
                     await db.delete(db_ban)
-        
-            await db.commit()
         
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to unban players")
