@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import asyncio
 from functools import wraps
+import logging
 from pydantic import BaseModel
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +83,7 @@ class Integration(ABC):
             async with session_factory.begin() as db:
                 db_config = await self.update(db)
                 self.start_connection()
-                # self.task = asyncio.create_task(self._loop)
+                self.task = asyncio.create_task(self._loop)
                 return db_config
         except:
             # Reset state
@@ -124,23 +125,13 @@ class Integration(ABC):
 
     async def _loop(self):
         while True:
-            # Sleep 12 hours first
-            await asyncio.sleep(60 * 60 * 12)
+            # Sleep 12-24 hours
+            await asyncio.sleep(60 * 60 * random.randrange(12, 24))
 
-            while True:
-                # Then sleep anywhere between 0 and 12 hours
-                await asyncio.sleep(60 * 60 * 12 * random.random())
-
-                # If already busy, just come back at later stage
-                if self.lock.locked():
-                    continue
-                
-                async with session_factory() as db:
-                    async for db_ban in get_bans_by_integration(db, self.config.id):
-                        # TODO: Figure out how to implement
-                        # Also don't forget to uncomment task creation in enable method
-                        pass
-
+            try:
+                await self.synchronize()
+            except:
+                logging.exception("Failed to synchronize ban lists for %r", self)
 
     # --- Connection hooks
 
@@ -392,5 +383,15 @@ class Integration(ABC):
         ------
         IntegrationBulkBanError
             Failed to unban one or more players.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def synchronize(self):
+        """Synchronize the local ban list with the remote ban list. If
+        a ban exists either locally or remotely, but not both, remove it.
+
+        Some integrations like Battlemetrics also track expired bans. In
+        case a ban is expired, change the response.
         """
         raise NotImplementedError

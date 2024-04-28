@@ -142,6 +142,10 @@ class CRCONIntegration(Integration):
 
         async with session_factory.begin() as db:
             await self.discard_multiple_ban_ids(db, player_ids)
+    
+    async def synchronize(self):
+        # TODO: Implement
+        pass
 
     # --- CRCON API wrappers
 

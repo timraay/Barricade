@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
 import logging
-from typing import Sequence
+from typing import Sequence, NamedTuple
 import aiohttp
 from uuid import UUID
 
 from bunker import schemas
-from bunker.constants import DISCORD_GUILD_ID, DISCORD_REPORTS_CHANNEL_ID
+from bunker.crud.bans import get_bans_by_integration
+from bunker.crud.responses import set_report_response
 from bunker.db import session_factory
-from bunker.enums import IntegrationType
+from bunker.enums import IntegrationType, PlayerIDType
 from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
 from bunker.integrations.integration import Integration, IntegrationMetaData
 from bunker.schemas import Response
@@ -19,6 +21,11 @@ REQUIRED_SCOPES = [
     "ban-list:create",
     "ban-list:read"
 ]
+
+class BattlemetricsBan(NamedTuple):
+    ban_id: int
+    player_id: int
+    expired: bool
 
 class BattlemetricsIntegration(Integration):
     BASE_URL = "https://api.battlemetrics.com"
@@ -134,6 +141,22 @@ class BattlemetricsIntegration(Integration):
         
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to unban players")
+    
+    async def synchronize(self):
+        remote_bans = await self.get_ban_list_bans()
+        async with session_factory.begin() as db:
+            async for db_ban in get_bans_by_integration(db, self.config.id):
+                remote_ban = remote_bans.pop(db_ban.remote_id, None)
+                if not remote_ban:
+                    db.delete(db_ban)
+
+                elif remote_ban.expired:
+                    # TODO: Update report response
+                    pass
+            
+            for remote_ban in remote_bans.values():
+                logging.warn("Ban exists on the remote but not locally, removing: %r", remote_ban)
+                await self.remove_ban(remote_ban.ban_id)
 
     # --- Battlemetrics API wrappers
 
@@ -228,20 +251,49 @@ class BattlemetricsIntegration(Integration):
         url = f"{self.BASE_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url)
 
-    async def get_ban_list_bans(self) -> list:
+    async def get_ban_list_bans(self) -> dict[str, BattlemetricsBan]:
         data = {
             "filter[banList]": str(self.config.banlist_id),
             "page[size]": 100,
-            "filter[expired]": "true"
+            "filter[expired]": "false"
         }
 
         url = f"{self.BASE_URL}/bans"
         resp = await self._make_request(method="GET", url=url, data=data)
-        responses: list = resp["data"]
+        responses = {}
 
         while resp["links"].get("next"):
             resp = await self._make_request(method="GET", url=resp["links"]["next"])
-            responses.extend(resp["data"])
+            for ban_data in resp["data"]:
+                ban_attrs = ban_data["attributes"]
+
+                ban_id = ban_data["id"]
+                player_id = None
+
+                # Find identifier of valid type
+                identifiers = ban_attrs["identifiers"]
+                for identifier_data in identifiers:
+                    try:
+                        PlayerIDType(identifier_data["type"])
+                    except KeyError:
+                        continue
+                    player_id = identifier_data["identifier"]
+                    break
+
+                # If no valid identifier is found, skip this
+                if not player_id:
+                    # TODO: Maybe delete the ban in this case?
+                    logging.warn("Could not find (valid) identifier for ban #%s %s", ban_id, identifiers)
+                    continue
+
+                expires_at_str = ban_attrs["expires_at"]
+                if not expires_at_str:
+                    expired = False
+                else:
+                    expires_at = datetime.fromisoformat(ban_data)
+                    expired = expires_at <= datetime.now(tz=timezone.utc)
+
+                responses[ban_id] = BattlemetricsBan(ban_id, player_id, expired)
 
         return responses
 
