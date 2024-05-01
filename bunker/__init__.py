@@ -1,2 +1,2 @@
 # Load hooks
-from . import bans
+from . import bans, forwarding

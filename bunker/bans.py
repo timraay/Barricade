@@ -1,12 +1,16 @@
 import asyncio
+import logging
 from typing import Coroutine, Sequence
 
 from discord import Embed
+import discord
 
 from bunker import schemas
+from bunker.constants import DISCORD_REPORTS_CHANNEL_ID
 from bunker.crud.bans import get_player_bans_for_community, get_player_bans_without_responses
 from bunker.crud.communities import get_community_by_id
 from bunker.db import session_factory
+from bunker.discord import bot
 from bunker.discord.communities import get_forward_channel
 from bunker.discord.utils import get_error_embed
 from bunker.discord.views.retry_error import RetryErrorView
@@ -113,7 +117,7 @@ async def on_player_unban(response: schemas.Response):
     await asyncio.gather(*coros)
 
 @add_hook(EventHooks.report_delete)
-async def on_report_delete(report: schemas.Report):
+async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
     player_ids = [player.player_id for player in report.players]
 
     async with session_factory() as db:
@@ -139,3 +143,19 @@ async def on_report_delete(report: schemas.Report):
             coros.append(coro)
     await asyncio.gather(*coros)
 
+@add_hook(EventHooks.report_delete)
+async def delete_public_report_message_on_report_delete(report: schemas.ReportWithRelations):
+    try:
+        await bot.delete_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
+    except discord.HTTPException:
+        pass
+
+@add_hook(EventHooks.report_delete)
+async def delete_private_report_messages_on_report_delete(report: schemas.ReportWithRelations):
+    for message_data in report.messages:
+        try:
+            await bot.delete_message(message_data.channel_id, message_data.message_id)
+        except discord.HTTPException:
+            pass
+        except:
+            logging.exception("Unexpected error occurred while attempting to delete %r", message_data)

@@ -8,6 +8,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .admin import Admin
     from .report_token import ReportToken
+    from .report_message import ReportMessage
     from .player_report_response import PlayerReportResponse
     from .integration import Integration
     from .web_token import WebToken
@@ -27,6 +28,11 @@ class Community(ModelBase):
     admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id")
     owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id])
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
+    messages: Mapped[list['ReportMessage']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
     integrations: Mapped[list['Integration']] = relationship(back_populates="community")
     api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")
+
+    def __repr__(self) -> str:
+        return f"Community[id={self.id}, name=\"{self.name}\"]"
+    

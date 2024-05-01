@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from .player_report import PlayerReport
     from .report_token import ReportToken
+    from .report_message import ReportMessage
 
 class Report(ModelBase):
     __tablename__ = "reports"
@@ -24,3 +25,4 @@ class Report(ModelBase):
 
     token: Mapped['ReportToken'] = relationship(back_populates="report", cascade="all, delete")
     players: Mapped[list['PlayerReport']] = relationship(back_populates="report", cascade="all, delete-orphan")
+    messages: Mapped[list['ReportMessage']] = relationship(back_populates="report", cascade="all, delete-orphan")

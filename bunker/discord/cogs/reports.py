@@ -111,11 +111,15 @@ class ReportsCog(commands.Cog):
         
             match data.command:
                 case "del":
+                    # TODO: Add confirmation
                     # TODO? Only allow admins to delete
                     await db.delete(db_report)
                     await db.flush()
 
-                    EventHooks.invoke_report_delete(db_report)
+                    EventHooks.invoke_report_delete(schemas.ReportWithRelations.model_validate(db_report))
+
+                    # Delete the message
+                    await interaction.message.delete()
 
                 case "edit":
                     await interaction.response.send_message(

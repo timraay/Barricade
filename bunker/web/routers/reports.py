@@ -22,7 +22,7 @@ async def get_reports(
     return paginator.paginate(result)
     
 
-@router.post("/submit", response_model=schemas.ReportWithToken)
+@router.post("/submit", response_model=schemas.ReportWithRelations)
 async def submit_report(
         submission: schemas.ReportSubmission,
         db: DatabaseDep,
@@ -56,7 +56,7 @@ async def submit_report(
     db_report.token = token
     return db_report
         
-@router.get("/forward", response_model=schemas.ReportWithToken)
+@router.get("/forward", response_model=schemas.ReportWithRelations)
 async def forward_report(
         report_id: int,
         db: DatabaseDep,
@@ -73,7 +73,7 @@ async def forward_report(
     return db_report
 
 
-@router.get("/{report_id}", response_model=schemas.ReportWithToken)
+@router.get("/{report_id}", response_model=schemas.ReportWithRelations)
 async def get_reports(
         report_id: int,
         db: DatabaseDep,

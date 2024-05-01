@@ -124,7 +124,7 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: boo
         The report model, or None if it does not exist
     """
     if load_relations:
-        options = (selectinload("*"),)
+        options = (selectinload(models.Report.players), selectinload(models.Report.messages), selectinload(models.Report.token),)
     else:
         options = (selectinload(models.Report.players),)
 
@@ -175,7 +175,11 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
         The report model
     """
     report_payload = report.model_dump(exclude={"token", "players"})
-    report_payload["id"] = report.token.id
+    report_payload.update({
+        "id": report.token.id,
+        # If we don't initialize messages here it won't be fetched later, no clue why though
+        "messages": [],
+    })
 
     db_players = []
     for player in report.players:
@@ -205,9 +209,10 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
 
     await db.flush()
 
+    # For some reason this does not load db_report.messages
     db_report = await get_report_by_id(db, db_report.id, load_relations=True)
 
-    EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
+    EventHooks.invoke_report_create(schemas.ReportWithRelations.model_validate(db_report))
 
     return db_report
 

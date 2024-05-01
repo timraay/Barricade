@@ -18,9 +18,13 @@ async def main():
         input("Are you sure you want to drop all current data?")
         await db.execute(DropSchema(schema_name, cascade=True, if_exists=True))
         await db.execute(CreateSchema(schema_name))
+        print("--", "Dropped schema")
 
     await create_tables()
+    print("--", "Created tables")
+
     async with session_factory.begin() as db:
+        print("--", "Begun session")
         c1 = await communities.create_new_community(db, schemas.CommunityCreateParams(
             name="Wolves of War",
             tag="(WTH)",
@@ -30,6 +34,7 @@ async def main():
             forward_channel_id=729998051288285256,
             owner_name="Abu"
         ))
+        print("--", "Created community 1")
         c2 = await communities.create_new_community(db, schemas.CommunityCreateParams(
             name="Community 2",
             tag="[C2]",
@@ -39,6 +44,7 @@ async def main():
             forward_channel_id=None,
             owner_name="C2 owner"
         ))
+        print("--", "Created community 2")
         c3 = await communities.create_new_community(db, schemas.CommunityCreateParams(
             name="Community 3",
             tag="[C3]",
@@ -48,23 +54,29 @@ async def main():
             forward_channel_id=None,
             owner_name="C3 owner"
         ))
+        print("--", "Created community 3")
+    print("--", "Committed communities")
 
     async with session_factory.begin() as db:
+        print("--", "Begun session")
         await communities.create_new_admin(db, schemas.AdminCreateParams(
             discord_id=446731539611648001,
             community_id=c1.id,
             name="Bunkerer"
         ))
+        print("--", "Created admin")
 
         t1 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c1.id,
             admin_id=c1.owner_id,
         ))
+        print("--", "Created token 1")
 
         t2 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c2.id,
             admin_id=c2.owner_id,
         ))
+        print("--", "Created token 2")
 
         await reports.create_report(db, schemas.ReportCreateParams(
             body="These guys need to be removed. They are a danger to society.",
@@ -84,6 +96,7 @@ async def main():
                 ),
             ]
         ))
+        print("--", "Created report 1")
         
         await reports.create_report(db, schemas.ReportCreateParams(
             body="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut velit ante, vulputate non fringilla cursus, commodo ut risus. Vestibulum id eros cursus orci euismod hendrerit a et urna. Donec vel nisl sed lectus posuere tincidunt. Donec in nisl blandit, facilisis sem molestie, lobortis urna.\nCras egestas feugiat lectus, id ultrices odio luctus eget. In hac habitasse platea dictumst. Suspendisse potenti.",
@@ -98,9 +111,13 @@ async def main():
                 ),
             ]
         ))
+        print("--", "Created report 2")
+    print("--", "Committed reports")
 
+    print("Done!")
+
+    # Sleep a bit to allow discord messages to be sent
     await asyncio.sleep(10)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

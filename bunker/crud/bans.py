@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete, not_
+from sqlalchemy import exists, select, delete, not_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,7 +104,7 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[s
         .join(models.PlayerBan.integration) \
         .where(
             models.PlayerBan.player_id.in_(player_ids),
-            not_(
+            not_(exists(
                 select(models.PlayerReportResponse)
                     .join(models.PlayerReport)
                     .where(
@@ -112,7 +112,7 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[s
                         models.PlayerReportResponse.community_id == models.Integration.community_id,
                         models.PlayerReportResponse.banned.is_(True),
                     )
-            )
+            ))
         )
     result = await db.scalars(stmt)
     return result.all()

@@ -54,7 +54,7 @@ class PlayerReviewView(View):
 
     @staticmethod
     async def get_embed(
-        report: schemas.ReportWithToken,
+        report: schemas.ReportWithRelations,
         responses: list[schemas.PendingResponse],
         stats: dict[int, schemas.ResponseStats] = None
     ):

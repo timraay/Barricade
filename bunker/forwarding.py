@@ -11,8 +11,8 @@ from bunker.discord.views.report_management import ReportManagementView
 from bunker.hooks import EventHooks, add_hook
 
 @add_hook(EventHooks.report_create)
-async def forward_report_to_communities(report: schemas.ReportWithToken):
-    async with session_factory() as db:
+async def forward_report_to_communities(report: schemas.ReportWithRelations):
+    async with session_factory.begin() as db:
         stmt = select(models.Community).where(
             models.Community.forward_guild_id.is_not(None),
             models.Community.forward_channel_id.is_not(None),
@@ -26,23 +26,39 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             return
 
         for community in communities:
-            channel = get_forward_channel(community)
-            if not channel:
-                return
-            
-            responses = [schemas.PendingResponse(
-                pr_id=player.id,
-                community_id=community.id,
-                player_report=player,
-                community=community
-            ) for player in report.players]
+            try:
+                channel = get_forward_channel(community)
+                if not channel:
+                    return
+                
+                # Create pending responses
+                responses = [schemas.PendingResponse(
+                    pr_id=player.id,
+                    community_id=community.id,
+                    player_report=player,
+                    community=community
+                ) for player in report.players]
 
-            view = PlayerReviewView(responses=responses)
-            embed = await PlayerReviewView.get_embed(report, responses)
-            await channel.send(embed=embed, view=view)
+                # Send message
+                view = PlayerReviewView(responses=responses)
+                embed = await PlayerReviewView.get_embed(report, responses)
+                message = await channel.send(embed=embed, view=view)
+
+                # Add message to database
+                message_data = schemas.ReportMessageCreateParams(
+                    report_id=report.id,
+                    community_id=community.id,
+                    channel_id=message.guild.id,
+                    message_id=message.guild.id,
+                )
+                db_message = models.ReportMessage(**message_data.model_dump())
+                db.add(db_message)
+
+            except:
+                logging.exception("Failed to forward %r to %r", report, community)
 
 @add_hook(EventHooks.report_create)
-async def forward_report_to_token_owner(report: schemas.ReportWithToken):
+async def forward_report_to_token_owner(report: schemas.ReportWithRelations):
     community = report.token.community
     admin = report.token.admin
 

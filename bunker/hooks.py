@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from enum import Enum, auto
+from enum import Enum
 from typing import Callable, Coroutine, Any
 
 from bunker import schemas
@@ -30,11 +30,11 @@ class EventHooks(str, Enum):
         return func
 
     @staticmethod
-    def invoke_report_create(report: schemas.ReportWithToken):
+    def invoke_report_create(report: schemas.ReportWithRelations):
         return EventHooks.report_create._invoke(report)
 
     @staticmethod
-    def invoke_report_delete(report: schemas.ReportWithToken):
+    def invoke_report_delete(report: schemas.ReportWithRelations):
         return EventHooks.report_delete._invoke(report)
 
     @staticmethod

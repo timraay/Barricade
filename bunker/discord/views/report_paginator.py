@@ -11,7 +11,7 @@ from bunker.discord.views.report_management import ReportManagementView
 from bunker.discord.views.player_review import PlayerReviewView
 
 class ReportPaginator(View):
-    def __init__(self, community: schemas.CommunityRef, reports: list[schemas.ReportWithToken]):
+    def __init__(self, community: schemas.CommunityRef, reports: list[schemas.ReportWithRelations]):
         if not reports:
             raise ValueError("reports may not be empty")
 

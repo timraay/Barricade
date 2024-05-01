@@ -5,6 +5,7 @@ from bunker.db.models.player_report_response import PlayerReportResponse
 from bunker.db.models.player_report import PlayerReport
 from bunker.db.models.player import Player
 from bunker.db.models.report_token import ReportToken
+from bunker.db.models.report_message import ReportMessage
 from bunker.db.models.report import Report
 from bunker.db.models.integration import Integration
 from bunker.db.models.web_token import WebToken

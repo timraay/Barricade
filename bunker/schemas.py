@@ -5,8 +5,11 @@ from uuid import UUID
 
 from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
 
+# Simple config to be used for ORM objects
 class _ModelFromAttributes(BaseModel):
     model_config=ConfigDict(from_attributes=True)
+
+# --- Integration configs
 
 class IntegrationConfigParams(_ModelFromAttributes):
     id: int | None
@@ -51,6 +54,10 @@ class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, Integ
 class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):
     pass
 
+
+# --- Base classes
+# These aren't directly used anywhere. They simply contain common
+# attributes for further models created below.
 
 class _AdminBase(BaseModel):
     discord_id: int
@@ -113,22 +120,40 @@ class _PlayerBanBase(BaseModel):
     integration_id: int
     remote_id: str
 
+class _ReportMessageBase(BaseModel):
+    report_id: int
+    community_id: int
+    channel_id: int
+    message_id: int
 
+
+# --- Reference models
+# These represent ORM entities with all of its primary keys and minimal relational attributes.
+# Only if a relation is defined with a greedy loading strategy, for instance `lazy="selectin"`,
+# it should be included here.
 
 class AdminRef(_AdminBase, _ModelFromAttributes):
-    pass
+    def __repr__(self) -> str:
+        return f"Admin[discord_id={self.discord_id}, community_id={self.community_id}, name=\"{self.name}\"]"
 
 class CommunityRef(_CommunityBase, _ModelFromAttributes):
     id: int
 
+    def __repr__(self) -> str:
+        return f"Player[id={self.id}, name=\"{self.name}\"]"
+
 class PlayerRef(_PlayerBase, _ModelFromAttributes):
-    pass
+    def __repr__(self) -> str:
+        return f"Player[id={self.id}]"
 
 class PlayerReportRef(_PlayerReportBase, _ModelFromAttributes):
     id: int
     report_id: int
 
     player: PlayerRef
+
+    def __repr__(self) -> str:
+        return f"PlayerReport[id={self.id}, report_id={self.report_id}, player_id=\"{self.player_id}\"]"
 
 class ReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
     id: int
@@ -137,22 +162,30 @@ class ReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
     community: CommunityRef
     admin: AdminRef
 
+    def __repr__(self) -> str:
+        return f"ReportToken[id={self.id}]"
+
 class ReportRef(_ReportBase, _ModelFromAttributes):
     id: int
     message_id: int
 
+    def __repr__(self) -> str:
+        return f"Report[id={self.id}]"
+
 class PlayerBanRef(_PlayerBanBase, _ModelFromAttributes):
     id: int
 
+    def __repr__(self) -> str:
+        return f"PlayerBan[id={self.id}, integration_id={self.integration_id}, player_id={self.player_id}]"
+
+class ReportMessageRef(_ReportMessageBase, _ModelFromAttributes):
+    def __repr__(self) -> str:
+        return f"ReportMessage[community_id={self.community_id}, report_id={self.report_id}, message_id={self.message_id}]"
 
 
-class AdminCreateParams(_AdminBase):
-    pass
-
-class CommunityCreateParams(_CommunityBase):
-    owner_name: str
-    forward_guild_id: Optional[int] = None
-    forward_channel_id: Optional[int] = None
+# --- ORM mapped models
+# These classes directly wrap the results of CRUD methods. Any additional relations that are
+# greedily loaded by these methods should be included here as well.
 
 class Admin(AdminRef):
     community: Optional[CommunityRef]
@@ -168,47 +201,28 @@ class ReportTokenCreateParams(_ReportTokenBase):
 class ReportToken(ReportTokenRef):
     report: Optional[ReportRef]
 
-
-class ReportAttachment(_ModelFromAttributes):
-    report_id: int
-    url: str
-
-class PlayerCreateParams(_PlayerBase):
-    pass
-
-class PlayerReportCreateParams(_PlayerReportBase):
-    bm_rcon_url: Optional[str]
+class ReportMessage(ReportMessageRef):
+    report: ReportRef
+    community: CommunityRef
 
 class PlayerReport(PlayerReportRef):
     report: ReportRef
 
-class ReportCreateParams(_ReportBase):
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    token: ReportTokenRef
-    players: list[PlayerReportCreateParams] = Field(min_length=1)
-    attachment_urls: list[str] = Field(default_factory=list)
-
 class Report(ReportRef):
     players: list[PlayerReportRef]
-    attachment_urls: list[ReportAttachment]
 
-class ReportWithToken(Report):
+class ReportWithRelations(Report):
     token: ReportTokenRef
-
-class ResponseCreateParams(_ResponseBase):
-    reject_reason: Optional[ReportRejectReason] = None
+    messages: list[ReportMessageRef]
 
 class Response(_ResponseBase, _ModelFromAttributes):
     id: int
     player_report: PlayerReport
     community: CommunityRef
 
-class PendingResponse(_ResponseBase):
-    player_report: PlayerReportRef
-    community: CommunityRef
-    banned: Optional[bool] = None
-    reject_reason: Optional[ReportRejectReason] = None
+class CommunityWithRelations(Community):
+    tokens: list[ReportTokenRef]
+    responses: list[Response]
 
 class Player(PlayerRef):
     reports: list[PlayerReport]
@@ -217,8 +231,53 @@ class PlayerBan(PlayerBanRef):
     player: PlayerRef
     integration: IntegrationConfig
 
+
+# --- Entity creation parameters
+
+class AdminCreateParams(_AdminBase):
+    pass
+
+class CommunityCreateParams(_CommunityBase):
+    owner_name: str
+    forward_guild_id: Optional[int] = None
+    forward_channel_id: Optional[int] = None
+
+class PlayerCreateParams(_PlayerBase):
+    pass
+
+class PlayerReportCreateParams(_PlayerReportBase):
+    bm_rcon_url: Optional[str]
+
+class ReportCreateParams(_ReportBase):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    token: ReportTokenRef
+    players: list[PlayerReportCreateParams] = Field(min_length=1)
+    attachment_urls: list[str] = Field(default_factory=list)
+
+class ReportMessageCreateParams(_ReportMessageBase):
+    pass
+
+class ResponseCreateParams(_ResponseBase):
+    reject_reason: Optional[ReportRejectReason] = None
+
+class PendingResponse(_ResponseBase):
+    player_report: PlayerReportRef
+    community: CommunityRef
+    banned: Optional[bool] = None
+    reject_reason: Optional[ReportRejectReason] = None
+
 class PlayerBanCreateParams(_PlayerBanBase):
     pass
+
+class IntegrationBanPlayerParams(BaseModel):
+    player_id: str
+    reasons: list[str]
+    community: CommunityRef
+
+
+
+# --- Report submission models
 
 class ReportSubmissionPlayerData(PlayerReportCreateParams):
     bm_rcon_url: Optional[str] = Field(alias="bmRconUrl")
@@ -239,15 +298,3 @@ class ResponseStats(BaseModel):
     num_banned: int
     num_rejected: int
     reject_reasons: dict[ReportRejectReason, int]
-
-
-class CommunityWithRelations(Community):
-    tokens: list[ReportTokenRef]
-    responses: list[Response]
-
-
-class IntegrationBanPlayerParams(BaseModel):
-    player_id: str
-    reasons: list[str]
-    community: CommunityRef
-
