@@ -142,20 +142,3 @@ async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
             )
             coros.append(coro)
     await asyncio.gather(*coros)
-
-@add_hook(EventHooks.report_delete)
-async def delete_public_report_message_on_report_delete(report: schemas.ReportWithRelations):
-    try:
-        await bot.delete_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
-    except discord.HTTPException:
-        pass
-
-@add_hook(EventHooks.report_delete)
-async def delete_private_report_messages_on_report_delete(report: schemas.ReportWithRelations):
-    for message_data in report.messages:
-        try:
-            await bot.delete_message(message_data.channel_id, message_data.message_id)
-        except discord.HTTPException:
-            pass
-        except:
-            logging.exception("Unexpected error occurred while attempting to delete %r", message_data)

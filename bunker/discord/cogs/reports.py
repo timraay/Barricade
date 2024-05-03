@@ -12,7 +12,7 @@ from sqlalchemy import select
 from bunker import schemas
 from bunker.crud.communities import get_community_by_id, get_community_by_guild_id, get_admin_by_id
 from bunker.crud.reports import get_report_by_id, get_reports_for_player
-from bunker.crud.responses import set_report_response, get_response_stats
+from bunker.crud.responses import get_pending_responses, set_report_response, get_response_stats
 from bunker.db import models, session_factory
 from bunker.discord.reports import get_report_embed
 from bunker.discord.utils import format_url, handle_error, CustomException
@@ -186,40 +186,14 @@ class ReportsCog(commands.Cog):
     
     async def refresh_report_view(self, interaction: Interaction, community_id: int, report_id: int):
         async with session_factory() as db:
-            report = await get_report_by_id(db, report_id, load_relations=True)
+            report = await get_report_by_id(db, report_id, load_token=True)
             community = await get_community_by_id(db, community_id)
 
             stats: dict[int, schemas.ResponseStats] = {}
             for player in report.players:
                 stats[player.id] = await get_response_stats(db, player)
 
-            responses = {
-                player.id: schemas.PendingResponse(
-                    pr_id=player.id,
-                    player_report=player,
-                    community_id=community_id,
-                    community=community,
-                ) for player in report.players
-            }
-            
-            stmt = select(
-                models.PlayerReportResponse.pr_id,
-                models.PlayerReportResponse.reject_reason,
-                models.PlayerReportResponse.banned
-            ).join(
-                models.PlayerReport
-            ).where(
-                models.PlayerReportResponse.community_id == community_id,
-                models.PlayerReport.id.in_(
-                    [player.id for player in report.players]
-                )
-            )
-            result = await db.execute(stmt)
-            for row in result:
-                responses[row.pr_id].banned = row.banned
-                responses[row.pr_id].reject_reason = row.reject_reason
-
-        responses = list(responses.values())
+            responses = await get_pending_responses(db, community, report.players)
         view = PlayerReviewView(responses=responses)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)

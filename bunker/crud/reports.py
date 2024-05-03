@@ -208,11 +208,52 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db_report.message_id = message.id
 
     await db.flush()
-
-    # For some reason this does not load db_report.messages
     db_report = await get_report_by_id(db, db_report.id, load_token=True)
-
     EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
+
+    return db_report
+
+async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
+    db_report = await get_report_by_id(db, report.token.id, load_relations=True)
+
+    db_prs = {
+        db_pr.player_id: db_pr
+        for db_pr in db_report.players
+    }
+    
+    for player in report.players:
+        db_pr = db_prs.pop(db_pr.player_id, None)
+        if db_pr:
+            # Player was (possibly) updated
+            db_pr.player_name = player.player_name
+            if player.bm_rcon_url:
+                db_pr.player.bm_rcon_url = player.bm_rcon_url
+        else:
+            # Player was added to report
+            db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
+                id=player.player_id,
+                bm_rcon_url=player.bm_rcon_url
+            ))
+            db_pr = models.PlayerReport(
+                report=db_report,
+                player=db_player,
+                player_name=player.player_name,
+            )
+            db_report.players.append(db_pr)
+            db.add(db_pr)
+    
+    for db_pr in db_prs.values():
+        # Player was removed
+        db_report.players.remove(db_pr)
+        await db.delete(db_pr)
+
+    db_report.body = report.body
+    db_report.reasons_bitflag = report.reasons_bitflag
+    db_report.reasons_custom = report.reasons_custom
+
+    await db.flush()
+    await db.refresh(db_report)
+    EventHooks.invoke_report_edit(schemas.ReportWithRelations.model_validate(db_report))
 
     return db_report
 

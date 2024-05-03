@@ -36,11 +36,9 @@ async def submit_report(
     if not token:
         logging.warn("Token not found")
         raise invalid_token_error
-    if token.is_expired():
+    
+    if token.is_expired() and not token.report:
         logging.warn("Token has expired")
-        raise invalid_token_error
-    if token.report:
-        logging.warn("Token was already used")
         raise invalid_token_error
     
     reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
@@ -52,7 +50,11 @@ async def submit_report(
         reasons_bitflag=reasons_bitflag,
         reasons_custom=reasons_custom,
     )
-    db_report = await reports.create_report(db, report)
+
+    if token.report:
+        db_report = await reports.edit_report(db, report)
+    else:
+        db_report = await reports.create_report(db, report)
     db_report.token = token
     return db_report
         
@@ -74,7 +76,7 @@ async def forward_report(
 
 
 @router.get("/{report_id}", response_model=schemas.ReportWithRelations)
-async def get_reports(
+async def get_report(
         report_id: int,
         db: DatabaseDep,
 ):

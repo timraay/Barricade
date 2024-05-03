@@ -3,9 +3,13 @@ import logging
 from sqlalchemy import select
 
 from bunker import schemas
+from bunker.constants import DISCORD_REPORTS_CHANNEL_ID
+from bunker.crud.communities import get_community_by_id
+from bunker.crud.responses import get_pending_responses
 from bunker.db import models, session_factory
 from bunker.discord import bot
 from bunker.discord.communities import get_forward_channel
+from bunker.discord.reports import get_report_embed
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.views.report_management import ReportManagementView
 from bunker.hooks import EventHooks, add_hook
@@ -88,3 +92,55 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
         )
     except discord.errors.HTTPException:
         logging.error("Could not send report confirmation to %s (ID: %s)", admin.name, admin.discord_id)
+
+@add_hook(EventHooks.report_edit)
+async def edit_public_report_message(report: schemas.ReportWithRelations):
+    try:
+        embed = await get_report_embed(report)
+        message = bot.get_partial_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
+        await message.edit(embed=embed)
+    except discord.HTTPException:
+        pass
+
+@add_hook(EventHooks.report_edit)
+async def edit_private_report_messages(report: schemas.ReportWithRelations):
+    if not report.messages:
+        return
+    
+    async with session_factory() as db:
+        for message_data in report.messages:
+            try:
+                # Create pending responses
+                community = await get_community_by_id(db, message_data.community_id)
+                responses = await get_pending_responses(db, community, report.players)
+
+                # Get new message content
+                view = PlayerReviewView(responses=responses)
+                embed = await PlayerReviewView.get_embed(report, responses)
+
+                # Update message
+                message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
+                await message.edit(embed=embed, view=view)
+            except discord.HTTPException:
+                pass
+            except:
+                logging.exception("Unexpected error occurred while attempting to delete %r", message_data)
+
+@add_hook(EventHooks.report_delete)
+async def delete_public_report_message(report: schemas.ReportWithRelations):
+    try:
+        message = bot.get_partial_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
+        await message.delete()
+    except discord.HTTPException:
+        pass
+
+@add_hook(EventHooks.report_delete)
+async def delete_private_report_messages(report: schemas.ReportWithRelations):
+    for message_data in report.messages:
+        try:
+            message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
+            await message.delete()
+        except discord.HTTPException:
+            pass
+        except:
+            logging.exception("Unexpected error occurred while attempting to delete %r", message_data)

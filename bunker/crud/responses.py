@@ -2,6 +2,7 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
+from bunker.crud.communities import get_community_by_id
 from bunker.db import models
 from bunker.enums import ReportRejectReason
 from bunker.hooks import EventHooks
@@ -75,3 +76,36 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
             data.reject_reasons[result.reject_reason] += result.amount
 
     return data
+
+async def get_pending_responses(
+        db: AsyncSession,
+        community: schemas.CommunityRef,
+        player_reports: list[schemas.PlayerReportRef],
+):
+    responses = {
+        player.id: schemas.PendingResponse(
+            pr_id=player.id,
+            player_report=player,
+            community_id=community.id,
+            community=community,
+        ) for player in player_reports
+    }
+    
+    stmt = select(
+        models.PlayerReportResponse.pr_id,
+        models.PlayerReportResponse.reject_reason,
+        models.PlayerReportResponse.banned
+    ).join(
+        models.PlayerReport
+    ).where(
+        models.PlayerReportResponse.community_id == community.id,
+        models.PlayerReport.id.in_(
+            [player.id for player in player_reports]
+        )
+    ).limit(len(player_reports))
+    result = await db.execute(stmt)
+    for row in result:
+        responses[row.pr_id].banned = row.banned
+        responses[row.pr_id].reject_reason = row.reject_reason
+    
+    return list(responses.values())

@@ -8,6 +8,7 @@ from bunker.utils import log_task_error
 
 class EventHooks(str, Enum):
     report_create = "report_create"
+    report_edit = "report_edit"
     report_delete = "report_delete"
     player_ban = "player_ban"
     player_unban = "player_unban"
@@ -32,6 +33,10 @@ class EventHooks(str, Enum):
     @staticmethod
     def invoke_report_create(report: schemas.ReportWithToken):
         return EventHooks.report_create._invoke(report)
+
+    @staticmethod
+    def invoke_report_edit(report: schemas.ReportWithRelations):
+        return EventHooks.report_edit._invoke(report)
 
     @staticmethod
     def invoke_report_delete(report: schemas.ReportWithRelations):

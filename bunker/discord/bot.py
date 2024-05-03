@@ -64,9 +64,12 @@ class Bot(commands.Bot):
             return member
         else:
             return await guild.fetch_member(user_id)
+        
+    def get_partial_message(self, channel_id: int, message_id: int):
+        return self.get_partial_messageable(channel_id).get_partial_message(message_id)
 
     async def delete_message(self, channel_id: int, message_id: int):
-        message = self.get_partial_messageable(channel_id).get_partial_message(message_id)
+        message = self.get_partial_messageable()
         await message.delete()
 
 def command_prefix(bot: Bot, message: discord.Message):
