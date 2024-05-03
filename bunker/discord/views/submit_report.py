@@ -1,11 +1,14 @@
+from enum import IntEnum
 import discord
 from discord import ButtonStyle, Interaction
 
 from bunker import schemas
 from bunker.crud.communities import get_admin_by_id
-from bunker.crud.reports import create_token, get_form_url
+from bunker.crud.reports import create_token
 from bunker.db import session_factory
 from bunker.discord.utils import View, CallableButton, CustomException
+from bunker.enums import ReportReasonFlag
+from bunker.urls import get_report_create_url
 
 class GetSubmissionURLView(View):
     def __init__(self):
@@ -35,7 +38,7 @@ class GetSubmissionURLView(View):
             )
             db_token = await create_token(db, token)
         
-        url = get_form_url(db_token.value)
+        url = get_report_create_url(db_token.value)
         view = OpenFormView(url)
         await view.send(interaction)
 

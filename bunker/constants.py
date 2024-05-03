@@ -53,5 +53,5 @@ DISCORD_ENROLL_CHANNEL_ID = int(os.getenv('DISCORD_ENROLL_CHANNEL_ID') or 0)
 # How many admins each community is allowed to have (excluding the owner)
 MAX_ADMIN_LIMIT = 3
 
-# The URL of the report form
-REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?entry.1804901355={access_token}"
+# The URL of the report form. Must end in a "?".
+REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"

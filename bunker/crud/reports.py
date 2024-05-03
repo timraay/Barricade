@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bunker import schemas
-from bunker.constants import REPORT_FORM_URL
 from bunker.db import models
 from bunker.discord.reports import get_report_embed, get_report_channel
 from bunker.exceptions import NotFoundError, AlreadyExistsError
@@ -77,15 +76,15 @@ async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams)
 
 
 
-async def get_all_reports(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
+async def get_all_reports(db: AsyncSession, load_token: bool = False, limit: int = 100, offset: int = 0):
     """Retrieve all reports.
 
     Parameters
     ----------
     db : AsyncSession
         An asynchronous database session
-    load_relations : bool, optional
-        Whether to also load relational properties, by default False
+    load_token : bool, optional
+        Whether to also load the relational token property, by default False
     limit : int, optional
         The amount of results to return, by default 100
     offset : int, optional
@@ -96,8 +95,8 @@ async def get_all_reports(db: AsyncSession, load_relations: bool = False, limit:
     List[Report]
         A sequence of all reports
     """
-    if load_relations:
-        options = (selectinload("*"),)
+    if load_token:
+        options = (selectinload(models.Report.players), selectinload(models.Report.token))
     else:
         options = (selectinload(models.Report.players),)
 
@@ -106,7 +105,7 @@ async def get_all_reports(db: AsyncSession, load_relations: bool = False, limit:
     return result.all()
 
 
-async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: bool = False):
+async def get_report_by_id(db: AsyncSession, report_id: int, load_token: bool = False, load_relations: bool = False):
     """Look up a report by its ID.
 
     Parameters
@@ -115,6 +114,9 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: boo
         An asynchronous database session
     report_id : int
         The ID of the report
+    load_token : bool, optional
+        Whether to also load the token relational property, ignored if `load_relations`
+        is True, by default False
     load_relations : bool, optional
         Whether to also load relational properties, by default False
 
@@ -124,13 +126,15 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_relations: boo
         The report model, or None if it does not exist
     """
     if load_relations:
-        options = (selectinload(models.Report.players), selectinload(models.Report.messages), selectinload(models.Report.token),)
+        options = (selectinload("*"),)
+    elif load_token:
+        options = (selectinload(models.Report.players), selectinload(models.Report.token),)
     else:
         options = (selectinload(models.Report.players),)
 
     return await db.get(models.Report, report_id, options=options)
 
-async def get_reports_for_player(db: AsyncSession, player_id: str, load_relations: bool = False):
+async def get_reports_for_player(db: AsyncSession, player_id: str, load_token: bool = False):
     """Get all reports of a player
 
     Parameters
@@ -139,16 +143,16 @@ async def get_reports_for_player(db: AsyncSession, player_id: str, load_relation
         An asynchronous database session
     player_id : str
         The ID of the player
-    load_relations : bool, optional
-        Whether to also load relational properties, by default False
+    load_token : bool, optional
+        Whether to also load the relational token property, by default False
 
     Returns
     -------
     List[Report]
         A sequence of report models
     """
-    if load_relations:
-        options = (selectinload("*"),)
+    if load_token:
+        options = (selectinload(models.Report.players), selectinload(models.Report.token))
     else:
         options = (selectinload(models.Report.players),)
     
@@ -175,11 +179,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
         The report model
     """
     report_payload = report.model_dump(exclude={"token", "players"})
-    report_payload.update({
-        "id": report.token.id,
-        # If we don't initialize messages here it won't be fetched later, no clue why though
-        "messages": [],
-    })
+    report_payload["id"] = report.token.id
 
     db_players = []
     for player in report.players:
@@ -193,7 +193,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
         # player.bm_rcon_url = db_player.bm_rcon_url
 
     db_report = models.Report(**report_payload)
-    for db_player in db_players:
+    for player, db_player in zip(report.players, db_players):
         models.PlayerReport(
             report=db_report,
             player=db_player,
@@ -210,9 +210,9 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     await db.flush()
 
     # For some reason this does not load db_report.messages
-    db_report = await get_report_by_id(db, db_report.id, load_relations=True)
+    db_report = await get_report_by_id(db, db_report.id, load_token=True)
 
-    EventHooks.invoke_report_create(schemas.ReportWithRelations.model_validate(db_report))
+    EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
 
     return db_report
 
@@ -261,7 +261,3 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
         created = True
     
     return db_player, created
-
-def get_form_url(access_token: str):
-    return REPORT_FORM_URL.format(access_token=access_token)
-

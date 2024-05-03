@@ -14,7 +14,7 @@ def get_report_channel():
 
 
 async def get_report_embed(
-        report: schemas.ReportCreateParams | schemas.ReportWithRelations,
+        report: schemas.ReportCreateParams | schemas.ReportWithToken,
         stats: dict[int, schemas.ResponseStats] = None,
         with_footer: bool = True
 ) -> discord.Embed:

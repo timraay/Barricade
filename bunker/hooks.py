@@ -30,7 +30,7 @@ class EventHooks(str, Enum):
         return func
 
     @staticmethod
-    def invoke_report_create(report: schemas.ReportWithRelations):
+    def invoke_report_create(report: schemas.ReportWithToken):
         return EventHooks.report_create._invoke(report)
 
     @staticmethod

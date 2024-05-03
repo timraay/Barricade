@@ -15,12 +15,14 @@ from bunker.crud.reports import get_report_by_id, get_reports_for_player
 from bunker.crud.responses import set_report_response, get_response_stats
 from bunker.db import models, session_factory
 from bunker.discord.reports import get_report_embed
-from bunker.discord.utils import handle_error, CustomException
+from bunker.discord.utils import format_url, handle_error, CustomException
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.views.report_paginator import ReportPaginator
+from bunker.discord.views.submit_report import OpenFormView
 from bunker.exceptions import NotFoundError
 from bunker.enums import ReportRejectReason
 from bunker.hooks import EventHooks
+from bunker.urls import get_report_edit_url
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -105,12 +107,15 @@ class ReportsCog(commands.Cog):
         data = RMCustomIDPayload(**match.groupdict())
 
         async with session_factory.begin() as db:
-            db_report = await get_report_by_id(db, data.report_id, load_relations=True)
+            db_report = await get_report_by_id(db, data.report_id, load_token=True)
             if not db_report:
                 raise NotFoundError("This report no longer exists")
         
             match data.command:
                 case "del":
+                    # Load "messages" property to satisfy ReportWithRelations schema
+                    await db_report.awaitable_attrs.messages
+
                     # TODO: Add confirmation
                     # TODO? Only allow admins to delete
                     await db.delete(db_report)
@@ -122,8 +127,9 @@ class ReportsCog(commands.Cog):
                     await interaction.message.delete()
 
                 case "edit":
+                    url = get_report_edit_url(schemas.ReportWithToken.model_validate(db_report))
                     await interaction.response.send_message(
-                        content="It is currently not yet possible to edit reports.",
+                        content="## " + format_url("Open Google Form", url),
                         ephemeral=True
                     )
 

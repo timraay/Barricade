@@ -11,7 +11,7 @@ from bunker.discord.views.report_management import ReportManagementView
 from bunker.hooks import EventHooks, add_hook
 
 @add_hook(EventHooks.report_create)
-async def forward_report_to_communities(report: schemas.ReportWithRelations):
+async def forward_report_to_communities(report: schemas.ReportWithToken):
     async with session_factory.begin() as db:
         stmt = select(models.Community).where(
             models.Community.forward_guild_id.is_not(None),
@@ -58,7 +58,7 @@ async def forward_report_to_communities(report: schemas.ReportWithRelations):
                 logging.exception("Failed to forward %r to %r", report, community)
 
 @add_hook(EventHooks.report_create)
-async def forward_report_to_token_owner(report: schemas.ReportWithRelations):
+async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     community = report.token.community
     admin = report.token.admin
 

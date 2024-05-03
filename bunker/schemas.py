@@ -211,8 +211,10 @@ class PlayerReport(PlayerReportRef):
 class Report(ReportRef):
     players: list[PlayerReportRef]
 
-class ReportWithRelations(Report):
+class ReportWithToken(Report):
     token: ReportTokenRef
+
+class ReportWithRelations(ReportWithToken):
     messages: list[ReportMessageRef]
 
 class Response(_ResponseBase, _ModelFromAttributes):

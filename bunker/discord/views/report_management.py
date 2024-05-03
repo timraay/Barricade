@@ -20,7 +20,7 @@ class ReportManagementView(View):
 
     @staticmethod
     async def get_embed(
-        report: schemas.ReportWithRelations,
+        report: schemas.ReportWithToken,
         stats: dict[int, schemas.ResponseStats] = None
     ):
         embed = await get_report_embed(report, stats=stats, with_footer=False)
