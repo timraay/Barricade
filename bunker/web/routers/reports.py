@@ -52,10 +52,12 @@ async def submit_report(
     )
 
     if token.report:
+        db.expire_all()
         db_report = await reports.edit_report(db, report)
+        await db.commit()
     else:
         db_report = await reports.create_report(db, report)
-    db_report.token = token
+
     return db_report
         
 @router.get("/forward", response_model=schemas.ReportWithRelations)

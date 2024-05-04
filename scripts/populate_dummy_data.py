@@ -57,7 +57,7 @@ async def main():
         print("--", "Created community 3")
     print("--", "Committed communities")
 
-    async with session_factory.begin() as db:
+    async with session_factory() as db:
         print("--", "Begun session")
         await communities.create_new_admin(db, schemas.AdminCreateParams(
             discord_id=446731539611648001,
@@ -78,6 +78,7 @@ async def main():
         ))
         print("--", "Created token 2")
 
+        # Already commits once finished
         await reports.create_report(db, schemas.ReportCreateParams(
             body="These guys need to be removed. They are a danger to society.",
             reasons_bitflag=ReportReasonFlag.TEAMKILLING_GRIEFING,
@@ -98,6 +99,7 @@ async def main():
         ))
         print("--", "Created report 1")
         
+        # Already commits once finished
         await reports.create_report(db, schemas.ReportCreateParams(
             body="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut velit ante, vulputate non fringilla cursus, commodo ut risus. Vestibulum id eros cursus orci euismod hendrerit a et urna. Donec vel nisl sed lectus posuere tincidunt. Donec in nisl blandit, facilisis sem molestie, lobortis urna.\nCras egestas feugiat lectus, id ultrices odio luctus eget. In hac habitasse platea dictumst. Suspendisse potenti.",
             reasons_bitflag=ReportReasonFlag.HACKING | ReportReasonFlag.CUSTOM,

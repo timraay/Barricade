@@ -70,28 +70,40 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     view = ReportManagementView(report)
 
     user = await bot.get_or_fetch_user(admin.discord_id)
+    message = None
 
     if community.forward_channel_id:
         channel = get_forward_channel(community)
         if channel:
             try:
-                await channel.send(
+                message = await channel.send(
                     content=f"{user.mention} your report was submitted! (ID: #{report.id})",
                     embed=embed,
                     view=view,
                 )
             except discord.HTTPException:
                 pass
-            else:
-                return
     
-    try:
-        await user.send(
-            content=user.mention,
-            embed=embed,
-        )
-    except discord.errors.HTTPException:
-        logging.error("Could not send report confirmation to %s (ID: %s)", admin.name, admin.discord_id)
+    if not message:
+        try:
+            message = await user.send(
+                content=user.mention,
+                embed=embed,
+            )
+        except discord.errors.HTTPException:
+            logging.error("Could not send report confirmation to %s (ID: %s)", admin.name, admin.discord_id)
+    
+    if message:
+        async with session_factory.begin() as db:
+            # Add message to database
+            message_data = schemas.ReportMessageCreateParams(
+                report_id=report.id,
+                community_id=community.id,
+                channel_id=message.channel.id,
+                message_id=message.id,
+            )
+            db_message = models.ReportMessage(**message_data.model_dump())
+            db.add(db_message)
 
 @add_hook(EventHooks.report_edit)
 async def edit_public_report_message(report: schemas.ReportWithRelations):
@@ -110,13 +122,16 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations):
     async with session_factory() as db:
         for message_data in report.messages:
             try:
-                # Create pending responses
-                community = await get_community_by_id(db, message_data.community_id)
-                responses = await get_pending_responses(db, community, report.players)
-
                 # Get new message content
-                view = PlayerReviewView(responses=responses)
-                embed = await PlayerReviewView.get_embed(report, responses)
+                if message_data.community_id == report.token.community_id:
+                    embed = await ReportManagementView.get_embed(report)
+                    view = ReportManagementView(report)
+                else:
+                    # Create pending responses
+                    community = await get_community_by_id(db, message_data.community_id)
+                    responses = await get_pending_responses(db, community, report.players)
+                    view = PlayerReviewView(responses=responses)
+                    embed = await PlayerReviewView.get_embed(report, responses)
 
                 # Update message
                 message = bot.get_partial_message(message_data.channel_id, message_data.message_id)

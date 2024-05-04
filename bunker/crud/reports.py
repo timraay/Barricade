@@ -166,6 +166,9 @@ async def get_reports_for_player(db: AsyncSession, player_id: str, load_token: b
 async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     """Create a new report.
 
+    This method will automatically commit after successfully creating
+    a report!
+
     Parameters
     ----------
     db : AsyncSession
@@ -209,27 +212,36 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
 
     await db.flush()
     db_report = await get_report_by_id(db, db_report.id, load_token=True)
+    if not db_report:
+        raise ValueError("Report no longer exists")
+
+    await db.commit()
     EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
 
     return db_report
 
 async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db_report = await get_report_by_id(db, report.token.id, load_relations=True)
-
+    if not db_report:
+        raise ValueError("Report does not exist")
+    
+    # Index all existing PRs by their IDs
     db_prs = {
         db_pr.player_id: db_pr
         for db_pr in db_report.players
     }
     
+    # Iterate over all submitted players
     for player in report.players:
-        db_pr = db_prs.pop(db_pr.player_id, None)
+        db_pr = db_prs.pop(player.player_id, None)
         if db_pr:
-            # Player was (possibly) updated
+            # Player already existed, update their attributes and take them out
+            # of the index.
             db_pr.player_name = player.player_name
             if player.bm_rcon_url:
                 db_pr.player.bm_rcon_url = player.bm_rcon_url
         else:
-            # Player was added to report
+            # Player did not yet exist, add to report
             db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
                 id=player.player_id,
                 bm_rcon_url=player.bm_rcon_url
@@ -239,11 +251,11 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
                 player=db_player,
                 player_name=player.player_name,
             )
-            db_report.players.append(db_pr)
+            # db_report.players.append(db_pr)
             db.add(db_pr)
     
+    # Iterate over all remaining previous players and remove them
     for db_pr in db_prs.values():
-        # Player was removed
         db_report.players.remove(db_pr)
         await db.delete(db_pr)
 
@@ -252,7 +264,7 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db_report.reasons_custom = report.reasons_custom
 
     await db.flush()
-    await db.refresh(db_report)
+    # await db.refresh(db_report)
     EventHooks.invoke_report_edit(schemas.ReportWithRelations.model_validate(db_report))
 
     return db_report

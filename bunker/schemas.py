@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
-from typing import Literal, Optional, ClassVar
+from typing import Literal, Optional
 from uuid import UUID
 
 from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
@@ -282,9 +282,11 @@ class IntegrationBanPlayerParams(BaseModel):
 # --- Report submission models
 
 class ReportSubmissionPlayerData(PlayerReportCreateParams):
+    model_config = ConfigDict(populate_by_name=True)
     bm_rcon_url: Optional[str] = Field(alias="bmRconUrl")
 
 class ReportSubmissionData(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     token: str
     players: list[ReportSubmissionPlayerData]
     reasons: list[str]
