@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import pydantic
 import re
 
@@ -10,6 +11,7 @@ from discord.ext import commands
 from sqlalchemy import select
 
 from bunker import schemas
+from bunker.constants import REPORT_TOKEN_EXPIRE_DELTA
 from bunker.crud.communities import get_community_by_id, get_community_by_guild_id, get_admin_by_id
 from bunker.crud.reports import get_report_by_id, get_reports_for_player
 from bunker.crud.responses import get_pending_responses, set_report_response, get_response_stats
@@ -127,6 +129,9 @@ class ReportsCog(commands.Cog):
                     await interaction.message.delete()
 
                 case "edit":
+                    # Extend token expiration date
+                    db_report.token.expires_at = datetime.now(tz=timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA
+                    # Send URL to user
                     url = get_report_edit_url(schemas.ReportWithToken.model_validate(db_report))
                     await interaction.response.send_message(
                         content="## " + format_url("Open Google Form", url),

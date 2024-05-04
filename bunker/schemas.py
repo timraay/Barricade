@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Literal, Optional
 from uuid import UUID
 
+from bunker.constants import REPORT_TOKEN_EXPIRE_DELTA
 from bunker.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
 
 # Simple config to be used for ORM objects
@@ -196,7 +197,7 @@ class Community(CommunityRef):
     integrations: list[IntegrationConfig]
 
 class ReportTokenCreateParams(_ReportTokenBase):
-    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=1))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=REPORT_TOKEN_EXPIRE_DELTA))
 
 class ReportToken(ReportTokenRef):
     report: Optional[ReportRef]

@@ -37,7 +37,7 @@ async def submit_report(
         logging.warn("Token not found")
         raise invalid_token_error
     
-    if token.is_expired() and not token.report:
+    if token.is_expired():
         logging.warn("Token has expired")
         raise invalid_token_error
     

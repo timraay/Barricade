@@ -55,3 +55,5 @@ MAX_ADMIN_LIMIT = 3
 
 # The URL of the report form. Must end in a "?".
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"
+# Time it takes for report tokens (used for submitting reports) to expire
+REPORT_TOKEN_EXPIRE_DELTA = timedelta(hours=1)

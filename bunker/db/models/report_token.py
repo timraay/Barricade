@@ -5,6 +5,7 @@ from sqlalchemy import Integer, String, TIMESTAMP, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bunker.db import ModelBase
+from bunker.constants import REPORT_TOKEN_EXPIRE_DELTA
 
 if TYPE_CHECKING:
     from .community import Community
@@ -18,7 +19,7 @@ class ReportToken(ModelBase):
     value: Mapped[str] = mapped_column(String, unique=True, index=True)
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     admin_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
-    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() - timedelta(days=1)))
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA))
 
     community: Mapped['Community'] = relationship(back_populates="tokens", lazy="selectin")
     admin: Mapped['Admin'] = relationship(back_populates="tokens", lazy="selectin")
