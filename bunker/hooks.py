@@ -35,8 +35,8 @@ class EventHooks(str, Enum):
         return EventHooks.report_create._invoke(report)
 
     @staticmethod
-    def invoke_report_edit(report: schemas.ReportWithRelations):
-        return EventHooks.report_edit._invoke(report)
+    def invoke_report_edit(report: schemas.ReportWithRelations, old_report: schemas.ReportWithToken):
+        return EventHooks.report_edit._invoke(report, old_report)
 
     @staticmethod
     def invoke_report_delete(report: schemas.ReportWithRelations):

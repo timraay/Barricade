@@ -93,7 +93,12 @@ async def on_player_ban(response: schemas.Response):
 @add_hook(EventHooks.player_unban)
 async def on_player_unban(response: schemas.Response):
     async with session_factory() as db:
-        bans = await get_player_bans_for_community(db, response.player_report.player_id, response.community_id)
+        bans = await get_player_bans_without_responses(db, [response.player_report.player_id], community_id=response.community_id)
+
+    if not bans:
+        # Either no integrations have banned the players or the players are
+        # still banned through another report
+        return
 
     manager = IntegrationManager()
     embed = get_error_embed(
@@ -114,6 +119,38 @@ async def on_player_unban(response: schemas.Response):
             embed=embed,
         )
         coros.append(coro)
+    await asyncio.gather(*coros)
+
+@add_hook(EventHooks.report_edit)
+async def unban_players_detached_from_report(report: schemas.ReportWithRelations, old_report: schemas.ReportWithToken):
+    old_player_ids = {player.player_id for player in old_report.players}
+    new_player_ids = {player.player_id for player in report.players}
+    detached_player_ids = old_player_ids.difference(new_player_ids)
+
+    if not detached_player_ids:
+        return
+    
+    async with session_factory() as db:
+        bans = await get_player_bans_without_responses(db, detached_player_ids)
+    
+        manager = IntegrationManager()
+        embed = get_error_embed(
+            "Integration failed to unban player after they were removed from a report!",
+            "Either manually delete the ban or retry using the button below."
+        )
+
+        coros = []
+        for ban in bans:
+            integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
+            community = await ban.integration.awaitable_attrs.community
+            coro = forward_errors(
+                integration.unban_player,
+                ban.player_id,
+                ban=ban,
+                community=community,
+                embed=embed,
+            )
+            coros.append(coro)
     await asyncio.gather(*coros)
 
 @add_hook(EventHooks.report_delete)

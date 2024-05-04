@@ -106,7 +106,7 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
             db.add(db_message)
 
 @add_hook(EventHooks.report_edit)
-async def edit_public_report_message(report: schemas.ReportWithRelations):
+async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
         embed = await get_report_embed(report)
         message = bot.get_partial_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
@@ -115,7 +115,7 @@ async def edit_public_report_message(report: schemas.ReportWithRelations):
         pass
 
 @add_hook(EventHooks.report_edit)
-async def edit_private_report_messages(report: schemas.ReportWithRelations):
+async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
     if not report.messages:
         return
     

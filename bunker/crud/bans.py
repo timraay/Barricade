@@ -1,3 +1,4 @@
+from typing import Sequence
 from sqlalchemy import exists, select, delete, not_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -80,25 +81,25 @@ async def bulk_delete_bans(db: AsyncSession, *where_clauses):
     await db.execute(stmt)
     await db.flush()
 
-async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[str]):
-    """
-    SELECT pb.*
-    FROM player_bans pb
-    INNER JOIN integrations i
-    ON pb.integration_id = i.id
-    WHERE
-        pb.player_id IN $player_ids
-        AND NOT EXISTS (
-            SELECT pr.id
-            FROM player_reports pr
-            INNER JOIN player_report_responses prr
-            ON
-                pr.id = prr.pr_id
-                AND prr.community_id = i.community_id
-                AND prr.banned IS true
-            WHERE
-                pr.player_id = pb.player_id
-        )
+async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequence[str], community_id: int | None = None):
+    """Get a list of player bans whose community has not responded to any reports
+    or has not chosen to ban them.
+
+    Essentially, returns a list of bans that should no longer exist.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    player_ids : Sequence[str]
+        A list of player IDs
+    community_id : int | None, optional
+        The ID of a community to filter results by, by default None
+
+    Returns
+    -------
+    Sequence[PlayerBan]
+        A list of player bans
     """
     stmt = select(models.PlayerBan) \
         .join(models.PlayerBan.integration) \
@@ -114,6 +115,10 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: list[s
                     )
             ))
         )
+    
+    if community_id is not None:
+        stmt = stmt.where(models.Integration.community_id == community_id)
+    
     result = await db.scalars(stmt)
     return result.all()
 

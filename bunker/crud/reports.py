@@ -225,6 +225,8 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     if not db_report:
         raise ValueError("Report does not exist")
     
+    old_report = schemas.ReportWithRelations.model_validate(db_report)
+    
     # Index all existing PRs by their IDs
     db_prs = {
         db_pr.player_id: db_pr
@@ -265,7 +267,11 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
 
     await db.flush()
     # await db.refresh(db_report)
-    EventHooks.invoke_report_edit(schemas.ReportWithRelations.model_validate(db_report))
+
+    new_report = schemas.ReportWithRelations.model_validate(db_report)
+    if (new_report != old_report):
+        # Only invoke if something actually changed
+        EventHooks.invoke_report_edit(new_report, old_report)
 
     return db_report
 
