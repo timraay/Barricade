@@ -16,9 +16,8 @@ function sendResponse(e) {
   const description = itemResponses[5];
   const attachmentUrls = itemResponses[6].split(";");
   for (const i = 7; i < 7 + 4 * 4; i += 4) {
-    if (itemResponses[i]) {
-      players.push(extractPlayerData(itemResponses, i + 1));
-    }
+    if (!itemResponses[i]) break;
+    players.push(extractPlayerData(itemResponses, i + 1));
   }
 
   const data = {
