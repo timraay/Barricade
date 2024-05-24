@@ -2,7 +2,6 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.crud.communities import get_community_by_id
 from bunker.db import models
 from bunker.enums import ReportRejectReason
 from bunker.hooks import EventHooks

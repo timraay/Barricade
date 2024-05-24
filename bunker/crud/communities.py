@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
 from bunker.db import models
+from bunker.discord.audit import audit_community_admin_add, audit_community_admin_leave, audit_community_change_owner, audit_community_created
 from bunker.discord.communities import grant_admin_role, grant_owner_role, revoke_admin_roles
 from bunker.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
@@ -173,7 +174,8 @@ async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_rela
 
 async def create_new_community(
         db: AsyncSession,
-        community: schemas.CommunityCreateParams
+        community: schemas.CommunityCreateParams,
+        by: str = None,
 ):
     """Create a new community.
 
@@ -213,7 +215,10 @@ async def create_new_community(
         db_owner.name = community.owner_name
     
     # Create the Community
-    db_community = models.Community(**community.model_dump(exclude={"owner_name"}))
+    db_community = models.Community(
+        **community.model_dump(exclude={"owner_name"}),
+        owner=db_owner,
+    )
     db.add(db_community)
     # Flush and refresh to fetch the community's ID
     await db.flush()
@@ -226,6 +231,11 @@ async def create_new_community(
 
     # Grant role to the owner
     await grant_owner_role(db_owner.discord_id)
+
+    audit_community_created(
+        community=db_community,
+        by=by,
+    )
 
     return db_community
 
@@ -295,8 +305,8 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
     if admin.community_id is None:
         raise NotFoundError
     
-    owned_community = await admin.awaitable_attrs.owned_community
-    if owned_community:
+    community: models.Community = await admin.awaitable_attrs.community
+    if community.owner_id == admin.discord_id:
         raise AdminOwnsCommunityError(admin)
 
     admin.community_id = None
@@ -307,9 +317,16 @@ async def admin_leave_community(db: AsyncSession, admin: models.Admin):
     await db.flush()
     await db.refresh(admin)
 
+    audit_community_admin_leave(community, admin)
+
     return admin
 
-async def admin_join_community(db: AsyncSession, admin: models.Admin, community: models.Community):
+async def admin_join_community(
+        db: AsyncSession,
+        admin: models.Admin,
+        community: models.Community,
+        by: str = None,
+):
     """Add an admin to a community.
 
     Parameters
@@ -351,9 +368,16 @@ async def admin_join_community(db: AsyncSession, admin: models.Admin, community:
     await db.flush()
     await db.refresh(admin)
 
+    audit_community_admin_add(community, admin, by=by)
+
     return admin
 
-async def transfer_ownership(db: AsyncSession, community: models.Community, admin: models.Admin):
+async def transfer_ownership(
+        db: AsyncSession,
+        community: models.Community,
+        admin: models.Admin,
+        by: str = None,
+):
     """Transfer ownership of a community.
 
     Parameters
@@ -381,12 +405,15 @@ async def transfer_ownership(db: AsyncSession, community: models.Community, admi
     if admin.community_id != community.id:
         raise AdminNotAssociatedError(admin, community)
     
-    old_owner_id = community.owner_id
+    old_owner: models.Admin = await community.awaitable_attrs.owner
     community.owner_id = admin.discord_id
     await db.flush()
     await db.refresh(community)
+    await db.refresh(admin)
 
-    await grant_admin_role(old_owner_id)
+    await grant_admin_role(old_owner.discord_id)
     await grant_owner_role(community.owner_id)
+
+    audit_community_change_owner(old_owner, admin, by=by)
 
     return True

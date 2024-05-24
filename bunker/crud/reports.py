@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bunker import schemas
+from bunker.crud.responses import get_response_stats
 from bunker.db import models
+from bunker.discord.audit import audit_report_created, audit_report_deleted, audit_report_edited, audit_token_created
 from bunker.discord.reports import get_report_embed, get_report_channel
 from bunker.exceptions import NotFoundError, AlreadyExistsError
 from bunker.hooks import EventHooks
@@ -32,7 +34,11 @@ async def get_token_by_value(db: AsyncSession, token_value: str):
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
-async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams):
+async def create_token(
+        db: AsyncSession,
+        token: schemas.ReportTokenCreateParams,
+        by: str = None,
+):
     """Create a new token.
 
     Parameters
@@ -72,6 +78,9 @@ async def create_token(db: AsyncSession, token: schemas.ReportTokenCreateParams)
     db.add(db_token)
     await db.flush()
     await db.refresh(db_token)
+
+    audit_token_created(token, by=by)
+
     return db_token
 
 
@@ -215,8 +224,10 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     if not db_report:
         raise ValueError("Report no longer exists")
 
+    report_with_token = schemas.ReportWithToken.model_validate(db_report)
     await db.commit()
-    EventHooks.invoke_report_create(schemas.ReportWithToken.model_validate(db_report))
+    EventHooks.invoke_report_create(report_with_token)
+    audit_report_created(report_with_token)
 
     return db_report
 
@@ -272,8 +283,31 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     if (new_report != old_report):
         # Only invoke if something actually changed
         EventHooks.invoke_report_edit(new_report, old_report)
+        audit_report_edited(new_report)
 
     return db_report
+
+async def delete_report(db: AsyncSession, report_id: int, by: str = None):
+    # Retrieve report
+    db_report = await get_report_by_id(db, report_id, load_relations=True)
+    if not db_report:
+        raise NotFoundError("No report exists with ID %s" % report_id)
+    
+    # Retrieve stats for auditing
+    stats = dict[int, schemas.ResponseStats]
+    for pr in db_report.players:
+        stats[pr.id] = await get_response_stats(db, pr)
+
+    # Delete it
+    await db.delete(db_report)
+    await db.flush()
+
+    # Invoke hooks and audit
+    report = schemas.ReportWithRelations.model_validate(db_report)
+    EventHooks.invoke_report_delete(report)
+    audit_report_deleted(report, stats, by=by)
+
+    return True
 
 async def get_player(db: AsyncSession, player_id: str):
     """Look up a player.

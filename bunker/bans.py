@@ -1,12 +1,9 @@
 import asyncio
-import logging
 from typing import Coroutine, Sequence
 
 from discord import Embed
-import discord
 
 from bunker import schemas
-from bunker.constants import DISCORD_REPORTS_CHANNEL_ID
 from bunker.crud.bans import get_player_bans_for_community, get_player_bans_without_responses
 from bunker.crud.communities import get_community_by_id
 from bunker.db import session_factory

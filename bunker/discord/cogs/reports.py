@@ -13,7 +13,7 @@ from sqlalchemy import select
 from bunker import schemas
 from bunker.constants import REPORT_TOKEN_EXPIRE_DELTA
 from bunker.crud.communities import get_community_by_id, get_community_by_guild_id, get_admin_by_id
-from bunker.crud.reports import get_report_by_id, get_reports_for_player
+from bunker.crud.reports import delete_report, get_report_by_id, get_reports_for_player
 from bunker.crud.responses import get_pending_responses, set_report_response, get_response_stats
 from bunker.db import models, session_factory
 from bunker.discord.reports import get_report_embed
@@ -109,26 +109,18 @@ class ReportsCog(commands.Cog):
         data = RMCustomIDPayload(**match.groupdict())
 
         async with session_factory.begin() as db:
-            db_report = await get_report_by_id(db, data.report_id, load_token=True)
-            if not db_report:
-                raise NotFoundError("This report no longer exists")
-        
             match data.command:
                 case "del":
-                    # Load "messages" property to satisfy ReportWithRelations schema
-                    await db_report.awaitable_attrs.messages
-
                     # TODO: Add confirmation
                     # TODO? Only allow admins to delete
-                    await db.delete(db_report)
-                    await db.flush()
-
-                    EventHooks.invoke_report_delete(schemas.ReportWithRelations.model_validate(db_report))
-
-                    # Delete the message
+                    await delete_report(db, data.report_id, by=interaction.user)
                     await interaction.message.delete()
 
                 case "edit":
+                    db_report = await get_report_by_id(db, data.report_id, load_token=True)
+                    if not db_report:
+                        raise NotFoundError("This report no longer exists")
+                    
                     # Extend token expiration date
                     db_report.token.expires_at = datetime.now(tz=timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA
                     # Send URL to user
