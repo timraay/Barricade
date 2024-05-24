@@ -222,7 +222,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     await db.flush()
     db_report = await get_report_by_id(db, db_report.id, load_token=True)
     if not db_report:
-        raise ValueError("Report no longer exists")
+        raise RuntimeError("Report no longer exists")
 
     report_with_token = schemas.ReportWithToken.model_validate(db_report)
     await db.commit()
@@ -234,7 +234,7 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
 async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     db_report = await get_report_by_id(db, report.token.id, load_relations=True)
     if not db_report:
-        raise ValueError("Report does not exist")
+        raise NotFoundError("No report exists with ID %s" % report.token.id)
     
     old_report = schemas.ReportWithRelations.model_validate(db_report)
     
