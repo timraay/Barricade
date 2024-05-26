@@ -57,7 +57,7 @@ class AdminAddConfirmationView(BaseConfirmationView):
         async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if admin:
-                await admin_join_community(db, admin, self.community)
+                await admin_join_community(db, admin, self.community, by=interaction.user)
             else:
                 await create_new_admin(db, schemas.AdminCreateParams(
                     discord_id=self.member.id,
@@ -86,7 +86,7 @@ class AdminRemoveConfirmationView(BaseConfirmationView):
                 raise CustomException("Admin not found!")
             if admin.community_id != self.community.id:
                 raise CustomException("Admin is not part of your community!")
-            await admin_leave_community(db, admin)
+            await admin_leave_community(db, admin, by=interaction.user)
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"Removed {self.member_name} as admin for {self.community.name}!")
@@ -111,7 +111,7 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
             community = await get_community_by_id(db, self.community.id)
             if not community:
                 raise CustomException("Community not found!")
-            await transfer_ownership(db, community, admin)
+            await transfer_ownership(db, community, admin, by=interaction.user)
             self.community = community
 
         await interaction.response.edit_message(embed=get_success_embed(
@@ -134,7 +134,7 @@ class LeaveCommunityConfirmationView(BaseConfirmationView):
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")
-            await admin_leave_community(db, admin)
+            await admin_leave_community(db, admin, by=interaction.user)
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"You left {self.community.name}!")

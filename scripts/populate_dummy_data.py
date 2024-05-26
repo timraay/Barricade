@@ -83,7 +83,7 @@ async def main():
             body="These guys need to be removed. They are a danger to society.",
             reasons_bitflag=ReportReasonFlag.TEAMKILLING_GRIEFING,
             reasons_custom=None,
-            token=t1,
+            token_id=t1.id,
             players=[
                 schemas.PlayerReportCreateParams(
                     player_id="11111111111111111",
@@ -104,7 +104,7 @@ async def main():
             body="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut velit ante, vulputate non fringilla cursus, commodo ut risus. Vestibulum id eros cursus orci euismod hendrerit a et urna. Donec vel nisl sed lectus posuere tincidunt. Donec in nisl blandit, facilisis sem molestie, lobortis urna.\nCras egestas feugiat lectus, id ultrices odio luctus eget. In hac habitasse platea dictumst. Suspendisse potenti.",
             reasons_bitflag=ReportReasonFlag.HACKING | ReportReasonFlag.CUSTOM,
             reasons_custom="Ipsum lorem",
-            token=t2,
+            token_id=t2.id,
             players=[
                 schemas.PlayerReportCreateParams(
                     player_id="76561199023367826",

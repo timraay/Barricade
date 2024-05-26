@@ -16,7 +16,7 @@ class Report(ModelBase):
     __tablename__ = "reports"
 
     id: Mapped[int] = mapped_column(ForeignKey("report_tokens.id", ondelete="CASCADE"), primary_key=True)
-    message_id: Mapped[int] = mapped_column(BigInteger, unique=True)
+    message_id: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=func.now())
     reasons_bitflag: Mapped[int] = mapped_column(Integer)
     reasons_custom: Mapped[Optional[str]]

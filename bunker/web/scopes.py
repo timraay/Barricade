@@ -4,10 +4,14 @@ def _convert_name(name: str):
     return name.lower().replace("_", ".")
 
 class Scopes(IntFlag):
-    COMMUNITY = auto()
-    COMMUNITY_CREATE = auto()
-    REPORT_DELETE = auto()
+    # Do NOT reorder or insert between
     STAFF = auto()
+    COMMUNITY_READ = auto()
+    COMMUNITY_MANAGE = auto()
+    COMMUNITY_SUPERUSER = auto()
+    REPORT_READ = auto()
+    REPORT_MANAGE = auto()
+    REPORT_SUPERUSER = auto()
 
     @classmethod
     def all(cls):
@@ -34,8 +38,11 @@ class Scopes(IntFlag):
         }
 
 SCOPE_DESCRIPTIONS = {
-    Scopes.COMMUNITY: "Manage communities and their admins",
-    Scopes.COMMUNITY_CREATE: "Create new communities",
-    Scopes.REPORT_DELETE: "Delete reports",
     Scopes.STAFF: "Manage web users",
+    Scopes.COMMUNITY_READ: "See all communities and their admins",
+    Scopes.COMMUNITY_MANAGE: "Manage your own community",
+    Scopes.COMMUNITY_SUPERUSER: "Manage all communities and create new ones",
+    Scopes.REPORT_READ: "See all reports",
+    Scopes.REPORT_MANAGE: "Manage your own reports",
+    Scopes.REPORT_SUPERUSER: "Delete reports",
 }

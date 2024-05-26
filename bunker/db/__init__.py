@@ -31,11 +31,8 @@ async def get_db():
     AsyncSession
         An asynchronous database session
     """
-    db = session_factory()
-    try:
+    async with session_factory.begin() as db:
         yield db
-    finally:
-        await db.close()
 DatabaseDep = Annotated[AsyncSession, Depends(get_db)]
 
 async def create_tables():

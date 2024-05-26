@@ -8,6 +8,7 @@ from bunker.crud.communities import get_community_by_id
 from bunker.crud.responses import get_pending_responses
 from bunker.db import models, session_factory
 from bunker.discord import bot
+from bunker.discord.audit import audit_report_created, audit_report_edited
 from bunker.discord.communities import get_forward_channel
 from bunker.discord.reports import get_report_embed
 from bunker.discord.views.player_review import PlayerReviewView
@@ -69,7 +70,7 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     embed = await ReportManagementView.get_embed(report)
     view = ReportManagementView(report)
 
-    user = await bot.get_or_fetch_user(admin.discord_id)
+    user = await bot.get_or_fetch_member(admin.discord_id)
     message = None
 
     if community.forward_channel_id:
@@ -104,6 +105,10 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
             )
             db_message = models.ReportMessage(**message_data.model_dump())
             db.add(db_message)
+
+@add_hook(EventHooks.report_create)
+async def forward_report_create_to_audit_log(report: schemas.ReportWithToken):
+    await audit_report_created(report)
 
 @add_hook(EventHooks.report_edit)
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
@@ -140,6 +145,10 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
                 pass
             except:
                 logging.exception("Unexpected error occurred while attempting to delete %r", message_data)
+
+@add_hook(EventHooks.report_edit)
+async def forward_report_edit_to_audit_log(report: schemas.ReportWithRelations, _):
+    await audit_report_edited(report)
 
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):

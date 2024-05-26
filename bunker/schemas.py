@@ -126,6 +126,10 @@ class _ReportMessageBase(BaseModel):
     community_id: int
     channel_id: int
     message_id: int
+    
+    @field_serializer('message_id', when_used='json-unless-none')
+    def convert_large_int_to_str(value: int):
+        return str(value)
 
 
 # --- Reference models
@@ -197,7 +201,7 @@ class Community(CommunityRef):
     integrations: list[IntegrationConfig]
 
 class ReportTokenCreateParams(_ReportTokenBase):
-    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=REPORT_TOKEN_EXPIRE_DELTA))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA)
 
 class ReportToken(ReportTokenRef):
     report: Optional[ReportRef]
@@ -251,12 +255,21 @@ class PlayerCreateParams(_PlayerBase):
 class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: Optional[str]
 
-class ReportCreateParams(_ReportBase):
+class ReportEditParams(_ReportBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    token: ReportTokenRef
     players: list[PlayerReportCreateParams] = Field(min_length=1)
     attachment_urls: list[str] = Field(default_factory=list)
+
+class ReportCreateParams(ReportEditParams):
+    token_id: int
+
+class ReportCreateParamsTokenless(ReportEditParams):
+    admin_id: int
+
+    @field_serializer('admin_id', when_used='json-unless-none')
+    def convert_large_int_to_str(value: int):
+        return str(value)
 
 class ReportMessageCreateParams(_ReportMessageBase):
     pass

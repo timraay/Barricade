@@ -1,13 +1,16 @@
-from fastapi import FastAPI, APIRouter, HTTPException, status, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Security, status, Depends
 from typing import Annotated
 
 from bunker import schemas
 from bunker.crud import communities
 from bunker.exceptions import AlreadyExistsError, AdminNotAssociatedError
 from bunker.db import models, DatabaseDep
+from bunker.web import schemas as web_schemas
 from bunker.web.paginator import PaginatorDep, PaginatedResponse
+from bunker.web.scopes import Scopes
+from bunker.web.security import get_active_token, get_active_token_community
 
-router = APIRouter(prefix="/communities")
+router = APIRouter(prefix="/communities", tags=["Communities"])
 
 def get_community_dependency(load_relations: bool):
     async def inner(db: DatabaseDep, community_id: int):
@@ -40,6 +43,10 @@ AdminWithRelationsDep = Annotated[models.Admin, Depends(get_admin_dependency(Tru
 async def get_all_communities(
         db: DatabaseDep,
         paginator: PaginatorDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_READ.to_list())
+        ],
 ):
     result = await communities.get_all_communities(db,
         limit=paginator.limit,
@@ -51,10 +58,17 @@ async def get_all_communities(
 async def create_community(
         db: DatabaseDep,
         community: schemas.CommunityCreateParams,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+        ],
 ):
     # Create the community
     try:
-        db_community = await communities.create_new_community(db, community)
+        db_community = await communities.create_new_community(
+            db, community,
+            by=(token.user.username if token.user else "Web Token")
+        )
     except AlreadyExistsError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -63,9 +77,40 @@ async def create_community(
 
     return db_community
 
+
+@router.get("/me", response_model=schemas.CommunityWithRelations)
+async def get_own_community(
+        community: Annotated[
+            schemas.CommunityWithRelations,
+            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_READ)
+        ]
+):
+    return community
+
+
+@router.put("/me/owner")
+async def transfer_own_community_ownership(
+        db: DatabaseDep,
+        admin: AdminDep,
+        community: Annotated[
+            schemas.Community,
+            Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_MANAGE)
+        ],
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Depends(get_active_token)
+        ],
+) -> bool:
+    return await transfer_community_ownership(db, community, admin, token)
+
+
 @router.get("/{community_id}", response_model=schemas.CommunityWithRelations)
 async def get_community(
         community: CommunityWithRelationsDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_READ.to_list())
+        ],
 ):
     return community
 
@@ -74,9 +119,16 @@ async def transfer_community_ownership(
         db: DatabaseDep,
         community: CommunityDep,
         admin: AdminDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+        ],
 ) -> bool:
     try:
-        return await communities.transfer_ownership(db, community, admin)
+        return await communities.transfer_ownership(
+            db, community, admin,
+            by=(token.user.username if token.user else "Web Token")
+        )
     except AdminNotAssociatedError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

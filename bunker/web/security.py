@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 from typing import Annotated
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi import Depends, HTTPException, status
@@ -13,9 +14,8 @@ from fastapi.security import (
 )
 from passlib.context import CryptContext
 
-from bunker import schemas
-from bunker.constants import ACCESS_TOKEN_EXPIRE_DELTA
-from bunker.db import models, get_db
+from bunker.crud.communities import get_community_by_id
+from bunker.db import DatabaseDep, models
 from bunker.web import schemas as web_schemas
 from bunker.web.scopes import Scopes
 
@@ -24,7 +24,7 @@ from bunker.web.scopes import Scopes
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -43,30 +43,41 @@ async def create_user(db: AsyncSession, user: web_schemas.WebUserCreateParams) -
 
 async def create_token(
         db: AsyncSession,
-        scopes: Scopes | None = None,
-        user: web_schemas.WebUser | None = None,
-        community: schemas.Community | None = None,
-        expires_delta: timedelta | None = ACCESS_TOKEN_EXPIRE_DELTA,
+        token: web_schemas.TokenCreateParams,
 ) -> tuple[models.WebToken, str]:
-    if scopes is None and user is None:
-        raise ValueError("\"scopes\" and \"user\" cannot both be None")
+    if token.scopes is None and token.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="\"scopes\" and \"user\" cannot both be null"
+        )
     
-    if community:
-        community_id = community.id
+    if token.expires_delta is None:
+        expires = None
     else:
-        community_id = None
-    
+        if token.expires_delta.total_seconds() < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="\"expires_delta\" must not be negative"
+            )
+        expires = datetime.now(tz=timezone.utc) + token.expires_delta
+
     token_value = generate_token_value()
     hashed_token_value = get_token_hash(token_value)
     db_token = models.WebToken(
         hashed_token=hashed_token_value,
-        scopes=scopes,
-        expires=datetime.now(tz=timezone.utc) + expires_delta,
-        user_id=user.id if user else None,
-        community_id=community_id
+        scopes=token.scopes,
+        expires=expires,
+        user_id=token.user_id,
+        community_id=token.community_id
     )
     db.add(db_token)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either user_id or community_id is an unknown identifier"
+        )
     return db_token, token_value
 
 
@@ -166,7 +177,7 @@ async def authenticate_user(db: AsyncSession, username: str, password: str):
 async def get_active_token(
         security_scopes: SecurityScopes,
         token: Annotated[str, Depends(oauth2_scheme)],
-        db: AsyncSession = Depends(get_db),
+        db: DatabaseDep,
 ):
     if security_scopes.scopes:
         authenticate_value = f'Bearer scope="{security_scopes.scope_str}"'
@@ -205,7 +216,7 @@ async def get_active_token(
 
     return db_token
 
-async def get_active_token_user(
+async def get_active_token_of_user(
         token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token)],
 ):
     if not token.user:
@@ -214,7 +225,7 @@ async def get_active_token_user(
             detail="Token not associated with user",
         )
 
-    return token.user
+    return token
 
 
 async def get_active_token_of_community(
@@ -227,3 +238,21 @@ async def get_active_token_of_community(
         )
 
     return token
+
+def get_active_token_community(load_relations: bool):
+    async def inner(
+        token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token_of_community)],
+        db: DatabaseDep,
+    ):
+        result = await get_community_by_id(
+            db,
+            community_id=token.community_id,
+            load_relations=load_relations
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Community does not exist"
+            )
+        return result
+    return inner

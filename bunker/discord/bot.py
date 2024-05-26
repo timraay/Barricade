@@ -58,12 +58,19 @@ class Bot(commands.Bot):
         return guild
     
     async def get_or_fetch_user(self, user_id: int):
+        user = self.get_user(user_id)
+        if user:
+            return user
+        else:
+            return await self.fetch_user(user_id)
+    
+    async def get_or_fetch_member(self, member_id: int):
         guild = self.primary_guild
-        member = guild.get_member(user_id)
+        member = guild.get_member(member_id)
         if member:
             return member
         else:
-            return await guild.fetch_member(user_id)
+            return await guild.fetch_member(member_id)
         
     def get_partial_message(self, channel_id: int, message_id: int):
         return self.get_partial_messageable(channel_id).get_partial_message(message_id)

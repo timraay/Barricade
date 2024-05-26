@@ -14,7 +14,7 @@ def get_report_channel():
 
 
 async def get_report_embed(
-        report: schemas.ReportCreateParams | schemas.ReportWithToken,
+        report: schemas.ReportWithToken,
         stats: dict[int, schemas.ResponseStats] = None,
         with_footer: bool = True
 ) -> discord.Embed:
@@ -24,11 +24,7 @@ async def get_report_embed(
     )
 
     for i, player in enumerate(report.players, 1):
-        if isinstance(player, schemas.PlayerReportCreateParams):
-            bm_rcon_url = player.bm_rcon_url
-        else:
-            bm_rcon_url = player.player.bm_rcon_url
-
+        bm_rcon_url = player.player.bm_rcon_url
         value = f"*`{player.player_id}`*"
 
         if stats and (stat := stats.get(player.id)):
@@ -69,7 +65,7 @@ async def get_report_embed(
 
     if with_footer:
         try:
-            user = await bot.get_or_fetch_user(report.token.admin_id)
+            user = await bot.get_or_fetch_member(report.token.admin_id)
         except discord.NotFound:
             avatar_url = None
         else:

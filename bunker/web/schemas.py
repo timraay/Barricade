@@ -1,6 +1,7 @@
-from datetime import datetime
-from pydantic import BaseModel, Field
+from datetime import datetime, timedelta
+from pydantic import BaseModel, ConfigDict, Field
 
+from bunker.constants import ACCESS_TOKEN_EXPIRE_DELTA
 from bunker.web.scopes import Scopes
 
 class WebUserBase(BaseModel):
@@ -27,6 +28,13 @@ class WebUserWithHash(WebUser):
 class WebUserWithPassword(WebUser):
     password: str
 
+
+class TokenCreateParams(BaseModel):
+    model_config = ConfigDict(ser_json_timedelta="float")
+    scopes: Scopes | None = None
+    expires_delta: timedelta | None = ACCESS_TOKEN_EXPIRE_DELTA
+    user_id: int | None = None
+    community_id: int | None = None
 
 class BaseToken(BaseModel):
     scopes: Scopes | None

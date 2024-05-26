@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 import secrets
 
@@ -79,7 +80,9 @@ async def create_token(
     await db.flush()
     await db.refresh(db_token)
 
-    audit_token_created(token, by=by)
+    asyncio.create_task(
+        audit_token_created(db_token, by=by)
+    )
 
     return db_token
 
@@ -190,8 +193,11 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     Report
         The report model
     """
-    report_payload = report.model_dump(exclude={"token", "players"})
-    report_payload["id"] = report.token.id
+    report_payload = report.model_dump(exclude={"token_id", "players"})
+    report_payload.update({
+        "id": report.token_id,
+        "message_id": 0
+    })
 
     db_players = []
     for player in report.players:
@@ -213,28 +219,27 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
         )
 
     db.add(db_report)
+    await db.flush()
 
-    embed = await get_report_embed(report)
+    db_report = await get_report_by_id(db, db_report.id, load_token=True)
+    if not db_report:
+        raise RuntimeError("Report no longer exists")
+    
+    embed = await get_report_embed(db_report)
     channel = get_report_channel()
     message = await channel.send(embed=embed)
     db_report.message_id = message.id
 
-    await db.flush()
-    db_report = await get_report_by_id(db, db_report.id, load_token=True)
-    if not db_report:
-        raise RuntimeError("Report no longer exists")
-
     report_with_token = schemas.ReportWithToken.model_validate(db_report)
     await db.commit()
     EventHooks.invoke_report_create(report_with_token)
-    audit_report_created(report_with_token)
 
     return db_report
 
 async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
-    db_report = await get_report_by_id(db, report.token.id, load_relations=True)
+    db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
-        raise NotFoundError("No report exists with ID %s" % report.token.id)
+        raise NotFoundError("No report exists with ID %s" % report.token_id)
     
     old_report = schemas.ReportWithRelations.model_validate(db_report)
     
@@ -283,7 +288,6 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     if (new_report != old_report):
         # Only invoke if something actually changed
         EventHooks.invoke_report_edit(new_report, old_report)
-        audit_report_edited(new_report)
 
     return db_report
 
@@ -305,7 +309,7 @@ async def delete_report(db: AsyncSession, report_id: int, by: str = None):
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
     EventHooks.invoke_report_delete(report)
-    audit_report_deleted(report, stats, by=by)
+    asyncio.create_task(audit_report_deleted(report, stats, by=by))
 
     return True
 
