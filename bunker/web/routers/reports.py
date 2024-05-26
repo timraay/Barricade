@@ -164,6 +164,11 @@ async def create_own_report(
         ],
 ):
     admin = await communities.get_admin_by_id(db, report.admin_id)
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin does not exist"
+        )
     if admin.community_id != token.community_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
