@@ -7,7 +7,7 @@ from bunker.exceptions import AlreadyExistsError, TooManyAdminsError, NotFoundEr
 from bunker.db import DatabaseDep
 from bunker.web import schemas as web_schemas
 from bunker.web.paginator import PaginatorDep, PaginatedResponse
-from bunker.web.routers.communities import AdminDep, CommunityDep
+from bunker.web.routers.communities import AdminDep, AdminWithRelationsDep, CommunityDep
 from bunker.web.scopes import Scopes
 from bunker.web.security import get_active_token, get_active_token_community, get_active_token_of_community
 
@@ -28,6 +28,7 @@ async def get_all_admins(
         offset=paginator.offset,
     )
     return paginator.paginate(result)
+
 
 @router.post("/admins", response_model=schemas.AdminRef)
 async def create_admin(
@@ -61,6 +62,17 @@ async def create_admin(
         )
 
     return db_admin
+
+
+@router.get("/admins/{admin_id}", response_model=schemas.Admin)
+async def get_admin(
+        admin: AdminWithRelationsDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_READ.to_list())
+        ],
+):
+    return admin    
 
 
 @router.put("/admins/{admin_id}/join", response_model=schemas.Admin)
