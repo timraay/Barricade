@@ -211,7 +211,7 @@ class ReportsCog(commands.Cog):
                     "Only admins of verified servers can use this command."
                 )
 
-            reports = await get_reports_for_player(db, player_id=player_id, load_relations=True)
+            reports = await get_reports_for_player(db, player_id=player_id, load_token=True)
             if not reports:
                 await interaction.response.send_message(
                     embed=discord.Embed(color=discord.Color.dark_theme()) \
