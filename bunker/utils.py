@@ -1,7 +1,6 @@
 import asyncio
 from cachetools import TTLCache
 from cachetools.keys import hashkey
-from enum import Enum
 from functools import wraps
 import logging
 import re

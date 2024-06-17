@@ -1,4 +1,4 @@
-from discord import ButtonStyle, Color, Embed, Interaction, Member
+from discord import ButtonStyle, Color, Embed, HTTPException, Interaction, Member
 from discord.ui import TextInput
 from sqlalchemy.exc import IntegrityError
 
@@ -6,8 +6,10 @@ from bunker import schemas
 from bunker.constants import MAX_ADMIN_LIMIT
 from bunker.crud.communities import get_community_by_id
 from bunker.db import session_factory
+from bunker.discord import bot
 from bunker.discord.communities import get_forward_channel
 from bunker.discord.utils import CustomException, Modal, View, CallableButton, get_command_mention
+from bunker.enums import Emojis
 
 class CommunityOverviewView(View):
     def __init__(self, community: schemas.Community, user: Member):
@@ -75,61 +77,65 @@ class CommunityOverviewView(View):
         )
 
     async def get_embed(self, interaction: Interaction):
-        embed = get_community_embed(self.community)
-
-        embed.add_field(
-            name="Owner",
-            value=self.fmt_name(self.community.owner),
-            inline=False
+        embed = Embed(
+            title=f"{self.community.tag} {self.community.name}",
+            color=Color.blurple(),
         )
-
-        admins = [
-            admin for admin in self.community.admins
-            if admin.discord_id != self.community.owner_id
-        ]
-
-        for i in range(MAX_ADMIN_LIMIT):
-            name = f"Admins ({len(admins)}/{MAX_ADMIN_LIMIT})" if i == 0 else "⠀"
-            if admins:
-                admin = admins.pop(0)
-                embed.add_field(
-                    name=name,
-                    value=self.fmt_name(admin),
-                    inline=True
-                )
-            else:
-                embed.add_field(
-                    name=name,
-                    value="**-**\n-",
-                    inline=True
-                )
 
         channel = get_forward_channel(self.community)
         if channel:
             embed.set_thumbnail(url=channel.guild.icon.url)
+            
         if self.is_admin or self.is_owner:
             if not self.community.forward_channel_id:
-                channel_mention = "⚠ No channel set"
+                channel_mention = "⚠️ *No reports channel*"
             elif not channel:
-                channel_mention = "⚠ Unknown channel"
+                channel_mention = "⚠️ *Unknown reports channel*"
             else:
-                channel_mention = channel.mention
-            embed.description += f"\n**Reports channel:**\n{channel_mention}"
+                channel_mention = f"🗒️ {channel.mention}"
+
+            embed.add_field(
+                name="Details",
+                value=f"{channel_mention}\n{Emojis.CONTACT} {self.community.contact_url}",
+            )
+        else:
+            embed.add_field(
+                name="Contact",
+                value=f"{Emojis.CONTACT} {self.community.contact_url}",
+            )
+        
+        admin_list = []
+        for admin in self.community.admins:
+            try:
+                member = await bot.get_or_fetch_member(admin.discord_id)
+                admin_list.append(member.mention)
+            except HTTPException:
+                admin_list.append(admin.name)
+            
+            if self.community.owner_id == admin.discord_id:
+                admin_list[-1] += f" {Emojis.OWNER}"
+
+        embed.add_field(
+            name=f"Admins ({len(self.community.admins)}/{MAX_ADMIN_LIMIT + 1})",
+            value="\n".join(admin_list),
+        )
 
         if self.is_admin:
             embed.add_field(
-                name="*`Available commands (Admin)`*",
+                name="> Available commands (Admin)",
                 value=(
-                    await get_command_mention(interaction.client.tree, "leave-community", guild_only=True)
+                    ">>> "
+                    + await get_command_mention(interaction.client.tree, "leave-community", guild_only=True)
                     + " - Leave this community"
                 ),
                 inline=False
             )
         elif self.is_owner:
             embed.add_field(
-                name="*`Available commands (Owner)`*",
+                name="> Available commands (Owner)",
                 value=(
-                    await get_command_mention(interaction.client.tree, "add-admin", guild_only=True)
+                    ">>> "
+                    + await get_command_mention(interaction.client.tree, "add-admin", guild_only=True)
                     + " - Add an admin to your community\n"
                     + await get_command_mention(interaction.client.tree, "remove-admin", guild_only=True)
                     + " - Remove an admin from your community\n"
@@ -185,10 +191,3 @@ class CommunityEditModal(CommunityBaseModal):
     
     async def on_submit(self, interaction: Interaction):
         await self.view.submit_edit_modal(interaction, self)
-        
-def get_community_embed(community: schemas.CommunityRef | schemas.CommunityCreateParams):
-    return Embed(
-        title=f"Community: {community.tag} {community.name}",
-        color=Color.blurple(),
-        description=f"**Name:** `{community.name}` - **Tag:** `{community.tag}`\n**Contact:** {community.contact_url}"
-    )

@@ -1,5 +1,6 @@
 import re
-from discord import ButtonStyle, Interaction
+from discord import ButtonStyle, Color, Interaction
+import discord
 from discord.ui import TextInput, Button
 from bunker import schemas
 from bunker.constants import DISCORD_ENROLL_CHANNEL_ID
@@ -7,7 +8,8 @@ from bunker.constants import DISCORD_ENROLL_CHANNEL_ID
 from bunker.crud.communities import create_new_community, get_admin_by_id
 from bunker.db import session_factory
 from bunker.discord.utils import View, CallableButton, CustomException, format_url, get_command_mention, get_success_embed
-from bunker.discord.views.community_overview import CommunityBaseModal, get_community_embed
+from bunker.discord.views.community_overview import CommunityBaseModal
+from bunker.enums import Emojis
 
 RE_BATTLEMETRICS_URL = re.compile(r"https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+")
 
@@ -72,11 +74,20 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
             owner_id=interaction.user.id,
             owner_name=interaction.user.display_name,
         )
-
-        embed = get_community_embed(params)
-        embed.set_author(
-            name=params.owner_name,
-            icon_url=interaction.user.avatar.url
+        
+        embed = discord.Embed(
+            title=f"{params.tag} {params.name}",
+            color=Color.blurple(),
+        )
+        embed.add_field(
+            name="Contact URL",
+            value=f"{Emojis.CONTACT} {params.contact_url}",
+            inline=True
+        )
+        embed.add_field(
+            name=f"Owner",
+            value=f"{interaction.user.display_name}\n{interaction.user.mention}",
+            inline=True
         )
         embed.add_field(
             name="Server",
