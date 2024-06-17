@@ -131,15 +131,15 @@ class BarricadeWebSocket:
 
 manager = BarricadeConnectionManager()
 
-async def authenticate(
-        authentication: Annotated[str, Header()] = "",
+async def authorize(
+        authorization: Annotated[str, Header()] = "",
 ):
     # Demonstration of how to add authenthication. Of course this is not secure at all.
-    # Check if the request includes an "Authentication" header with bearer token.
-    print('token:', authentication)
-    bearer = authentication.lower()
+    # Check if the request includes an "Authorization" header with bearer token.
+    print('token:', authorization)
+    bearer = authorization.lower()
     if bearer.startswith("bearer: ") or bearer.startswith("bearer "):
-        token = authentication.split(" ", 1)[1].strip()
+        token = authorization.split(" ", 1)[1].strip()
         if token == "password":
             return token
 
@@ -149,7 +149,7 @@ async def authenticate(
 @app.websocket("/ws")
 async def ws_endpoint(
         ws: WebSocket,
-        token: Annotated[str, Depends(authenticate)],
+        token: Annotated[str, Depends(authorize)],
 ):
     await manager.connect(BarricadeWebSocket(ws))
 

@@ -142,7 +142,7 @@ class Websocket:
             ws_factory = websockets.connect(
                 self.get_url(),
                 extra_headers={
-                    'Authentication': f'Bearer {self.token}'
+                    'Authorization': f'Bearer {self.token}'
                 }
             )
 
