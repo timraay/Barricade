@@ -1,22 +1,88 @@
 import asyncio
+from enum import Enum
 import json
 import logging
+import random
+from typing import AsyncIterator
 import pydantic
 import websockets
 import itertools
 from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
 
+import websockets.legacy
+import websockets.legacy.client
+
+from bunker.exceptions import IntegrationFailureError
+
+
+class ClientRequestType(str, Enum):
+    BAN_PLAYERS = "ban_players"
+    UNBAN_PLAYERS = "unban_players"
+    NEW_REPORT = "new_report"
+
+class ServerRequestType(str, Enum):
+    pass
+
 class RequestBody(pydantic.BaseModel):
     id: int
-    request: str
+    request: ServerRequestType | ClientRequestType
     payload: dict | None = None
 
-    def response(self, payload: dict | None = None):
+    def response_ok(self, payload: dict | None = None):
         return ResponseBody(id=self.id, response=payload)
+
+    def response_error(self, error: str):
+        return ResponseBody(id=self.id, response={'error': error}, failed=True)
 
 class ResponseBody(pydantic.BaseModel):
     id: int
+    request: None = None
     response: dict | None
+    failed: bool = False
+
+BACKOFF_MIN = 1.92
+BACKOFF_MAX = 60.0
+BACKOFF_FACTOR = 1.618
+BACKOFF_INITIAL = 5
+
+async def reconnect(ws_factory: websockets.legacy.client.Connect) -> AsyncIterator[websockets.WebSocketClientProtocol]:
+    # Modified version of Connect.__aiter__ which reconnects
+    # with exponential backoff, unless a 401 or 403 is returned
+    backoff_delay = BACKOFF_MIN
+    while True:
+        try:
+            async with ws_factory as protocol:
+                yield protocol
+        except Exception as e:
+            # If we fail to authorize ourselves we raise instead of backoff
+            if isinstance(e, websockets.InvalidStatusCode):
+                if e.status_code in (403, 1008):
+                    raise
+            
+            # Add a random initial delay between 0 and 5 seconds.
+            # See 7.2.3. Recovering from Abnormal Closure in RFC 6544.
+            if backoff_delay == BACKOFF_MIN:
+                initial_delay = random.random() * BACKOFF_INITIAL
+                logging.info(
+                    "! connect failed; reconnecting in %.1f seconds",
+                    initial_delay,
+                    exc_info=True,
+                )
+                await asyncio.sleep(initial_delay)
+            else:
+                logging.info(
+                    "! connect failed again; retrying in %d seconds",
+                    int(backoff_delay),
+                    exc_info=True,
+                )
+                await asyncio.sleep(int(backoff_delay))
+            # Increase delay with truncated exponential backoff.
+            backoff_delay = backoff_delay * BACKOFF_FACTOR
+            backoff_delay = min(backoff_delay, BACKOFF_MAX)
+            continue
+        else:
+            # Connection succeeded - reset backoff delay
+            backoff_delay = BACKOFF_MIN
 
 class Websocket:
     def __init__(self, address: str, token: str = None):
@@ -27,8 +93,10 @@ class Websocket:
         # This future can have one of three states:
         # - Pending: The websocket is trying to connect
         # - Cancelled: The websocket is/was disabled
+        # - Exception: The connection was rejected
         # - Done: The websocket is connected
-        self._ws: asyncio.Future[websockets.WebSocketClientProtocol] = asyncio.Future().cancel()
+        self._ws: asyncio.Future[websockets.WebSocketClientProtocol] = asyncio.Future()
+        self._ws.cancel()
 
         self._waiters: dict[int, asyncio.Future[dict]] = {}
         self._counter = itertools.count()
@@ -38,15 +106,7 @@ class Websocket:
         parsed_url = urlparse(self.address)
 
         # Overwrite scheme to be "ws"
-        parsed_url.scheme = "ws"
-
-        # Add token to query params
-        if self.token is not None:
-            # Extract query params and add "token"
-            query = dict(parse_qsl(parsed_url.query))
-            query["token"] = self.token
-            # Re-encode query params
-            parsed_url.query = urlencode(query)
+        parsed_url._replace(scheme="ws")
 
         # Rebuild URL
         return urlunparse(list(parsed_url))
@@ -55,7 +115,7 @@ class Websocket:
         return self._ws_task is not None
     
     def is_connected(self):
-        return self._ws is not None
+        return self._ws.done() and not self._ws.cancelled()
     
     async def wait_until_connected(self, timeout: float = None):
         return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
@@ -70,44 +130,98 @@ class Websocket:
     def stop(self) -> bool:
         if self._ws_task:
             self._ws_task.cancel()
+            self._ws_task = None
         self._ws.cancel()
     
     def update_connection(self):
         self.start()
 
-
     async def _ws_loop(self):
         try:
             # Initialize the factory
-            ws_factory = websockets.connect(self.get_url())
+            ws_factory = websockets.connect(
+                self.get_url(),
+                extra_headers={
+                    'Authentication': f'Bearer {self.token}'
+                }
+            )
 
-            # Automatically reconnect with exponential backoff
-            async for ws in ws_factory:
-                # Once connected change the future to done
-                print("connected!")
-                self._ws.set_result(ws)
+            try:
+                # Automatically reconnect with exponential backoff
+                async for ws in reconnect(ws_factory):
+                    # Once connected change the future to done
+                    print("connected!")
+                    self._ws.set_result(ws)
 
-                try:
-                    # Start listening for messages
-                    async for message in ws:
-                        try:
-                            await self.handle_message(message)
-                        except:
-                            logging.exception("Failed to handle incoming message: %s", message)
-                except websockets.ConnectionClosed:
-                    # If the websocket was closed, try reconnecting
-                    continue
-                finally:
-                    # Change the ws to pending again while we reconnect
-                    self._ws = asyncio.Future()
+                    try:
+                        # Start listening for messages
+                        async for message in ws:
+                            try:
+                                await self.handle_message(message)
+                            except:
+                                logging.exception("Failed to handle incoming message: %s", message)
+                    except websockets.ConnectionClosed:
+                        print()
+                        # If the websocket was closed, try reconnecting
+                        continue
+                    finally:
+                        # Change the ws to pending again while we reconnect
+                        self._ws = asyncio.Future()
+            except websockets.WebSocketException as e:
+                self._ws.set_exception(e)
 
         finally:
             # When exiting the loop, stop the task and cancel the future
             self._ws_task = None
-            self._ws.cancel()
+            if not self._ws.done():
+                self._ws.cancel()
 
+    async def handle_message(self, message: str):
+        content = json.loads(message)
+        try:
+            request = content["request"]
+        except KeyError:
+            logging.error("Received malformed websocket request: %s", content)
+            return
 
-    async def execute(self, request: str, payload: dict = None):
+        try:
+            if request:
+                await self.handle_request(RequestBody.model_validate(content))
+            else:
+                await self.handle_response(ResponseBody.model_validate(content))
+        except pydantic.ValidationError:
+            logging.error("Received malformed Barricade request: %s", content)
+            return
+
+    async def handle_request(self, request: RequestBody):
+        print("New request: %r" % request)
+
+        # Respond to request
+        ws = await self.wait_until_connected(timeout=10)
+        await ws.send(request.response_ok().model_dump_json())
+
+    async def handle_response(self, response: ResponseBody):
+        waiter = self._waiters.get(response.id)
+
+        # Make sure response is being awaited
+        if not waiter:
+            logging.warning("Discarding response since it is not being awaited: %r", response)
+            return
+        
+        # Make sure waiter is still available
+        if waiter.done():
+            logging.warning("Discarding response since waiter is already marked done: %r", response)
+            return
+        
+        # Set response
+        if response.failed:
+            waiter.set_exception(
+                IntegrationFailureError(response.response.get("error", ""))
+            )
+        else:
+            waiter.set_result(response.response)
+
+    async def execute(self, request_type: ClientRequestType, payload: dict | None) -> dict | None:
         try:
             # First make sure websocket is connected
             ws = await self.wait_until_connected(2)
@@ -117,45 +231,29 @@ class Websocket:
         except asyncio.TimeoutError:
             # Took too long to connect
             raise
-        else:
-            # Send request
-            req_id = next(self._counter)
-            body = RequestBody(id=req_id, request=request, payload=payload)
-            await ws.send(body.model_dump_json())
-            
-            # Allocate response waiter
-            fut = asyncio.Future()
-            self._waiters[req_id] = fut
 
-            try:
-                # Wait for and return response
-                return await asyncio.wait_for(fut, timeout=10)
-            finally:
-                # Remove waiter
-                if req_id in self._waiters:
-                    del self._waiters[req_id]
-
-    async def handle_message(self, message: str):
-        obj = json.loads(message)
-
-        if 'response' in obj:
-            body = ResponseBody.model_validate(obj)
+        # Send request
+        request = RequestBody(
+            id=next(self._counter),
+            request=request_type,
+            payload=payload
+        )
+        await ws.send(request.model_dump_json())
         
-            if waiter := self._waiters.get(body.id):
-                waiter.set_result(body.response)
-                del self._waiters[body.id]
-            else:
-                logging.warning("Discarding response with ID %s since it is not being awaited", body.id)
-        
-        elif 'request' in obj:
-            body = RequestBody.model_validate(obj)
-            print("New request:", body.request, body.payload)
+        # Allocate response waiter
+        fut = asyncio.Future()
+        self._waiters[request.id] = fut
 
-            # Respond to request
-            ws = await self.wait_until_connected(timeout=10)
-            ws.send(body.response().model_dump())
-
-        else:
-            raise ValueError("Unknown message")
-
-        
+        try:
+            # Wait for and return response
+            return await asyncio.wait_for(fut, timeout=10)
+        except asyncio.TimeoutError:
+            logging.error("Websocket did not respond in time to request: %r", request)
+            raise
+        except IntegrationFailureError as e:
+            logging.error("Websocket returned error \"%s\" for request: %r", e, request)
+            raise
+        finally:
+            # Remove waiter
+            if request.id in self._waiters:
+                del self._waiters[request.id]
