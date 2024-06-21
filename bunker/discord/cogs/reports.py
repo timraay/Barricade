@@ -121,7 +121,8 @@ class ReportsCog(commands.Cog):
                     if not db_report:
                         raise NotFoundError("This report no longer exists")
                     
-                    # Extend token expiration date
+                    # Generate new token and update expiration date
+                    db_report.token.value = db_report.token.generate_value()
                     db_report.token.expires_at = datetime.now(tz=timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA
                     # Send URL to user
                     url = get_report_edit_url(schemas.ReportWithToken.model_validate(db_report))

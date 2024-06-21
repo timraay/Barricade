@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime, timezone
-import secrets
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from bunker import schemas
 from bunker.crud.responses import get_response_stats
 from bunker.db import models
-from bunker.discord.audit import audit_report_created, audit_report_deleted, audit_report_edited, audit_token_created
+from bunker.discord.audit import audit_report_deleted, audit_token_created
 from bunker.discord.reports import get_report_embed, get_report_channel
 from bunker.exceptions import NotFoundError, AlreadyExistsError
 from bunker.hooks import EventHooks
@@ -73,8 +72,7 @@ async def create_token(
         raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, token.community_id))
 
     db_token = models.ReportToken(
-        **token.model_dump(),
-        value=secrets.token_urlsafe(16),
+        **token.model_dump()
     )
     db.add(db_token)
     await db.flush()

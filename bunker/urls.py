@@ -35,6 +35,8 @@ class FormEntryID(IntEnum):
     player5_id = 1042826548
     player5_bm_url = 1072815851
 
+    is_edit = 1041440882
+
     def _key(self):
         return f"entry.{self}"
 
@@ -56,8 +58,8 @@ class FormEntryID(IntEnum):
         
         params[self._key()] = values
 
-    def encode_bool(self, params: dict):
-        params[self._key()] = "I want to include another player in the report"
+    def encode_bool(self, params: dict, value: str = "I want to include another player in the report"):
+        params[self._key()] = value
 
 
 def get_report_create_url(access_token: str):
@@ -113,5 +115,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
         FormEntryID.player5_id.encode_str(params, player.player_id)
         if player.player.bm_rcon_url:
             FormEntryID.player5_bm_url.encode_str(params, player.player.bm_rcon_url)
+
+    FormEntryID.is_edit.encode_bool(params, value="1")
     
     return REPORT_FORM_URL + urlencode(params, doseq=True)

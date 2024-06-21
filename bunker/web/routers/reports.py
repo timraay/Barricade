@@ -81,8 +81,7 @@ async def create_report(
         ),
     )
 
-@router.post("/reports/submit", response_model=schemas.ReportWithToken)
-async def submit_report(
+async def validate_submission_token(
         submission: schemas.ReportSubmission,
         db: DatabaseDep,
 ):
@@ -100,6 +99,20 @@ async def submit_report(
         logging.warn("Token has expired")
         raise invalid_token_error
     
+    return token
+
+@router.post("/reports/submit", response_model=schemas.ReportWithToken)
+async def submit_report(
+        token: Annotated[models.ReportToken, Depends(validate_submission_token)],
+        submission: schemas.ReportSubmission,
+        db: DatabaseDep,
+):
+    if token.report:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    
     reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
 
     # Create the report
@@ -110,12 +123,35 @@ async def submit_report(
         reasons_custom=reasons_custom,
     )
 
-    if token.report:
-        db.expire_all()
-        db_report = await reports.edit_report(db, report)
-        await db.commit()
-    else:
-        db_report = await reports.create_report(db, report)
+    db_report = await reports.create_report(db, report)
+
+    return db_report
+
+@router.put("/reports/submit", response_model=schemas.ReportWithToken)
+async def submit_report(
+        token: Annotated[models.ReportToken, Depends(validate_submission_token)],
+        submission: schemas.ReportSubmission,
+        db: DatabaseDep,
+):
+    if not token.report:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    
+    reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
+
+    # Create the report
+    report = schemas.ReportCreateParams(
+        **submission.data.model_dump(exclude={"token", "reasons"}),
+        token_id=token.id,
+        reasons_bitflag=reasons_bitflag,
+        reasons_custom=reasons_custom,
+    )
+    
+    db.expire_all()
+    db_report = await reports.edit_report(db, report)
+    await db.commit()
 
     return db_report
         

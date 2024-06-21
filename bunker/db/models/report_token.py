@@ -1,4 +1,5 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+import secrets
 from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import Integer, String, TIMESTAMP, ForeignKey, func
@@ -16,7 +17,7 @@ class ReportToken(ModelBase):
     __tablename__ = "report_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    value: Mapped[str] = mapped_column(String, unique=True, index=True)
+    value: Mapped[str] = mapped_column(String, unique=True, index=True, default_factory=lambda: ReportToken.generate_value())
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     admin_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA))
@@ -27,3 +28,7 @@ class ReportToken(ModelBase):
 
     def is_expired(self):
         return datetime.now(tz=timezone.utc) >= self.expires_at
+    
+    @staticmethod
+    def generate_value():
+        return secrets.token_urlsafe(16)

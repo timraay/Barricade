@@ -1,4 +1,4 @@
-const API_URL = "http://45.91.103.62:5050/post";
+const API_URL = "http://localhost:5050/post";
 
 function extractPlayerData(arr, start) {
   return {
@@ -32,8 +32,10 @@ function sendResponse(e) {
     }
   };
 
+  const method = itemResponses[23] ? "put" : "post"
+
   const options = {
-    method: "post",
+    method,
     payload: JSON.stringify(data),
     contentType: "application/json; charset=utf-8",
   };
