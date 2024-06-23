@@ -134,7 +134,7 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
             logging.error("An unexpected error occured when handling an interaction", exc_info=error)
     
     elif isinstance(error, ExpiredButtonError):
-        embed = get_error_embed(title="This action no longer is available.")
+        embed = get_error_embed("This action no longer is available.")
     elif isinstance(error, (app_commands.CommandOnCooldown, commands.CommandOnCooldown)):
         sec = timedelta(seconds=int(error.retry_after))
         d = datetime(1,1,1) + sec
@@ -143,23 +143,26 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
             output = output.replace("0h", "")
         if output.startswith("0m"):
             output = output.replace("0m", "")
-        embed = get_error_embed(title="That command is still on cooldown!", description="Cooldown expires in " + output + ".")
+        embed = get_error_embed(
+            "That command is still on cooldown!",
+            "Cooldown expires in " + output + "."
+        )
     elif isinstance(error, (app_commands.MissingPermissions, commands.MissingPermissions)):
-        embed = get_error_embed(title="Missing required permissions to use that command!", description=str(error))
+        embed = get_error_embed("Missing required permissions to use that command!", str(error))
     elif isinstance(error, (app_commands.BotMissingPermissions, commands.BotMissingPermissions)):
-        embed = get_error_embed(title="I am missing required permissions to use that command!", description=str(error))
+        embed = get_error_embed("I am missing required permissions to use that command!", str(error))
     elif isinstance(error, (app_commands.CheckFailure, commands.CheckFailure)):
-        embed = get_error_embed(title="Couldn't run that command!", description=None)
+        embed = get_error_embed("Couldn't run that command!")
     elif isinstance(error, commands.MissingRequiredArgument):
-        embed = get_error_embed(title="Missing required argument(s)!")
-        embed.description = str(error)
+        embed = get_error_embed("Missing required argument(s)!", str(error))
     elif isinstance(error, commands.MaxConcurrencyReached):
-        embed = get_error_embed(title="You can't do that right now!")
-        embed.description = str(error)
+        embed = get_error_embed("You can't do that right now!", str(error))
+    elif isinstance(error, discord.NotFound):
+        embed = get_error_embed("Could not find that channel or user!", str(error))
     elif isinstance(error, commands.BadArgument):
-        embed = get_error_embed(title="Invalid argument!", description=esc_md(str(error)))
+        embed = get_error_embed("Invalid argument!", esc_md(str(error)))
     else:
-        embed = get_error_embed(title="An unexpected error occured!", description=esc_md(str(error)))
+        embed = get_error_embed("An unexpected error occured!", esc_md(str(error)))
         logging.error("An unexpected error occured when handling an interaction", exc_info=error)
 
     if isinstance(interaction, Interaction):

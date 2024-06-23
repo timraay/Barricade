@@ -10,6 +10,7 @@ from bunker.db import session_factory
 from bunker.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
 from bunker.crud.communities import get_admin_by_id, get_community_by_id
 from bunker.discord.autocomplete import atcp_community
+from bunker.discord.communities import grant_admin_role, grant_owner_role
 from bunker.discord.utils import CustomException, get_command_mention
 from bunker.discord.views.admin_confirmation import (
     AdminAddConfirmationView,
@@ -26,6 +27,26 @@ if TYPE_CHECKING:
 class CommunitiesCog(commands.Cog):
     def __init__(self, bot: 'Bot'):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        # Only run if user joins primary guild
+        if member.guild.id != DISCORD_GUILD_ID:
+            return
+        
+        with session_factory() as db:
+            admin = await get_admin_by_id(db, discord_id=member.id)
+            # Return if member is not an admin of any community
+            if not admin or not admin.community:
+                return
+            
+            if admin.owned_community:
+                # Grant owner role if user owns a community
+                await grant_owner_role(member.id)
+            else:
+                # Grant admin role otherwise
+                await grant_admin_role(member.id)
+
     
     @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)

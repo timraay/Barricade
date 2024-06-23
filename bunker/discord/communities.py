@@ -21,25 +21,31 @@ async def get_admin_name(admin: schemas.AdminRef):
         return admin.name
 
 
-async def grant_admin_role(user_id: int):
+async def grant_admin_role(user_id: int, strict: bool = True):
     admin_role, owner_role = get_admin_roles()
-    user = await bot.get_or_fetch_member(user_id)
+    user = await bot.get_or_fetch_member(user_id, strict=strict)
+    if not user:
+        return False
     await user.add_roles(admin_role)
     await user.remove_roles(owner_role)
+    return True
 
-async def grant_owner_role(user_id: int):
+async def grant_owner_role(user_id: int, strict: bool = True):
     admin_role, owner_role = get_admin_roles()
-    user = await bot.get_or_fetch_member(user_id)
+    user = await bot.get_or_fetch_member(user_id, strict=strict)
+    if not user:
+        return False
     await user.add_roles(owner_role)
     await user.remove_roles(admin_role)
+    return True
 
-async def revoke_admin_roles(user_id: int):
+async def revoke_admin_roles(user_id: int, strict: bool = True):
     admin_role, owner_role = get_admin_roles()
-    try:
-        user = await bot.get_or_fetch_member(user_id)
-    except NotFound:
-        return
+    user = await bot.get_or_fetch_member(user_id, strict=strict)
+    if not user:
+        return False
     await user.remove_roles(admin_role, owner_role)
+    return True
 
 def get_forward_channel(community: schemas.CommunityRef):
     guild = bot.get_guild(community.forward_guild_id)

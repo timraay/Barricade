@@ -331,7 +331,7 @@ async def admin_leave_community(
     await db.flush()
     await db.refresh(admin)
 
-    await revoke_admin_roles(admin.discord_id)
+    await revoke_admin_roles(admin.discord_id, strict=False)
 
     asyncio.create_task(
         audit_community_admin_remove(community, admin, by=by)
@@ -383,7 +383,6 @@ async def admin_join_community(
 
     await grant_admin_role(admin.discord_id)
 
-    await db.flush()
     await db.refresh(admin)
 
     asyncio.create_task(
@@ -431,8 +430,8 @@ async def transfer_ownership(
     await db.refresh(community)
     await db.refresh(admin)
 
-    await grant_admin_role(old_owner.discord_id)
     await grant_owner_role(community.owner_id)
+    await grant_admin_role(old_owner.discord_id, strict=False)
 
     asyncio.create_task(
         audit_community_change_owner(old_owner, admin, by=by)
