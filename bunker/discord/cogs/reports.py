@@ -5,7 +5,7 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 import discord
-from discord import app_commands, Interaction
+from discord import ButtonStyle, app_commands, Interaction
 from discord.ext import commands
 
 from sqlalchemy import select
@@ -17,7 +17,7 @@ from bunker.crud.reports import delete_report, get_report_by_id, get_reports_for
 from bunker.crud.responses import get_pending_responses, set_report_response, get_response_stats
 from bunker.db import models, session_factory
 from bunker.discord.reports import get_report_embed
-from bunker.discord.utils import format_url, handle_error, CustomException
+from bunker.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed, handle_error, CustomException
 from bunker.discord.views.player_review import PlayerReviewView
 from bunker.discord.views.report_paginator import ReportPaginator
 from bunker.discord.views.submit_report import OpenFormView
@@ -113,8 +113,24 @@ class ReportsCog(commands.Cog):
                 case "del":
                     # TODO: Add confirmation
                     # TODO? Only allow admins to delete
-                    await delete_report(db, data.report_id, by=interaction.user)
-                    await interaction.message.delete()
+                    async def confirm_delete(_interaction: Interaction):
+                        await delete_report(db, data.report_id, by=interaction.user)
+                        await interaction.message.delete()
+                        await _interaction.response.edit_message(
+                            embed=get_success_embed(f"Report #{data.report_id} deleted!"),
+                            view=None
+                        )
+
+                    view = View()
+                    view.add_item(
+                        CallableButton(confirm_delete, style=ButtonStyle.red, label="Delete Report")
+                    )
+                    await interaction.response.send_message(
+                        embed=get_danger_embed(
+                            "Are you sure you want to delete this report?",
+                            "This action is irreversible."
+                        )
+                    )
 
                 case "edit":
                     db_report = await get_report_by_id(db, data.report_id, load_token=True)
