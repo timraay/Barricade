@@ -11,7 +11,7 @@ from bunker.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
 from bunker.crud.communities import get_admin_by_id, get_community_by_id
 from bunker.discord.autocomplete import atcp_community
 from bunker.discord.communities import grant_admin_role, grant_owner_role
-from bunker.discord.utils import CustomException, get_command_mention
+from bunker.discord.utils import CustomException, View, get_command_mention, get_question_embed
 from bunker.discord.views.admin_confirmation import (
     AdminAddConfirmationView,
     AdminRemoveConfirmationView,
@@ -20,6 +20,7 @@ from bunker.discord.views.admin_confirmation import (
 )
 from bunker.discord.views.community_overview import CommunityOverviewView
 from bunker.discord.views.integration_management import IntegrationManagementView
+from bunker.discord.views.report_channel_confirmation import ReportChannelConfirmationView
 
 if TYPE_CHECKING:
     from bunker.discord.bot import Bot
@@ -196,6 +197,26 @@ class CommunitiesCog(commands.Cog):
             
             await owner.community.awaitable_attrs.integrations
             view = IntegrationManagementView(owner.community)
+            await view.send(interaction)
+
+    @app_commands.command(name="set-reports-channel", description="Set the current channel as your community's report feed")
+    @app_commands.default_permissions(manage_guild=True)
+    async def set_reports_channel(self, interaction: Interaction):
+        async with session_factory() as db:
+            # Make sure the user owns a community
+            owner = await get_admin_by_id(db, interaction.user.id)
+            if not owner or not owner.owned_community:
+                raise CustomException(
+                    "You need to be a community owner to do this!"
+                )
+            
+            if not interaction.channel.permissions_for(interaction.guild.me).send_messages:
+                raise CustomException(
+                    "Cannot send messages to this channel!",
+                    f"Give the bot Send Messages permission for this channel and try again."
+                )
+            
+            view = ReportChannelConfirmationView()
             await view.send(interaction)
 
     @app_commands.command(name="community", description="Get information about a community")
