@@ -43,12 +43,19 @@ class Bot(commands.Bot):
     async def setup_hook(self) -> None:
         await load_all_cogs()
         await sync_commands()
-        # TODO: this is lazy and ugly
+
         from bunker.discord.views.enroll import EnrollView, EnrollAcceptView
         from bunker.discord.views.submit_report import GetSubmissionURLView
+        from bunker.discord.views.player_review import PlayerReportResponseButton
+        from bunker.discord.views.report_management import ReportManagementButton
+        
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
         self.add_view(GetSubmissionURLView())
+        self.add_dynamic_items(
+            PlayerReportResponseButton,
+            ReportManagementButton,
+        )
 
     @property
     def primary_guild(self):
@@ -76,11 +83,11 @@ class Bot(commands.Bot):
                 raise
             return None
     
-    def get_partial_message(self, channel_id: int, message_id: int):
-        return self.get_partial_messageable(channel_id).get_partial_message(message_id)
+    def get_partial_message(self, channel_id: int, message_id: int, guild_id: int | None = None):
+        return self.get_partial_messageable(channel_id, guild_id=guild_id).get_partial_message(message_id)
 
     async def delete_message(self, channel_id: int, message_id: int):
-        message = self.get_partial_messageable()
+        message = self.get_partial_message(channel_id, message_id)
         await message.delete()
 
 def command_prefix(bot: Bot, message: discord.Message):
