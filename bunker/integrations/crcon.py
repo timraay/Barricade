@@ -13,8 +13,10 @@ from bunker.exceptions import (
     AlreadyBannedError, IntegrationValidationError
 )
 from bunker.integrations.integration import Integration, IntegrationMetaData
-from bunker.integrations.websocket import BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, UnbanPlayersRequestConfigPayload, UnbanPlayersRequestPayload, Websocket
-from bunker.web.security import generate_token_value, get_token_hash
+from bunker.integrations.websocket import (
+    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType,
+    UnbanPlayersRequestPayload, Websocket
+)
 
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
 
@@ -55,7 +57,6 @@ class CRCONIntegration(Integration):
         name="Community RCON",
         config_cls=schemas.CRCONIntegrationConfig,
         type=IntegrationType.COMMUNITY_RCON,
-        ask_remove_bans=False,
         emoji="🤩",
     )
 

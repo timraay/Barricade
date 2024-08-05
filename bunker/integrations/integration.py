@@ -30,7 +30,6 @@ class IntegrationMetaData(BaseModel):
     name: str
     config_cls: type[schemas.IntegrationConfig]
     type: IntegrationType
-    ask_remove_bans: bool
     emoji: str
 
 class Integration(ABC):
@@ -91,7 +90,7 @@ class Integration(ABC):
             self.stop_connection()
             raise
 
-    async def disable(self, remove_bans: bool) -> models.Integration:
+    async def disable(self) -> models.Integration:
         """Disable this integration.
 
         Updates and saves the config.
@@ -100,8 +99,6 @@ class Integration(ABC):
         ----------
         db : AsyncSession
             An asynchronous database session
-        remove_bans : bool
-            Whether to remove all bans
 
         Returns
         -------

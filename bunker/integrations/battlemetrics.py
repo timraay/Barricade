@@ -33,7 +33,6 @@ class BattlemetricsIntegration(Integration):
         name="Battlemetrics",
         config_cls=schemas.BattlemetricsIntegrationConfig,
         type=IntegrationType.BATTLEMETRICS,
-        ask_remove_bans=False,
         emoji="🤕",
     )
 

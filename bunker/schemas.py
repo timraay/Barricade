@@ -23,7 +23,7 @@ class IntegrationConfigParams(_ModelFromAttributes):
     api_url: str
     
     organization_id: Optional[str]
-    banlist_id: Optional[UUID]
+    banlist_id: Optional[str]
     bunker_api_key_id: Optional[int]
 
 class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
@@ -38,7 +38,7 @@ class CRCONIntegrationConfigParams(IntegrationConfigParams):
 
     integration_type: Literal[IntegrationType.COMMUNITY_RCON] = IntegrationType.COMMUNITY_RCON
     organization_id: None = None
-    banlist_id: None = None
+    banlist_id: Optional[str] = None
 
 class IntegrationConfig(IntegrationConfigParams):
     id: int

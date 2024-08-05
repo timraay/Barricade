@@ -25,7 +25,7 @@ class Integration(ModelBase):
 
     # Battlemetrics
     organization_id: Mapped[Optional[str]]
-    banlist_id: Mapped[Optional[UUID]]
+    banlist_id: Mapped[Optional[str]]
 
     # Community RCON
     bunker_api_key_id: Mapped[Optional[int]] = mapped_column(ForeignKey("web_tokens.id"), nullable=True)
