@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from enum import Enum
 import json
 import logging
@@ -7,12 +8,12 @@ from typing import AsyncIterator
 import pydantic
 import websockets
 import itertools
-from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import websockets.legacy
 import websockets.legacy.client
 
-from bunker.exceptions import IntegrationFailureError
+from bunker.exceptions import IntegrationCommandError
 
 
 class ClientRequestType(str, Enum):
@@ -21,11 +22,11 @@ class ClientRequestType(str, Enum):
     NEW_REPORT = "new_report"
 
 class ServerRequestType(str, Enum):
-    pass
+    SCAN_PLAYERS = "scan_players"
 
 class RequestBody(pydantic.BaseModel):
     id: int
-    request: ServerRequestType | ClientRequestType
+    request: ClientRequestType | ServerRequestType
     payload: dict | None = None
 
     def response_ok(self, payload: dict | None = None):
@@ -39,6 +40,35 @@ class ResponseBody(pydantic.BaseModel):
     request: None = None
     response: dict | None
     failed: bool = False
+
+class UnbanPlayersRequestConfigPayload(pydantic.BaseModel):
+    banlist_id: str
+class BanPlayersRequestConfigPayload(UnbanPlayersRequestConfigPayload):
+    reason: str
+
+class BanPlayersRequestPayload(pydantic.BaseModel):
+    player_ids: dict[str, str | None]
+    config: BanPlayersRequestConfigPayload
+
+class ScanPlayersRequestPayload(pydantic.BaseModel):
+    player_ids: list[str]
+
+class UnbanPlayersRequestPayload(pydantic.BaseModel):
+    # Even though in theory these can all be converted to ints, we should safely
+    # filter out all invalid record IDs later.
+    record_ids: list[str] = pydantic.Field(alias="ban_ids")
+    config: UnbanPlayersRequestConfigPayload
+
+class NewReportRequestPayloadPlayer(pydantic.BaseModel):
+    player_id: int
+    player_name: str
+    bm_rcon_url: str | None
+class NewReportRequestPayload(pydantic.BaseModel):
+    created_at: datetime
+    body: str
+    reasons: list[str]
+    attachment_urls: list[str]
+    players: list[NewReportRequestPayloadPlayer]
 
 BACKOFF_MIN = 1.92
 BACKOFF_MAX = 60.0
@@ -216,7 +246,10 @@ class Websocket:
         # Set response
         if response.failed:
             waiter.set_exception(
-                IntegrationFailureError(response.response.get("error", ""))
+                IntegrationCommandError(
+                    response.response,
+                    response.response.get("error", ""),
+                )
             )
         else:
             waiter.set_result(response.response)
@@ -238,19 +271,30 @@ class Websocket:
             request=request_type,
             payload=payload
         )
-        await ws.send(request.model_dump_json())
+        request_dump = request.model_dump_json()
+        await ws.send(request_dump)
         
         # Allocate response waiter
         fut = asyncio.Future()
         self._waiters[request.id] = fut
 
         try:
-            # Wait for and return response
-            return await asyncio.wait_for(fut, timeout=10)
-        except asyncio.TimeoutError:
-            logging.error("Websocket did not respond in time to request: %r", request)
-            raise
-        except IntegrationFailureError as e:
+            try:
+                # Wait for and return response
+                return await asyncio.wait_for(fut, timeout=10)
+            except asyncio.TimeoutError:
+                logging.warning((
+                    "Websocket did not respond in time to request, retransmitting and"
+                    " waiting another 5 seconds: %r"
+                ), request)
+                await ws.send(request_dump)
+
+                try:
+                    return await asyncio.wait_for(fut, timeout=5)
+                except asyncio.TimeoutError:
+                    logging.error("Websocket did not respond in time to request: %r", request)
+                    raise
+        except IntegrationCommandError as e:
             logging.error("Websocket returned error \"%s\" for request: %r", e, request)
             raise
         finally:

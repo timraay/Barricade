@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Sequence
 
 from bunker import schemas
-from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans, get_bans_by_integration
+from bunker.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
 from bunker.crud.integrations import create_integration_config, update_integration_config
 from bunker.db import session_factory
 from bunker.enums import IntegrationType

@@ -34,6 +34,13 @@ class IntegrationFailureError(Exception):
     """Generic exception raised when an integration fails to
     perform a remote action."""
 
+class IntegrationCommandError(IntegrationFailureError):
+    """Exception when an integration utilizing the Integration protocol returns
+    a response with the `failed` flag set to `true`."""
+    def __init__(self, response: dict, *args: object) -> None:
+        self.response = response
+        super().__init__(*args)
+
 class IntegrationValidationError(IntegrationFailureError):
     """Exception raised when an integration fails to validate"""
 

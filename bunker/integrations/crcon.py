@@ -1,41 +1,54 @@
-from typing import Sequence
+from datetime import datetime
+import re
+from typing import Sequence, TypedDict
 import aiohttp
 import logging
-import pydantic
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bunker import schemas
-from bunker.db import models, session_factory
+from bunker.crud.bans import expire_bans_of_player, get_bans_by_integration
+from bunker.db import session_factory
 from bunker.enums import IntegrationType
 from bunker.exceptions import (
-    IntegrationBanError, IntegrationBulkBanError, NotFoundError,
+    IntegrationBanError, IntegrationCommandError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
 from bunker.integrations.integration import Integration, IntegrationMetaData
-from bunker.integrations.websocket import Websocket
+from bunker.integrations.websocket import BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, UnbanPlayersRequestConfigPayload, UnbanPlayersRequestPayload, Websocket
 from bunker.web.security import generate_token_value, get_token_hash
 
-class DoEnableBunkerApiIntegrationPayload(pydantic.BaseModel):
-    community: schemas._CommunityBase
-    api_key: str
+RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
 
-class DoDisableBunkerApiIntegrationPayload(pydantic.BaseModel):
-    community: schemas._CommunityBase
-    remove_bans: bool = False
+class Blacklist(TypedDict):
+    id: int
+    name: str
+    sync: str
+    servers: list[int] | None
 
-class DoAddBanPayload(pydantic.BaseModel):
+class PlayerName(TypedDict):
+    id: int
+    name: str
     player_id: str
-    player_name: str
+    created: datetime
+    last_seen: datetime
+
+class Player(TypedDict):
+    id: int
+    player_id: str
+    created: datetime
+    names: list[PlayerName]
+    steaminfo: dict | None
+
+class BlacklistRecord(TypedDict):
+    id: int
+    player_id: str
     reason: str
-
-class DoRemoveBanPayload(pydantic.BaseModel):
-    player_id: str
-
-class DoAddMultipleBansPayload(pydantic.BaseModel):
-    bans: list[DoAddBanPayload]
-
-class DoRemoveMultipleBansPayload(pydantic.BaseModel):
-    player_ids: list[str]
+    admin_name: str
+    created_at: datetime
+    expires_at: datetime | None
+    is_active: bool
+    blacklist: Blacklist
+    player: Player
+    formatted_reason: str
 
 class CRCONIntegration(Integration):
     meta = IntegrationMetaData(
@@ -82,70 +95,88 @@ class CRCONIntegration(Integration):
         
         await self.validate_api_access()
 
-    async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
+    async def ban_player(self, response: schemas.Response):
         async with session_factory.begin() as db:
-            db_ban = await self.get_ban(db, params.player_id)
+            player_id = response.player_report.player_id
+            db_ban = await self.get_ban(db, player_id)
             if db_ban is not None:
-                raise AlreadyBannedError(params.player_id, "Player is already banned")
+                raise AlreadyBannedError(player_id, "Player is already banned")
 
             try:
-                await self.add_ban(DoAddBanPayload(
-                    player_id=params.player_id,
-                    reason=self.get_ban_reason(params.community)
-                ))
+                await self.add_ban(
+                    player_id=player_id,
+                    reason=self.get_ban_reason(response.community)
+                )
             except Exception as e:
-                raise IntegrationBanError(params.player_id, "Failed to ban player") from e
+                raise IntegrationBanError(player_id, "Failed to ban player") from e
 
-            await self.set_ban_id(db, params.player_id, params.player_id)
+            await self.set_ban_id(db, player_id, player_id)
 
-    async def unban_player(self, player_id: str):
+    async def unban_player(self, response: schemas.Response):
         async with session_factory.begin() as db:
+            player_id = response.player_report.player_id
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
 
+            await db.delete(db_ban)
+            await db.flush()
+
             try:
-                await self.remove_ban(DoRemoveBanPayload(
-                    player_id=player_id,
-                ))
+                await self.remove_ban(db_ban.remote_id)
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
-
-            await db.delete(db_ban)
     
-    async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
+    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
+        ban_ids: list[tuple[str, str]] = []
         try:
-            await self.add_multiple_bans(DoAddMultipleBansPayload(bans=[
-                DoAddBanPayload(
-                    player_id=param.player_id,
-                    reason=self.get_ban_reason(param.community)
-                )
-                for param in params
-            ]))
-        except Exception as e:
-            raise IntegrationBulkBanError(
-                [param.player_id for param in params],
-                "Failed to ban players"
-            ) from e
+            async for ban in self.add_multiple_bans(
+                player_ids={
+                    response.player_report.player_id: self.get_ban_reason(response.community)
+                    for response in responses
+                }
+            ):
+                ban_ids.append(ban)
 
-        async with session_factory.begin() as db:
-            await self.set_multiple_ban_ids(db, [
-                (param.player_id, param.player_id)
-                for param in params
-            ])
+        finally:
+            if ban_ids:
+                async with session_factory.begin() as db:
+                    await self.set_multiple_ban_ids(db, ban_ids)
 
-    async def bulk_unban_players(self, player_ids: Sequence[str]):
+    async def bulk_unban_players(self, responses: Sequence[schemas.Response]):
+        async with session_factory() as db:
+            player_ids: dict[str, str] = {}
+            for response in responses:
+                player_id = response.player_report.player_id
+                ban = await self.get_ban(db, player_id)
+                player_ids[ban.remote_id] = player_id
+
+        successful_player_ids: list[str] = []
         try:
-            await self.remove_multiple_bans(DoRemoveMultipleBansPayload(player_ids=player_ids))
-        except Exception as e:
-            raise IntegrationBulkBanError(player_ids, "Failed to unban players") from e
+            async for ban_id in self.remove_multiple_bans(ban_ids=player_ids.keys()):
+                successful_player_ids.append(player_ids[ban_id])
+        finally:
+            if successful_player_ids:
+                async with session_factory.begin() as db:
+                    await self.discard_multiple_ban_ids(db, successful_player_ids)
 
-        async with session_factory.begin() as db:
-            await self.discard_multiple_ban_ids(db, player_ids)
-    
     async def synchronize(self):
-        # TODO: Implement
-        pass
+        remote_bans = await self.get_blacklist_bans()
+        async with session_factory.begin() as db:
+            async for db_ban in get_bans_by_integration(db, self.config.id):
+                remote_ban = remote_bans.pop(db_ban.remote_id, None)
+                if not remote_ban:
+                    await db.delete(db_ban)
+
+                elif not remote_ban["is_active"]:
+                    # The player was unbanned, change responses of all reports where
+                    # the player is banned
+                    with session_factory.begin() as _db:
+                        await expire_bans_of_player(_db, db_ban.player_id, db_ban.integration.community_id)
+            
+            for remote_ban in remote_bans.values():
+                logging.warn("Ban exists on the remote but not locally, removing: %r", remote_ban)
+                await self.remove_ban(remote_ban["id"])
 
     # --- CRCON API wrappers
 
@@ -203,21 +234,101 @@ class CRCONIntegration(Integration):
             raise IntegrationValidationError("Invalid API key")
         elif is_auth is not True:
             raise IntegrationValidationError("Received unexpected API response")
+        
+        resp = await self._make_request(method="GET", endpoint="/get_version")
+        version = resp["result"].strip()
+        match = RE_VERSION.match(version)
+        if not match:
+            raise IntegrationValidationError('Unknown CRCON version "%s"' % version)
+        version_numbers = [int(num) for num in match.groups()]
+        if (
+            version_numbers[0] < 10 or
+            (version_numbers[0] == 10 and version_numbers[1] <= 0)
+        ):
+            raise IntegrationValidationError('Oudated CRCON version')
 
-    async def submit_api_key(self, data: DoEnableBunkerApiIntegrationPayload):
-        await self._make_request(method="POST", endpoint="/do_enable_bunker_api_integration", data=data.model_dump())
-    
-    async def revoke_api_key(self, data: DoDisableBunkerApiIntegrationPayload):
-        await self._make_request(method="DELETE", endpoint="/do_disable_bunker_api_integration", data=data.model_dump())
+    async def get_blacklist_bans(self):
+        records: dict[str, BlacklistRecord] = {}
+        page = 1
+        page_size = 100
+        while True:
+            resp = await self._make_request(
+                "GET", "/get_blacklist_bans",
+                data=dict(
+                    blacklist_id=self.config.banlist_id,
+                    exclude_expired=True,
+                    page_size=page_size,
+                    page=page,
+                )    
+            )
+            result = resp["result"]
 
-    async def add_ban(self, data: DoAddBanPayload):
-        await self._make_request(method="POST", endpoint="/do_add_bunker_blacklist", data=data.model_dump())
+            for record in result["records"]:
+                records[record["id"]] = record
 
-    async def remove_ban(self, data: DoRemoveBanPayload):
-        await self._make_request(method="DELETE", endpoint="/do_remove_bunker_blacklist", data=data.model_dump())
+            if page * page_size >= result["total"]:
+                break
 
-    async def add_multiple_bans(self, data: DoAddMultipleBansPayload):
-        await self._make_request(method="POST", endpoint="/do_add_multiple_bunker_blacklist", data=data.model_dump())
+            page += 1
+        return records
 
-    async def remove_multiple_bans(self, data: DoRemoveMultipleBansPayload):
-        await self._make_request(method="DELETE", endpoint="/do_remove_multiple_bunker_blacklist", data=data.model_dump())
+    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True):
+        try:
+            response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
+                player_ids=player_ids,
+                config=BanPlayersRequestConfigPayload(
+                    banlist_id=self.config.banlist_id,
+                    reason="Banned via shared HLL Bunker report.",
+                )
+            ))
+        except IntegrationCommandError as e:
+            if e.response.get("error") != "Could not ban all players":
+                raise
+
+            successful_ids = e.response["player_ids"]
+            for player_id, ban_id in successful_ids.items():
+                yield (player_id, ban_id)
+            
+            if not partial_retry:
+                raise
+
+            # Retry for failed player IDs
+            missing_player_ids = {k: v for k, v in player_ids.items() if k not in successful_ids}
+            async for (player_id, ban_id) in self.add_multiple_bans(missing_player_ids, partial_retry=False):
+                yield player_id, ban_id
+        else:
+            for player_id, ban_id in response["player_ids"]:
+                yield player_id, ban_id
+
+    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True):
+        try:
+            response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
+                ban_ids=ban_ids,
+                config=BanPlayersRequestConfigPayload(
+                    banlist_id=self.config.banlist_id,
+                )
+            ))
+        except IntegrationCommandError as e:
+            if e.response.get("error") != "Could not unban all players":
+                raise
+
+            successful_ids = e.response["ban_ids"]
+            for ban_id in successful_ids:
+                yield ban_id
+            
+            if not partial_retry:
+                raise
+
+            # Retry for failed ban IDs
+            missing_ban_ids = list(set(ban_ids) - set(successful_ids))
+            async for ban_id in self.remove_multiple_bans(missing_ban_ids, partial_retry=False):
+                yield ban_id
+        else:
+            for ban_id in response["ban_ids"]:
+                yield ban_id
+
+    async def add_ban(self, player_id: str, reason: str | None = None):
+        return await anext(self.add_multiple_bans({player_id: reason}))
+
+    async def remove_ban(self, ban_id: str):
+        return await anext(self.remove_multiple_bans([ban_id]))
