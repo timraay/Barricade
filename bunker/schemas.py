@@ -24,14 +24,13 @@ class IntegrationConfigParams(_ModelFromAttributes):
     
     organization_id: Optional[str]
     banlist_id: Optional[str]
-    bunker_api_key_id: Optional[int]
 
 class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
     api_url: str = "https://api.battlemetrics.com"
 
     integration_type: Literal[IntegrationType.BATTLEMETRICS] = IntegrationType.BATTLEMETRICS
-    bunker_api_key_id: None = None
+    banlist_id: Optional[str] = None
 
 class CRCONIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None

@@ -13,7 +13,7 @@ from discord.utils import escape_markdown as esc_md
 from bunker import schemas
 from bunker.crud.communities import get_community_by_id, get_community_by_owner_id
 from bunker.db import models, session_factory
-from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
+from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_danger_embed, get_success_embed, get_question_embed
 from bunker.enums import IntegrationType
 from bunker.exceptions import IntegrationValidationError
 from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
@@ -357,23 +357,11 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
             placeholder="https://www.battlemetrics.com/rcon/orgs/edit/...",
         )
 
-        self.show_banlist = default_values and default_values.banlist_id is not None
-
-        if self.show_banlist:
-            self.banlist_id = discord.ui.TextInput(
-                label="Banlist ID (Leave empty to create new)",
-                style=discord.TextStyle.short,
-                required=False,
-                placeholder="XXXXXXXX-XXXX-4XXX-XXXX-XXXXXXXXXXXX"
-            )
-
         # Load default values
         if default_values:
             self.integration_id = default_values.id
             self.api_key.default = default_values.api_key
             self.org_url.default = "https://www.battlemetrics.com/rcon/orgs/edit/" + str(default_values.organization_id)
-            if self.show_banlist:
-                self.banlist_id.default = default_values.banlist_id
 
     async def on_submit(self, interaction: Interaction):
         # Extract organization ID
@@ -382,22 +370,14 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
             raise CustomException("Invalid organization URL!")
         organization_id = match.group(1)
 
-        # Assert that banlist_id is UUID
-        if self.show_banlist and self.banlist_id.value:
-            try:
-                UUID(self.banlist_id.value)
-            except ValueError:
-                raise CustomException("Invalid banlist ID!")
-
         config = schemas.BattlemetricsIntegrationConfigParams(
             id=self.integration_id,
             community_id=self.view.community.id,
             api_key=self.api_key.value,
             organization_id=organization_id,
-            banlist_id=self.banlist_id.value if self.show_banlist else None
         )
         integration = BattlemetricsIntegration(config)
-        
+
         await self.view.submit_integration_config(interaction, integration)
 
 class ConfigureCRCONIntegrationModal(Modal):
@@ -419,38 +399,18 @@ class ConfigureCRCONIntegrationModal(Modal):
             style=discord.TextStyle.short,
         )
 
-        self.show_banlist = default_values and default_values.banlist_id is not None
-
-        if self.show_banlist:
-            self.banlist_id = discord.ui.TextInput(
-                label="Blacklist ID (Leave empty to create new)",
-                style=discord.TextStyle.short,
-                required=False
-            )
-
         # Load default values
         if default_values:
             self.integration_id = default_values.id
             self.api_key.default = default_values.api_url
             self.api_key.default = default_values.api_key
-            if self.show_banlist:
-                self.banlist_id = default_values.banlist_id
 
     async def on_submit(self, interaction: Interaction):
-        # Assert that banlist_id is number
-        if self.show_banlist and self.banlist_id.value:
-            try:
-                if int(self.banlist_id.value) < 0:
-                    raise ValueError
-            except ValueError:
-                raise CustomException("Invalid banlist ID!")
-            
         config = schemas.CRCONIntegrationConfig(
             id=self.integration_id,
             community_id=self.view.community.id,
             api_url=self.api_url.value,
             api_key=self.api_key.value,
-            banlist_id=self.banlist_id.value
         )
         integration = CRCONIntegration(config)
 

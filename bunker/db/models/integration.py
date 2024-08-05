@@ -22,14 +22,10 @@ class Integration(ModelBase):
 
     api_key: Mapped[str]
     api_url: Mapped[str]
+    banlist_id: Mapped[Optional[str]]
 
     # Battlemetrics
     organization_id: Mapped[Optional[str]]
-    banlist_id: Mapped[Optional[str]]
-
-    # Community RCON
-    bunker_api_key_id: Mapped[Optional[int]] = mapped_column(ForeignKey("web_tokens.id"), nullable=True)
 
     community: Mapped['Community'] = relationship(back_populates="integrations")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="integration")
-    bunker_api_key: Mapped[Optional['WebToken']] = relationship(back_populates="integrations")
