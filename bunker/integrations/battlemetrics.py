@@ -5,8 +5,7 @@ import aiohttp
 from uuid import UUID
 
 from bunker import schemas
-from bunker.crud.bans import get_bans_by_integration
-from bunker.crud.responses import set_report_response
+from bunker.crud.bans import expire_bans_of_player, get_bans_by_integration
 from bunker.db import session_factory
 from bunker.enums import IntegrationType, PlayerIDType
 from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
@@ -148,11 +147,13 @@ class BattlemetricsIntegration(Integration):
             async for db_ban in get_bans_by_integration(db, self.config.id):
                 remote_ban = remote_bans.pop(db_ban.remote_id, None)
                 if not remote_ban:
-                    db.delete(db_ban)
+                    await db.delete(db_ban)
 
                 elif remote_ban.expired:
-                    # TODO: Update report response
-                    pass
+                    # The player was unbanned, change responses of all reports where
+                    # the player is banned
+                    with session_factory.begin() as _db:
+                        await expire_bans_of_player(_db, db_ban.player_id, db_ban.integration.community_id)
             
             for remote_ban in remote_bans.values():
                 logging.warn("Ban exists on the remote but not locally, removing: %r", remote_ban)
