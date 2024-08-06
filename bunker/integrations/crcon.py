@@ -7,7 +7,7 @@ import logging
 from bunker import schemas
 from bunker.crud.bans import expire_bans_of_player, get_bans_by_integration
 from bunker.db import session_factory
-from bunker.enums import IntegrationType
+from bunker.enums import Emojis, IntegrationType
 from bunker.exceptions import (
     IntegrationBanError, IntegrationCommandError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
@@ -57,7 +57,7 @@ class CRCONIntegration(Integration):
         name="Community RCON",
         config_cls=schemas.CRCONIntegrationConfig,
         type=IntegrationType.COMMUNITY_RCON,
-        emoji="🤩",
+        emoji=Emojis.CRCON,
     )
 
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:

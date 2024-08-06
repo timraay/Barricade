@@ -98,3 +98,5 @@ class Emojis(StrEnum):
     TICK_NO = "<:tick_no:1246502631904645291>"
     OWNER = "<:owner:1246838964141297715>"
     CONTACT = "<:contact:1246838962329354251>"
+    CRCON = "<:crcon:1270322997437136926>"
+    BATTLEMETRICS = "<:battlemetrics:1270322990525055047>"

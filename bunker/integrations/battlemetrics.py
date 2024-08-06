@@ -7,7 +7,7 @@ from uuid import UUID
 from bunker import schemas
 from bunker.crud.bans import expire_bans_of_player, get_bans_by_integration
 from bunker.db import session_factory
-from bunker.enums import IntegrationType, PlayerIDType
+from bunker.enums import Emojis, IntegrationType, PlayerIDType
 from bunker.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
 from bunker.integrations.integration import Integration, IntegrationMetaData
 from bunker.schemas import Response
@@ -33,7 +33,7 @@ class BattlemetricsIntegration(Integration):
         name="Battlemetrics",
         config_cls=schemas.BattlemetricsIntegrationConfig,
         type=IntegrationType.BATTLEMETRICS,
-        emoji="🤕",
+        emoji=Emojis.BATTLEMETRICS,
     )
 
     def __init__(self, config: schemas.BattlemetricsIntegrationConfigParams) -> None:

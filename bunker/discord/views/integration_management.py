@@ -298,6 +298,12 @@ class IntegrationManagementView(View):
                 emoji=integration_cls.meta.emoji,
                 row=0
             ))
+        self.add_item(discord.ui.Button(
+            style=ButtonStyle.gray,
+            label="Help",
+            row=1,
+            url="https://github.com/timraay/Bunker/wiki/Quickstart#3-connecting-to-your-game-servers"
+        ))
         self.add_item(CallableButton(
             self.edit,
             style=ButtonStyle.gray,
@@ -347,14 +353,14 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
         self.view = view
 
         # Define input fields
-        self.api_key = discord.ui.TextInput(
-            label="API key",
-            style=discord.TextStyle.short,
-        )
         self.org_url = discord.ui.TextInput(
             label="Organization URL",
             style=discord.TextStyle.short,
             placeholder="https://www.battlemetrics.com/rcon/orgs/edit/...",
+        )
+        self.api_key = discord.ui.TextInput(
+            label="API key",
+            style=discord.TextStyle.short,
         )
 
         # Load default values
@@ -362,6 +368,11 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
             self.integration_id = default_values.id
             self.api_key.default = default_values.api_key
             self.org_url.default = "https://www.battlemetrics.com/rcon/orgs/edit/" + str(default_values.organization_id)
+        else:
+            self.integration_id = None
+
+        self.add_item(self.api_key)
+        self.add_item(self.org_url)
 
     async def on_submit(self, interaction: Interaction):
         # Extract organization ID
@@ -392,7 +403,7 @@ class ConfigureCRCONIntegrationModal(Modal):
         self.api_url = discord.ui.TextInput(
             label="API URL",
             style=discord.TextStyle.short,
-            default="https://........../api"
+            placeholder="https://........../api"
         )
         self.api_key = discord.ui.TextInput(
             label="API key",
@@ -404,6 +415,11 @@ class ConfigureCRCONIntegrationModal(Modal):
             self.integration_id = default_values.id
             self.api_key.default = default_values.api_url
             self.api_key.default = default_values.api_key
+        else:
+            self.integration_id = None
+        
+        self.add_item(self.api_url)
+        self.add_item(self.api_key)
 
     async def on_submit(self, interaction: Interaction):
         config = schemas.CRCONIntegrationConfig(

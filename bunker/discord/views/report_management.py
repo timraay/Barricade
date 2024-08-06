@@ -26,7 +26,7 @@ class ReportManagementButton(
         self.command = command
         self.report_id = report_id
         
-        button.custom_id = f"rm:{self.command}:{self.report_id}",
+        button.custom_id = f"rm:{self.command}:{self.report_id}"
         
         super().__init__(button)
     

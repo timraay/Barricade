@@ -32,9 +32,9 @@ class PlayerReportResponseButton(
         self.reject_reason = reject_reason
 
         if self.reject_reason:
-            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}:{self.reject_reason.name}",
+            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}:{self.reject_reason.name}"
         else:
-            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}",
+            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}"
         
         super().__init__(button)
     

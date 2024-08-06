@@ -17,7 +17,7 @@ class ReportToken(ModelBase):
     __tablename__ = "report_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    value: Mapped[str] = mapped_column(String, unique=True, index=True, default_factory=lambda: ReportToken.generate_value())
+    value: Mapped[str] = mapped_column(String, unique=True, index=True, default=lambda: ReportToken.generate_value())
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     admin_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA))
