@@ -3,7 +3,7 @@
 import uvicorn
 import logging
 
-from bunker.constants import DISCORD_BOT_TOKEN, DISCORD_GUILD_ID
+from bunker.constants import DISCORD_BOT_TOKEN, WEB_HOST, WEB_PORT
 from bunker.web.app import app
 
 logging.basicConfig(
@@ -17,4 +17,4 @@ def pre_flight():
 
 if __name__ == '__main__':
     pre_flight()
-    uvicorn.run(app, host="127.0.0.1", port=5050)
+    uvicorn.run(app, host=WEB_HOST, port=WEB_PORT)

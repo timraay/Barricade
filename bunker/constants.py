@@ -17,6 +17,13 @@ if not LOGS_FOLDER.exists():
     print('Adding logs folder:\n', LOGS_FOLDER.absolute())
     LOGS_FOLDER.mkdir()
 
+
+# The address to forward the web server to
+WEB_HOST = os.getenv('WEB_HOST', '127.0.0.1')
+WEB_PORT = int(os.getenv('WEB_PORT', 8080))
+# Whether to leave Swagger UI enabled
+WEB_DOCS_VISIBLE = os.getenv('WEB_DOCS_VISIBLE', '1').strip().lower() not in ('', '0', 'no', 'off', 'false')
+
 # Load DB parameters from env
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_PORT = os.getenv('DB_PORT', 5432)

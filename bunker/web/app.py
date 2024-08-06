@@ -6,7 +6,7 @@ import logging
 from bunker import integrations
 from bunker.db import create_tables
 from bunker.discord import bot
-from bunker.constants import DISCORD_BOT_TOKEN
+from bunker.constants import DISCORD_BOT_TOKEN, WEB_DOCS_VISIBLE
 from bunker.web import routers
 
 @asynccontextmanager
@@ -33,7 +33,11 @@ async def lifespan(app: FastAPI):
         if not bot.is_closed():
             await bot.close()
 
-app = FastAPI(lifespan=lifespan)
+if WEB_DOCS_VISIBLE:
+    app = FastAPI(lifespan=lifespan)
+else:
+    # Disable automatically generated documentation
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 
 # Add routers
 routers.setup_all(app)
