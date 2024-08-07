@@ -13,6 +13,7 @@ class ReportRejectReason(StrEnum):
 class IntegrationType(StrEnum):
     BATTLEMETRICS = "battlemetrics"
     COMMUNITY_RCON = "crcon"
+    CUSTOM = "custom"
 
 class ReportReasonDetailsType(NamedTuple):
     pretty_name: str

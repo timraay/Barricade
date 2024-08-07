@@ -1,5 +1,6 @@
-from sqlalchemy import select, func, or_
+from sqlalchemy import exists, not_, select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bunker import schemas
 from bunker.db import models
@@ -42,7 +43,7 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReport):
+async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef):
     stmt = select(
         models.PlayerReportResponse.banned,
         models.PlayerReportResponse.reject_reason,
@@ -108,3 +109,32 @@ async def get_pending_responses(
         responses[row.pr_id].reject_reason = row.reject_reason
     
     return list(responses.values())
+
+async def get_reports_for_player_with_no_community_response(db: AsyncSession, player_id: str, community_id: int):
+    """Get all reports of a player
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    player_id : str
+        The ID of the player
+    load_token : bool, optional
+        Whether to also load the relational token property, by default False
+
+    Returns
+    -------
+    List[Report]
+        A sequence of report models
+    """
+    options = (selectinload(models.Report.players), selectinload(models.Report.token))
+    
+    stmt = select(models.Report) \
+        .join(models.Report.players) \
+        .where(
+            models.PlayerReport.player_id == player_id,
+            not_(exists(models.PlayerReport.responses))
+        ) \
+        .options(*options)
+    result = await db.scalars(stmt)
+    return result.all()

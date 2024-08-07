@@ -79,3 +79,51 @@ async def get_report_embed(
         )
 
     return embed
+
+def get_alert_embed(
+        reports_urls: list[tuple[schemas.Report, str]],
+        player: schemas.PlayerReportRef
+):
+    player_id_type = get_player_id_type(player.player_id)
+    is_steam = player_id_type == PlayerIDType.STEAM_64_ID
+
+    title = f"{player.player_name}\n{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
+    description = []
+
+    if player_id_type == PlayerIDType.STEAM_64_ID:
+        description.append(format_url(
+            "View on Steam",
+            f"https://steamcommunity.com/profiles/{player.player_id}"
+        ))
+
+    bm_rcon_url = player.player.bm_rcon_url
+    if bm_rcon_url:
+        description.append(format_url("View on Battlemetrics", bm_rcon_url))
+
+    if description:
+        description.append("")
+    
+    if len(reports_urls) == 1:
+        description.append(
+            "There is a report against this player that has not yet been reviewed."
+            )
+    else:
+        description.append(
+            f"There are {len(reports_urls)} reports against this player that have not yet been reviewed."
+        )
+
+    embed = discord.Embed(
+        title=title,
+        description="\n".join(description),
+        colour=discord.Colour.red()
+    )
+
+    for report, message_url in reports_urls:
+        embed.add_field(
+            name="\n".join(
+                ReportReasonFlag(report.reasons_bitflag).to_list(report.reasons_custom, with_emoji=True)
+            ),
+            value=f"{message_url}\n{discord.utils.format_dt(report.created_at, 'R')}"
+        )
+    
+    return embed

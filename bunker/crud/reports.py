@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -172,6 +172,11 @@ async def get_reports_for_player(db: AsyncSession, player_id: str, load_token: b
         .options(*options)
     result = await db.scalars(stmt)
     return result.all()
+
+async def is_player_reported(db: AsyncSession, player_id: str):
+    stmt = select(exists().where(models.PlayerReport.player_id == player_id))
+    result = await db.scalar(stmt)
+    return bool(result)
 
 async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     """Create a new report.

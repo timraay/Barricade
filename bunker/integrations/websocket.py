@@ -1,10 +1,11 @@
 import asyncio
 from datetime import datetime
 from enum import Enum
+import inspect
 import json
 import logging
 import random
-from typing import AsyncIterator
+from typing import AsyncIterator, Awaitable, Callable, Coroutine
 import pydantic
 import websockets
 import itertools
@@ -114,8 +115,20 @@ async def reconnect(ws_factory: websockets.legacy.client.Connect) -> AsyncIterat
             # Connection succeeded - reset backoff delay
             backoff_delay = BACKOFF_MIN
 
+class WebsocketRequestHandler:
+    def __init__(self, ws: 'Websocket'):
+        self.ws = ws
+
+    async def scan_players(self, payload: dict | None) -> dict | None:
+        raise NotImplementedError
+
 class Websocket:
-    def __init__(self, address: str, token: str = None):
+    def __init__(
+        self,
+        address: str,
+        token: str = None,
+        request_handler_factory: Callable[['Websocket'], WebsocketRequestHandler] = WebsocketRequestHandler,
+    ):
         self.address = address
         self.token = token
 
@@ -130,6 +143,8 @@ class Websocket:
 
         self._waiters: dict[int, asyncio.Future[dict]] = {}
         self._counter = itertools.count()
+        
+        self.request_handler = request_handler_factory(self)
 
     def get_url(self):
         # Parse URL
@@ -225,10 +240,24 @@ class Websocket:
 
     async def handle_request(self, request: RequestBody):
         print("New request: %r" % request)
+        handler: Callable[[dict | None], Awaitable[dict | None]] | None
+        handler = getattr(self.request_handler, request.request.value, None)
+        if not inspect.iscoroutinefunction(handler):
+            response = request.response_error("No such command")
+        else:
+            try:
+                ret = await handler(request)
+                response = request.response_ok(ret)
+            except NotImplementedError:
+                logging.warning('Missing implementation for command %s', request.request)
+                response = request.response_error("No such command")
+            except Exception as e:
+                logging.exception("Unexpected error while handling %r", request)
+                response = request.response_error(str(e))
 
         # Respond to request
         ws = await self.wait_until_connected(timeout=10)
-        await ws.send(request.response_ok().model_dump_json())
+        await ws.send(response.model_dump_json())
 
     async def handle_response(self, response: ResponseBody):
         waiter = self._waiters.get(response.id)

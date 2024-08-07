@@ -13,10 +13,11 @@ from discord.utils import escape_markdown as esc_md
 from bunker import schemas
 from bunker.crud.communities import get_community_by_id, get_community_by_owner_id
 from bunker.db import models, session_factory
-from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_danger_embed, get_success_embed, get_question_embed
+from bunker.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from bunker.enums import IntegrationType
 from bunker.exceptions import IntegrationValidationError
 from bunker.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
+from bunker.integrations.custom import CustomIntegration
 from bunker.integrations.manager import IntegrationManager
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
@@ -35,6 +36,14 @@ async def configure_crcon_integration(
     config: schemas.CRCONIntegrationConfig | None
 ):
     modal = ConfigureCRCONIntegrationModal(view, default_values=config)
+    await interaction.response.send_modal(modal)
+
+async def configure_custom_integration(
+    interaction: Interaction,
+    view: 'IntegrationManagementView',
+    config: schemas.CustomIntegrationConfig | None
+):
+    modal = ConfigureCustomIntegrationModal(view, default_values=config)
     await interaction.response.send_modal(modal)
 
 async def get_owned_community(db: AsyncSession, user_id: int):
@@ -247,6 +256,8 @@ class IntegrationManagementView(View):
                 await configure_battlemetrics_integration(interaction, self, config)
             case IntegrationType.COMMUNITY_RCON:
                 await configure_crcon_integration(interaction, self, config)
+            case IntegrationType.CUSTOM:
+                await configure_custom_integration(interaction, self, config)
             case _:
                 logging.error("Tried configuring integration with unknown type %s", integration_cls.meta.type)
                 raise CustomException("Unknown integration type \"%s\"" % integration_cls.meta.type)
@@ -413,7 +424,7 @@ class ConfigureCRCONIntegrationModal(Modal):
         # Load default values
         if default_values:
             self.integration_id = default_values.id
-            self.api_key.default = default_values.api_url
+            self.api_url.default = default_values.api_url
             self.api_key.default = default_values.api_key
         else:
             self.integration_id = None
@@ -429,6 +440,55 @@ class ConfigureCRCONIntegrationModal(Modal):
             api_key=self.api_key.value,
         )
         integration = CRCONIntegration(config)
+
+        await self.view.submit_integration_config(interaction, integration)
+
+class ConfigureCustomIntegrationModal(Modal):
+    def __init__(self, view: IntegrationManagementView, default_values: Optional[schemas.CustomIntegrationConfig] = None):
+        super().__init__(
+            title="Configure Custom Integration",
+            timeout=None
+        )
+        self.view = view
+
+        # Define input fields
+        self.api_url = discord.ui.TextInput(
+            label="Websocket URL",
+            style=discord.TextStyle.short,
+            placeholder="ws://..."
+        )
+        self.api_key = discord.ui.TextInput(
+            label="Auth Bearer Token",
+            style=discord.TextStyle.short,
+        )
+        self.banlist_id = discord.ui.TextInput(
+            label="Banlist ID",
+            style=discord.TextStyle.short,
+            required=False,
+        )
+
+        # Load default values
+        if default_values:
+            self.integration_id = default_values.id
+            self.api_url.default = default_values.api_url
+            self.api_key.default = default_values.api_key
+            self.banlist_id.default = default_values.banlist_id
+        else:
+            self.integration_id = None
+        
+        self.add_item(self.api_url)
+        self.add_item(self.api_key)
+        self.add_item(self.banlist_id)
+
+    async def on_submit(self, interaction: Interaction):
+        config = schemas.CustomIntegrationConfig(
+            id=self.integration_id,
+            community_id=self.view.community.id,
+            api_url=self.api_url.value,
+            api_key=self.api_key.value,
+            banlist_id=self.banlist_id.value or None,
+        )
+        integration = CustomIntegration(config)
 
         await self.view.submit_integration_config(interaction, integration)
 

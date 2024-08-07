@@ -39,6 +39,13 @@ class CRCONIntegrationConfigParams(IntegrationConfigParams):
     organization_id: None = None
     banlist_id: Optional[str] = None
 
+class CustomIntegrationConfigParams(IntegrationConfigParams):
+    id: int | None = None
+
+    integration_type: Literal[IntegrationType.CUSTOM] = IntegrationType.CUSTOM
+    organization_id: None = None
+    banlist_id: Optional[str] = None
+
 class IntegrationConfig(IntegrationConfigParams):
     id: int
 
@@ -52,6 +59,9 @@ class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, Integ
     pass
 
 class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):
+    pass
+
+class CustomIntegrationConfig(CustomIntegrationConfigParams, IntegrationConfig):
     pass
 
 
