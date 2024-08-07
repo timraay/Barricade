@@ -36,7 +36,7 @@ Before setting up your community to receive reports, make sure you have the foll
 
 3. #### Link up your admin tools.
 
-    Use the `/manage-integrations` command, then press the `Add integration...` button. Select the type of admin tool you're trying to integrate and fill in the required details.
+    Use the `/integrations` command, then press the `Add integration...` button. Select the type of admin tool you're trying to integrate and fill in the required details.
 
 ## Frequently Asked Questions (FAQ)
 

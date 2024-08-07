@@ -24,6 +24,7 @@ class Community(ModelBase):
 
     forward_guild_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     forward_channel_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    admin_role_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
     admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id")
     owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id])

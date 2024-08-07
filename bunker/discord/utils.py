@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import functools
 import logging
 
 from typing import Callable, Optional, Any, Awaitable
@@ -172,6 +173,15 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
             await interaction.response.send_message(embed=embed, ephemeral=True)
     else:
         await interaction.send(embed=embed)
+
+def handle_error_wrap(func):
+    @functools.wraps(func)
+    async def wrapper(self, interaction, *args, **kwargs):
+        try:
+            return await func(self, interaction, *args, **kwargs)
+        except Exception as e:
+            await handle_error(interaction, e)
+    return wrapper
 
 
 class View(ui.View):

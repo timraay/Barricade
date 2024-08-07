@@ -9,7 +9,7 @@ from bunker.constants import REPORT_TOKEN_EXPIRE_DELTA
 from bunker.crud.reports import delete_report, get_report_by_id
 from bunker.db import session_factory
 from bunker.discord.reports import get_report_embed
-from bunker.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed
+from bunker.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
 from bunker.exceptions import NotFoundError
 from bunker.urls import get_report_edit_url
 
@@ -38,6 +38,7 @@ class ReportManagementButton(
             report_id=int(match["report_id"]),
         )
     
+    @handle_error_wrap
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
             match self.command:

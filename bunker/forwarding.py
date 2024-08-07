@@ -138,7 +138,7 @@ async def send_or_edit_report_management_message(
     admin = report.token.admin
 
     user = await bot.get_or_fetch_member(admin.discord_id)
-    content=f"{user.mention} your report was submitted! (ID: #{report.id})",
+    content=f"{user.mention} your report was submitted! (ID: #{report.id})"
     
     async with session_factory.begin() as db:                    
         view = ReportManagementView(report)
@@ -197,12 +197,12 @@ async def send_or_edit_message(
         message_data = schemas.ReportMessageCreateParams(
             report_id=report.id,
             community_id=community.id,
-            channel_id=message.guild.id,
-            message_id=message.guild.id,
+            channel_id=message.channel.id,
+            message_id=message.id,
         )
 
         db_message = models.ReportMessage(**message_data.model_dump())
         db.add(db_message)
-        db.flush()
+        await db.flush()
         return message
     

@@ -10,7 +10,7 @@ from bunker.crud.communities import get_community_by_id
 from bunker.crud.reports import get_report_by_id
 from bunker.crud.responses import get_pending_responses, get_response_stats, set_report_response
 from bunker.db import models, session_factory
-from bunker.discord.utils import View
+from bunker.discord.utils import CustomException, View, handle_error_wrap
 from bunker.discord.reports import get_report_embed
 from bunker.enums import ReportRejectReason
 
@@ -52,6 +52,7 @@ class PlayerReportResponseButton(
             reject_reason=reject_reason,
         )
     
+    @handle_error_wrap
     async def callback(self, interaction: Interaction):
         match self.command:
             case "refresh":
@@ -76,6 +77,20 @@ class PlayerReportResponseButton(
         )
         
         async with session_factory.begin() as db:
+            community = await get_community_by_id(db, self.community_id)
+
+            # Make sure user has the Admin role
+            if not community.admin_role_id:
+                raise CustomException(
+                    "You are not permitted to do that!",
+                    f"Ask <@{community.owner_id}> to configure an Admin role."
+                )
+            if not discord.utils.get(interaction.user.roles, id=community.admin_role_id):
+                raise CustomException(
+                    "You are not permitted to do that!",
+                    "You do not have this community's configured Admin role."
+                )
+
             db_prr = await set_report_response(db, prr)
 
             players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players

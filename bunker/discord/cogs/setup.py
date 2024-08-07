@@ -10,7 +10,7 @@ from bunker.discord.views.submit_report import GetSubmissionURLView
 
 @app_commands.guilds(DISCORD_GUILD_ID)
 @app_commands.default_permissions(manage_messages=True)
-class AdminCog(commands.GroupCog, group_name='admin'):
+class SetupCog(commands.GroupCog, group_name='setup'):
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -40,4 +40,4 @@ class AdminCog(commands.GroupCog, group_name='admin'):
 
 
 async def setup(bot: Bot):
-    await bot.add_cog(AdminCog(bot))
+    await bot.add_cog(SetupCog(bot))

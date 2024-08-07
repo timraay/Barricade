@@ -95,14 +95,21 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if pr.player_id == player_id
                     )
 
-                    # TODO: Use admin role
-                    content = f"<@&123> a potentially dangerous player has joined your server!"
+                    if community.admin_role_id:
+                        content = f"<@&{community.admin_role_id}> a potentially dangerous player has joined your server!"
+                    else:
+                        content = "A potentially dangerous player has joined your server!"
+
                     embed = get_alert_embed(
                         report_urls=list(reversed(zip(sorted_reports, (message.jump_url for message in messages)))),
                         player=player
                     )
 
-                    await channel.send(content=content, embed=embed)
+                    await channel.send(
+                        content=content,
+                        embed=embed,
+                        allowed_mentions=discord.AllowedMentions(roles=True),
+                    )
 
 class CustomIntegration(Integration):
     meta = IntegrationMetaData(

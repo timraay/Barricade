@@ -4,20 +4,14 @@ import discord
 from discord import Interaction
 from discord import app_commands
 from discord.ext import commands
-from discord.utils import escape_markdown as esc_md
 
 from bunker.db import session_factory
-from bunker.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
+from bunker.constants import DISCORD_GUILD_ID
 from bunker.crud.communities import get_admin_by_id, get_community_by_id
 from bunker.discord.autocomplete import atcp_community
-from bunker.discord.communities import grant_admin_role, grant_owner_role
-from bunker.discord.utils import CustomException, View, get_command_mention, get_question_embed
-from bunker.discord.views.admin_confirmation import (
-    AdminAddConfirmationView,
-    AdminRemoveConfirmationView,
-    OwnershipTransferConfirmationView,
-    LeaveCommunityConfirmationView
-)
+from bunker.discord.communities import get_forward_channel
+from bunker.discord.utils import CustomException, get_command_mention
+from bunker.discord.views.admin_role_confirmation import AdminRoleConfirmationView
 from bunker.discord.views.community_overview import CommunityOverviewView
 from bunker.discord.views.integration_management import IntegrationManagementView
 from bunker.discord.views.report_channel_confirmation import ReportChannelConfirmationView
@@ -26,164 +20,17 @@ if TYPE_CHECKING:
     from bunker.discord.bot import Bot
 
 class CommunitiesCog(commands.Cog):
+    config_group = app_commands.Group(
+        name="config",
+        description="Configure community settings",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_guild=True),
+    )
+
     def __init__(self, bot: 'Bot'):
         self.bot = bot
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        # Only run if user joins primary guild
-        if member.guild.id != DISCORD_GUILD_ID:
-            return
-        
-        with session_factory() as db:
-            admin = await get_admin_by_id(db, discord_id=member.id)
-            # Return if member is not an admin of any community
-            if not admin or not admin.community:
-                return
-            
-            if admin.owned_community:
-                # Grant owner role if user owns a community
-                await grant_owner_role(member.id)
-            else:
-                # Grant admin role otherwise
-                await grant_admin_role(member.id)
-
-    
-    @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")
-    @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.default_permissions(manage_guild=True)
-    async def add_admin_to_community(self, interaction: Interaction, user: discord.Member):
-        async with session_factory() as db:
-            # Make sure the user is a community owner
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
-                raise CustomException(
-                    "You need to be a community owner to do this!",
-                )
-            
-            admin = await get_admin_by_id(db, user.id)
-            if admin:
-                if admin.community_id == owner.community_id:
-                    raise CustomException(
-                        f"{esc_md(user.nick or user.display_name)} is already part of your community!"
-                    )
-                # Make sure admin isn't part of any other community yet
-                if admin.community_id:
-                    raise CustomException(
-                        f"{esc_md(user.nick or user.display_name)} is already part of another community!",
-                        (
-                            "Ask them to leave their current community first by using the"
-                           f" {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
-                           " command."
-                        )
-                    )
-            
-            if len(await owner.owned_community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
-                raise CustomException(
-                    "You've hit the limit of admins allowed per community!",
-                    (
-                        f"Each community is only allowed up to {MAX_ADMIN_LIMIT} admins,"
-                        " excluding the owner. You need to remove an existing admin before"
-                        " you can add a new one."
-                    )
-                )
-            
-            view = AdminAddConfirmationView(owner.community, user)
-            await view.send(interaction)
-
-    @app_commands.command(name="remove-admin", description="Remove an admin's access from the Bunker")
-    @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.default_permissions(manage_guild=True)
-    async def remove_admin_from_community(self, interaction: Interaction, user: discord.Member):
-        async with session_factory() as db:
-            # Make sure the user is a community owner
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
-                raise CustomException(
-                    "You need to be a community owner to do this!",
-                )
-            
-            if user.id == interaction.user.id:
-                raise CustomException(
-                    f"You cannot remove yourself from your own community!",
-                    (
-                       f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)} to"
-                       f" transfer ownership, then {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
-                        " to leave."
-                    )
-                )
-
-            admin = await get_admin_by_id(db, user.id)
-            if not admin or admin.community_id != owner.community_id:
-                raise CustomException(
-                    f"{esc_md(user.nick or user.display_name)} is not an admin of your community!"
-                )
-            
-            view = AdminRemoveConfirmationView(admin.community, user)
-            await view.send(interaction)
-
-    @app_commands.command(name="transfer-ownership", description="Transfer ownership to another admin")
-    @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.default_permissions(manage_guild=True)
-    async def transfer_ownership_of_community(self, interaction: Interaction, user: discord.Member):
-        async with session_factory() as db:
-            # Make sure the user is a community owner
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
-                raise CustomException(
-                    "You need to be a community owner to do this!",
-                )
-            
-            # Make sure they're not transfering to themselves
-            if user.id == interaction.user.id:
-                raise CustomException(
-                    "You can't transfer ownership to yourself!"
-                )
-            
-            admin = await get_admin_by_id(db, user.id)
-
-            # Make sure admin exists
-            if not admin or admin.community_id is None:
-                raise CustomException(
-                    f"{esc_md(user.nick or user.display_name)} is not part of {esc_md(owner.community.name)}!",
-                    (
-                        f"Use {await get_command_mention(interaction.client.tree, 'add-admin', guild_only=True)}"
-                        " first to add them to your community, before transfering ownership to them."
-                    )
-                )
-            # Make sure admin is part of the community
-            elif admin.community_id != owner.community_id:
-                raise CustomException(
-                    f"{esc_md(user.nick or user.display_name)} already is part of another community!"
-                )
-            
-            view = OwnershipTransferConfirmationView(owner.community, user)
-            await view.send(interaction)
-
-    @app_commands.command(name="leave-community", description="Remove your admin access from the Bunker")
-    @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.default_permissions(manage_guild=True)
-    async def leave_community_as_admin(self, interaction: Interaction):
-        async with session_factory() as db:
-            admin = await get_admin_by_id(db, interaction.user.id)
-            # Make sure the user is part of a community
-            if not admin or not admin.community_id:
-                raise CustomException("You can't leave a community without being part of one...!")
-            # Make sure the user is not an owner
-            if admin.owned_community:
-                raise CustomException(
-                    "You must transfer ownership first!",
-                    (
-                        f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)}"
-                        " to transfer ownership to another community admin."
-                    )
-                )
-            
-            view = LeaveCommunityConfirmationView(admin.community, interaction.user)
-            await view.send(interaction)
-    
-
-    @app_commands.command(name="manage-integrations", description="Enable, disable, or configure your integrations")
+    @app_commands.command(name="integrations", description="Enable, disable, or configure your integrations")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def manage_integrations(self, interaction: Interaction):
@@ -199,9 +46,8 @@ class CommunitiesCog(commands.Cog):
             view = IntegrationManagementView(owner.community)
             await view.send(interaction)
 
-    @app_commands.command(name="set-reports-channel", description="Set the current channel as your community's report feed")
-    @app_commands.default_permissions(manage_guild=True)
-    async def set_reports_channel(self, interaction: Interaction):
+    @config_group.command(name="reports-channel", description="Set a channel as your community's report feed")
+    async def set_reports_channel(self, interaction: Interaction, channel: discord.TextChannel):
         async with session_factory() as db:
             # Make sure the user owns a community
             owner = await get_admin_by_id(db, interaction.user.id)
@@ -210,14 +56,82 @@ class CommunitiesCog(commands.Cog):
                     "You need to be a community owner to do this!"
                 )
             
-            if not interaction.channel.permissions_for(interaction.guild.me).send_messages:
+            if channel.permissions_for(channel.guild.default_role).read_messages:
                 raise CustomException(
-                    "Cannot send messages to this channel!",
-                    f"Give the bot Send Messages permission for this channel and try again."
+                    "This channel is publicly visible!",
+                    "Report feeds should be private and only accessible by admins."
                 )
             
-            view = ReportChannelConfirmationView()
+            required_perms = discord.Permissions(send_messages=True, read_messages=True, read_message_history=True)
+            if not channel.permissions_for(channel.guild.me).is_superset(required_perms):
+                raise CustomException(
+                    "Cannot read from and/or send messages to this channel!",
+                    (
+                        f"Give the bot all of the following permissions and try again:"
+                        "\n"
+                        "\n- View Channel"
+                        "\n- Read Message History"
+                        "\n- Send Messages"
+                    )
+                )
+            
+            view = ReportChannelConfirmationView(channel)
             await view.send(interaction)
+
+    @config_group.command(name="admin-role", description="Set a role to identify your admins with")
+    async def set_admin_role(self, interaction: Interaction, role: discord.Role):
+        async with session_factory() as db:
+            # Make sure the user owns a community
+            owner = await get_admin_by_id(db, interaction.user.id)
+            if not owner or not owner.owned_community:
+                raise CustomException(
+                    "You need to be a community owner to do this!"
+                )
+            
+            if owner.community.forward_guild_id:
+                guild = self.bot.get_guild(owner.community.forward_guild_id)
+                if guild and guild != role.guild:
+                    raise CustomException(
+                        "Role must be from the same server as your Reports feed!",
+                        "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed."
+                    )
+
+            view = AdminRoleConfirmationView(role)
+            await view.send(interaction)
+
+    @config_group.command(name="view", description="See all your configured settings")
+    async def view_community_config(self, interaction: Interaction):
+        async with session_factory() as db:
+            # Make sure the user owns a community
+            owner = await get_admin_by_id(db, interaction.user.id)
+            if not owner or not owner.owned_community:
+                raise CustomException(
+                    "You need to be a community owner to do this!"
+                )
+            
+            channel = get_forward_channel(owner.community)
+
+            embed = discord.Embed()
+            embed.add_field(
+                name="Reports feed",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-channel')}*"
+                    f"\n> -# The text channel where you receive new reports."
+                    f"\n- {channel.mention if channel else 'Unknown' if owner.community.forward_channel_id else 'None'}"
+                ),
+                inline=True
+            )
+            embed.add_field(
+                name="Admin role",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'admin-role')}*"
+                    f"\n> -# The role that can review reports."
+                    f"\n- {'<@&'+str(owner.community.admin_role_id)+'>' if owner.community.admin_role_id else 'None'}"
+                ),
+                inline=True
+            )
+
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="community", description="Get information about a community")
     @app_commands.guilds(DISCORD_GUILD_ID)
