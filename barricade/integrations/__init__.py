@@ -3,6 +3,7 @@ from sqlalchemy import select
 from barricade.db import models, session_factory
 
 from barricade.enums import IntegrationType
+from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from .integration import Integration
 
@@ -12,6 +13,7 @@ from .crcon import CRCONIntegration
 INTEGRATION_TYPES = (
     BattlemetricsIntegration,
     CRCONIntegration,
+    CustomIntegration,
 )
 
 def type_to_integration(integration_type: IntegrationType) -> type[Integration]:
