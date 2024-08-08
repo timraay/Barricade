@@ -1,12 +1,12 @@
 import asyncio
 from sqlalchemy.schema import CreateSchema, DropSchema
 
-from bunker import schemas
-from bunker.constants import DISCORD_BOT_TOKEN
-from bunker.crud import communities, reports, responses
-from bunker.db import session_factory, engine, create_tables
-from bunker.discord import bot
-from bunker.enums import ReportReasonFlag
+from barricade import schemas
+from barricade.constants import DISCORD_BOT_TOKEN
+from barricade.crud import communities, reports, responses
+from barricade.db import session_factory, engine, create_tables
+from barricade.discord import bot
+from barricade.enums import ReportReasonFlag
 
 async def main():
     await bot.login(DISCORD_BOT_TOKEN)
@@ -62,7 +62,7 @@ async def main():
         await communities.create_new_admin(db, schemas.AdminCreateParams(
             discord_id=446731539611648001,
             community_id=c1.id,
-            name="Bunkerer"
+            name="Barricadeer"
         ))
         print("--", "Created admin")
 

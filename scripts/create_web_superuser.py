@@ -1,9 +1,9 @@
 import asyncio
 
-from bunker.db import session_factory, create_tables
-from bunker.web.schemas import WebUserCreateParams
-from bunker.web.scopes import Scopes
-from bunker.web.security import create_user
+from barricade.db import session_factory, create_tables
+from barricade.web.schemas import WebUserCreateParams
+from barricade.web.scopes import Scopes
+from barricade.web.security import create_user
 
 async def main(username: str = None, password: str = None):
     username = username or input("Username: ")

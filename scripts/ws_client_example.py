@@ -1,6 +1,6 @@
 
 import asyncio
-from bunker.integrations.websocket import Websocket, ClientRequestType
+from barricade.integrations.websocket import Websocket, ClientRequestType
 
 
 async def main():

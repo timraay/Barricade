@@ -3,8 +3,8 @@
 import uvicorn
 import logging
 
-from bunker.constants import DISCORD_BOT_TOKEN, WEB_HOST, WEB_PORT
-from bunker.web.app import app
+from barricade.constants import DISCORD_BOT_TOKEN, WEB_HOST, WEB_PORT
+from barricade.web.app import app
 
 logging.basicConfig(
     format="[%(asctime)s][%(levelname)7s][%(module)s.%(funcName)s:%(lineno)s] %(message)s",
