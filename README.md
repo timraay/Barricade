@@ -10,6 +10,7 @@
 
 <img align="right" width="250" height="250" src="assets/icon.png">
 
+> [!IMPORTANT]
 > For any issues or feature requests, please [open an Issue](https://github.com/timraay/Barricade/issues) here on GitHub, or [ask in Discord](https://discord.gg/Pm5WfhB). Barricade staff cannot unban you, see the FAQ below on where to appeal.
 
 The Hell Let Loose Barricade is a service by server admins for server admins, to protect their servers from cheaters and troublemakers through collaborative data sharing. Receive reports created by verified admins and apply bans with a single button press through seamless integration with your favorite admin tools.
@@ -28,13 +29,17 @@ Before setting up your community to receive reports, make sure you have the foll
 
 1. #### Invite HLL Barricade to your Discord server.
 
-    Use [this link](https://discord.com/oauth2/authorize?client_id=1190718626286813244&scope=bot+applications.commands&permissions=35840) (TODO: Update permissions) to invite the Discord bot. Allow it all the requested permissions. Barricade won't be able to operate properly without them.
+    Use [this link](https://discord.com/oauth2/authorize?client_id=1190718626286813244&scope=bot+applications.commands&permissions=199680) to invite the Discord bot. Allow it all the requested permissions. Barricade won't be able to operate properly without them.
 
 2. #### Configure which channel reports need to be sent to.
 
-    Use the `/set-reports-channel` command in your Discord server to assign a text channel. Make sure that it is a **private** channel. Anyone that is able to read the channel will be able to respond to reports and (un)ban players!
+    Use the `/config reports-channel` command in your Discord server to assign a text channel. Make sure that it is a **private** channel.
 
-3. #### Link up your admin tools.
+3. #### Configure which role can review reports.
+
+    Use the `/config admin-role` command in your Discord server to assign a role. Typically this is your admin role.
+
+4. #### Link up your admin tools.
 
     Use the `/integrations` command, then press the `Add integration...` button. Select the type of admin tool you're trying to integrate and fill in the required details.
 
