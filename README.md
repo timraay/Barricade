@@ -1,8 +1,11 @@
 > [!CAUTION]
 > <div align="center">
 > <h2><b>THIS PROJECT IS CURRENTLY STILL UNDER ACTIVE DEVELOPMENT.<br>IN ITS CURRENT STATE IT IS INCOMPLETE, MESSY, BROKEN, AND INSECURE.</b></h2>
+> </div>
 
 <img align="right" src="assets/banner.png">
+
+<div align="center">
 
 # [![GitHub release](https://img.shields.io/github/release/timraay/Barricade.svg)](https://github.com/timraay/Barricade/releases) [![GitHub license](https://img.shields.io/github/license/timraay/Barricade.svg)](https://github.com/timraay/Barricade/blob/main/LICENSE) [![GitHub contributors](https://img.shields.io/github/contributors/timraay/Barricade.svg)](https://github.com/timraay/Barricade/graphs/contributors) [![GitHub issues](https://img.shields.io/github/issues/timraay/Barricade.svg)](https://github.com/timraay/Barricade/issues) [![GitHub pull requests](https://img.shields.io/github/issues-pr/timraay/Barricade.svg)](https://github.com/timraay/Barricade/pulls) [![GitHub stars](https://img.shields.io/github/stars/timraay/Barricade.svg)](https://github.com/timraay/Barricade/stargazers)
 
