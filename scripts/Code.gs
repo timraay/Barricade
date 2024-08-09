@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5050/post";
+const API_URL = "http://localhost:8080/reports/submit";
 
 function extractPlayerData(arr, start) {
   return {
@@ -14,11 +14,15 @@ function sendResponse(e) {
   const players = [extractPlayerData(itemResponses, 1)];
   const reasons = itemResponses[4].split(";");
   const description = itemResponses[5];
-  const attachmentUrls = itemResponses[6].split(";");
-  for (const i = 7; i < 7 + 4 * 4; i += 4) {
+  // const attachmentUrls = itemResponses[6].split(";");
+  // for (const i = 7; i < 7 + 4 * 4; i += 4) {
+  const attachmentUrls = [];
+  for (const i = 6; i < 6 + 4 * 4; i += 4) {
     if (!itemResponses[i]) break;
     players.push(extractPlayerData(itemResponses, i + 1));
   }
+
+  const isEdit = itemResponses[itemResponses.length - 1] === "1";
 
   const data = {
     id: e.response.getId(),
@@ -32,10 +36,8 @@ function sendResponse(e) {
     }
   };
 
-  const method = itemResponses[23] ? "put" : "post"
-
   const options = {
-    method,
+    method: isEdit ? "put" : "post",
     payload: JSON.stringify(data),
     contentType: "application/json; charset=utf-8",
   };
