@@ -10,10 +10,12 @@ class WebUserBase(BaseModel):
 class WebUserDelete(WebUserBase):
     pass
 
-class WebUserCreateParams(WebUserBase):
+class WebUserUpdateParams(WebUserBase):
     username: str = Field(min_length=3, max_length=20)
-    password: str = Field(min_length=8, max_length=64)
     scopes: Scopes = Scopes(0)
+
+class WebUserCreateParams(WebUserUpdateParams):
+    password: str = Field(min_length=8, max_length=64)
 
 class WebUser(WebUserBase):
     id: int

@@ -39,7 +39,7 @@ AdminDep = Annotated[models.Admin, Depends(get_admin_dependency(False))]
 AdminWithRelationsDep = Annotated[models.Admin, Depends(get_admin_dependency(True))]
 
 
-@router.get("", response_model=PaginatedResponse[schemas.Community])
+@router.get("", response_model=PaginatedResponse[schemas.SafeCommunity])
 async def get_all_communities(
         db: DatabaseDep,
         paginator: PaginatorDep,
@@ -104,7 +104,7 @@ async def transfer_own_community_ownership(
     return await transfer_community_ownership(db, community, admin, token)
 
 
-@router.get("/{community_id}", response_model=schemas.CommunityWithRelations)
+@router.get("/{community_id}", response_model=schemas.SafeCommunityWithRelations)
 async def get_community(
         community: CommunityWithRelationsDep,
         token: Annotated[

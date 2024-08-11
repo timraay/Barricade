@@ -123,7 +123,7 @@ def get_token_hash(token: str) -> str:
 
 
 
-async def get_user_by_username(db: AsyncSession, username: str):
+async def get_user_by_username(db: DatabaseDep, username: str):
     """Find a user by their username
 
     Parameters

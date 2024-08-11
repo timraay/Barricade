@@ -43,7 +43,7 @@ async def get_reports(
     )
     return paginator.paginate(result)
 
-@router.post("/reports", response_model=schemas.ReportWithToken)
+@router.post("/reports", response_model=schemas.SafeReportWithToken)
 async def create_report(
         report: schemas.ReportCreateParamsTokenless,
         db: DatabaseDep,
@@ -101,7 +101,7 @@ async def validate_submission_token(
     
     return token
 
-@router.post("/reports/submit", response_model=schemas.ReportWithToken)
+@router.post("/reports/submit", response_model=schemas.SafeReportWithToken)
 async def submit_report(
         token: Annotated[models.ReportToken, Depends(validate_submission_token)],
         submission: schemas.ReportSubmission,
@@ -127,7 +127,7 @@ async def submit_report(
 
     return db_report
 
-@router.put("/reports/submit", response_model=schemas.ReportWithToken)
+@router.put("/reports/submit", response_model=schemas.SafeReportWithToken)
 async def submit_report(
         token: Annotated[models.ReportToken, Depends(validate_submission_token)],
         submission: schemas.ReportSubmission,
@@ -155,7 +155,7 @@ async def submit_report(
 
     return db_report
         
-@router.get("/reports/{report_id}", response_model=schemas.ReportWithToken)
+@router.get("/reports/{report_id}", response_model=schemas.SafeReportWithToken)
 async def get_report(
         report: ReportWithTokenDep,
         token: Annotated[
@@ -165,7 +165,7 @@ async def get_report(
 ):
     return report
 
-@router.put("/reports/{report_id}", response_model=schemas.ReportWithToken)
+@router.put("/reports/{report_id}", response_model=schemas.SafeReportWithToken)
 async def edit_report(
         report_id: int,
         report: schemas.ReportEditParams,
@@ -190,7 +190,7 @@ async def edit_report(
     return result
 
 
-@router.post("/communities/me/reports", response_model=schemas.ReportWithToken)
+@router.post("/communities/me/reports", response_model=schemas.SafeReportWithToken)
 async def create_own_report(
         report: schemas.ReportCreateParamsTokenless,
         db: DatabaseDep,
@@ -213,7 +213,7 @@ async def create_own_report(
     return await create_report(report, db, token)
 
 
-@router.put("/communities/me/reports/{report_id}", response_model=schemas.ReportWithToken)
+@router.put("/communities/me/reports/{report_id}", response_model=schemas.SafeReportWithToken)
 async def edit_own_report(
         report_id: int,
         report: schemas.ReportEditParams,

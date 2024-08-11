@@ -15,6 +15,28 @@ from barricade.web.security import (
     get_password_hash,
 )
 
+async def get_user_by_username_dependency(
+    user: Annotated[schemas.WebUser | None, Depends(get_user_by_username)]
+):
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Web user does not exist"
+        )
+    return user
+
+async def get_user_by_id_dependency(
+    db: DatabaseDep,
+    user_id: int,
+):
+    user = await db.get(models.WebUser, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Web user does not exist"
+        )
+    return user
+
 router = APIRouter(prefix="/users", tags=["Web Users"])
 
 @router.get("", response_model=list[schemas.WebUser])
@@ -47,12 +69,7 @@ async def delete_web_user(
         token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
         db: DatabaseDep
 ):
-    db_user = await get_user_by_username(db, user.username)
-    if db_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Web user does not exist"
-        )
+    db_user = await get_user_by_username_dependency(db, user.username)
     await db.delete(db_user)
     await db.commit()
     return True
@@ -81,6 +98,36 @@ async def update_current_user_password(
     await db.commit()
     return True
 
+@router.put("/{user_id}", response_model=schemas.WebUser)
+async def update_user(
+        user: Annotated[models.WebUser, Depends(get_user_by_id_dependency)],
+        updated_user: schemas.WebUserUpdateParams,
+        token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
+        db: DatabaseDep
+):
+    if user.username != updated_user.username:
+        if await get_user_by_username(db, updated_user.username):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+    
+    for key, val in updated_user:
+        setattr(user, key, val)
+    
+    await db.commit()
+    return user
+
+@router.put("/{user_id}/password")
+async def update_user_password(
+        user: Annotated[models.WebUser, Depends(get_user_by_id_dependency)],
+        new_password: Annotated[str, Query(min_length=8, max_length=64)],
+        token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
+        db: DatabaseDep
+):
+    user.hashed_password = get_password_hash(new_password)
+    await db.commit()
+    return True
 
 def setup(app: FastAPI):
     app.include_router(router)

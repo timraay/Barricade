@@ -12,18 +12,20 @@ class _ModelFromAttributes(BaseModel):
 
 # --- Integration configs
 
-class IntegrationConfigParams(_ModelFromAttributes):
+class SafeIntegrationConfigParams(_ModelFromAttributes):
     id: int | None
 
     community_id: int
     integration_type: IntegrationType
     enabled: bool = True
 
-    api_key: str
     api_url: str
     
     organization_id: Optional[str]
     banlist_id: Optional[str]
+
+class IntegrationConfigParams(SafeIntegrationConfigParams):
+    api_key: str
 
 class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
@@ -46,14 +48,17 @@ class CustomIntegrationConfigParams(IntegrationConfigParams):
     organization_id: None = None
     banlist_id: Optional[str] = None
 
-class IntegrationConfig(IntegrationConfigParams):
+class SafeIntegrationConfig(SafeIntegrationConfigParams):
     id: int
 
     def __eq__(self, value: object) -> bool:
         # Existing __eq__ only works consistently if both are explicitly the same class
-        if isinstance(value, IntegrationConfig):
+        if isinstance(value, type(self)):
             return self.model_dump() == value.model_dump()
         return super().__eq__(value)
+
+class IntegrationConfig(SafeIntegrationConfig, IntegrationConfigParams):
+    pass
 
 class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, IntegrationConfig):
     pass
@@ -169,12 +174,14 @@ class PlayerReportRef(_PlayerReportBase, _ModelFromAttributes):
     def __repr__(self) -> str:
         return f"PlayerReport[id={self.id}, report_id={self.report_id}, player_id=\"{self.player_id}\"]"
 
-class ReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
+class SafeReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
     id: int
-    value: str
 
     community: CommunityRef
     admin: AdminRef
+
+class ReportTokenRef(SafeReportTokenRef):
+    value: str
 
     def __repr__(self) -> str:
         return f"ReportToken[id={self.id}]"
@@ -204,9 +211,12 @@ class ReportMessageRef(_ReportMessageBase, _ModelFromAttributes):
 class Admin(AdminRef):
     community: Optional[CommunityRef]
 
-class Community(CommunityRef):
+class SafeCommunity(CommunityRef):
     owner: AdminRef
     admins: list[AdminRef]
+    integrations: list[SafeIntegrationConfig]
+
+class Community(SafeCommunity):
     integrations: list[IntegrationConfig]
 
 class ReportTokenCreateParams(_ReportTokenBase):
@@ -225,7 +235,9 @@ class PlayerReport(PlayerReportRef):
 class Report(ReportRef):
     players: list[PlayerReportRef]
 
-class ReportWithToken(Report):
+class SafeReportWithToken(Report):
+    token: SafeReportTokenRef
+class ReportWithToken(SafeReportWithToken):
     token: ReportTokenRef
 
 class ReportWithRelations(ReportWithToken):
@@ -236,9 +248,12 @@ class Response(_ResponseBase, _ModelFromAttributes):
     player_report: PlayerReport
     community: CommunityRef
 
-class CommunityWithRelations(Community):
+class SafeCommunityWithRelations(SafeCommunity):
     tokens: list[ReportTokenRef]
     responses: list[Response]
+
+class CommunityWithRelations(Community, SafeCommunityWithRelations):
+    pass
 
 class Player(PlayerRef):
     reports: list[PlayerReport]
