@@ -108,6 +108,6 @@ class ReportManagementView(View):
         stats: dict[int, schemas.ResponseStats] = None
     ):
         embed = await get_report_embed(report, stats=stats, with_footer=False)
-        embed.color = discord.Color.blurple()
+        embed.color = discord.Colour(0xfee75c) # yellow
         return embed
     

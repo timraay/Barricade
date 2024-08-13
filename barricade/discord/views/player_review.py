@@ -242,9 +242,13 @@ class PlayerReviewView(View):
         stats: dict[int, schemas.ResponseStats] = None
     ):
         embed = await get_report_embed(report, stats)
-        if len(responses) == len(report.players):
-            if any(response.banned for response in responses):
-                embed.color = discord.Colour.brand_red()
-            else:
-                embed.color = discord.Colour.brand_green()
+
+        if any(response.banned is None for response in responses):
+            embed.color = discord.Colour.blurple()
+        elif any(response.banned is True for response in responses):
+            embed.color = discord.Colour(0x521616) # dark red
+        elif all(response.banned is False for response in responses):
+            embed.color = discord.Colour(0x253021) # dark green
+        # default color is dark_theme
+
         return embed
