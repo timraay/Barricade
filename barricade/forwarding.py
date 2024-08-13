@@ -9,7 +9,6 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.responses import get_pending_responses
 from barricade.db import models, session_factory
 from barricade.discord import bot
-from barricade.discord.audit import audit_report_created, audit_report_edited
 from barricade.discord.communities import get_forward_channel
 from barricade.discord.reports import get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
@@ -53,10 +52,6 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
 async def forward_report_to_token_owner(report: schemas.ReportWithToken):
     await send_or_edit_report_management_message(report)
 
-@add_hook(EventHooks.report_create)
-async def forward_report_create_to_audit_log(report: schemas.ReportWithToken):
-    await audit_report_created(report)
-
 @add_hook(EventHooks.report_edit)
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
@@ -84,10 +79,6 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
                     await send_or_edit_report_review_message(report, responses, community)
             except:
                 logging.exception("Unexpected error occurred while attempting to edit %r", message_data)
-
-@add_hook(EventHooks.report_edit)
-async def forward_report_edit_to_audit_log(report: schemas.ReportWithRelations, _):
-    await audit_report_edited(report)
 
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):

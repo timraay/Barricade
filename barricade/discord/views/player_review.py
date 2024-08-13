@@ -16,25 +16,27 @@ from barricade.enums import ReportRejectReason
 
 class PlayerReportResponseButton(
     discord.ui.DynamicItem[discord.ui.Button],
-    template=r"prr:(?P<command>\w+):(?P<community_id>\d+):(?P<pr_id>\d+)(?::(?P<reject_reason>[\w_]+))?"
+    template=r"prr:(?P<command>\w+):(?P<community_id>\d+):(?P<report_id>\d+):(?P<pr_id>\d+)(?::(?P<reject_reason>[\w_]+))?"
 ):
     def __init__(
         self,
         button: discord.ui.Button,
         command: str,
         community_id: int,
+        report_id: int,
         pr_id: int,
         reject_reason: Optional[ReportRejectReason] = None
     ):
         self.command = command
         self.community_id = community_id
+        self.report_id = report_id
         self.pr_id = pr_id
         self.reject_reason = reject_reason
 
         if self.reject_reason:
-            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}:{self.reject_reason.name}"
+            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.report_id}:{self.pr_id}:{self.reject_reason.name}"
         else:
-            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.pr_id}"
+            button.custom_id = f"prr:{self.command}:{self.community_id}:{self.report_id}:{self.pr_id}"
         
         super().__init__(button)
     
@@ -48,6 +50,7 @@ class PlayerReportResponseButton(
             button=item,
             command=match["command"],
             community_id=int(match["community_id"]),
+            report_id=int(match["report_id"]),
             pr_id=int(match["pr_id"]),
             reject_reason=reject_reason,
         )
@@ -76,7 +79,7 @@ class PlayerReportResponseButton(
             reject_reason=self.reject_reason,
         )
         
-        async with session_factory.begin() as db:
+        async with session_factory() as db:
             community = await get_community_by_id(db, self.community_id)
 
             # Make sure user has the Admin role
@@ -91,6 +94,7 @@ class PlayerReportResponseButton(
                     "You do not have this community's configured Admin role."
                 )
 
+            # This will immediately commit
             db_prr = await set_report_response(db, prr)
 
             players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players
@@ -138,8 +142,10 @@ class PlayerReportResponseButton(
     
     async def refresh_report_view(self, interaction: Interaction):
         async with session_factory() as db:
-            # In this case, pr_id is actually the report ID, not the player report ID
-            report = await get_report_by_id(db, self.pr_id, load_token=True)
+            report = await get_report_by_id(db, self.report_id, load_token=True)
+            if not report:
+                raise CustomException("Report with ID %s no longer exists!" % self.pr_id)
+
             community = await get_community_by_id(db, self.community_id)
 
             stats: dict[int, schemas.ResponseStats] = {}
@@ -165,6 +171,7 @@ class PlayerReviewView(View):
                     ),
                     command="refresh",
                     community_id=response.community_id,
+                    report_id=response.player_report.report_id,
                     pr_id=response.pr_id,
 
                 )
@@ -181,6 +188,7 @@ class PlayerReviewView(View):
                         ),
                         command="unban",
                         community_id=response.community_id,
+                        report_id=response.player_report.report_id,
                         pr_id=response.pr_id,
 
                     )
@@ -196,6 +204,7 @@ class PlayerReviewView(View):
                         ),
                         command="ban",
                         community_id=response.community_id,
+                        report_id=response.player_report.report_id,
                         pr_id=response.pr_id,
 
                     )
@@ -220,6 +229,7 @@ class PlayerReviewView(View):
                         ),
                         command="reject",
                         community_id=response.community_id,
+                        report_id=response.player_report.report_id,
                         pr_id=response.pr_id,
                         reject_reason=reason
                     )

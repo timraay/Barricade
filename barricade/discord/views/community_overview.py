@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT
-from barricade.crud.communities import get_community_by_id
+from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_forward_channel
@@ -59,14 +59,12 @@ class CommunityOverviewView(View):
             if community.owner_id != interaction.user.id:
                 raise CustomException("You no longer own this community!")
 
-            community.name = modal.name.value
-            community.tag = modal.tag.value
-            community.contact_url = modal.contact_url.value
+            edited_community = schemas.CommunityEditParams.model_validate(community)
+            edited_community.name = modal.name.value
+            edited_community.tag = modal.tag.value
+            edited_community.contact_url = modal.contact_url.value
 
-            try:
-                await db.flush()
-            except IntegrityError:
-                raise CustomException("Another community with this name already exists")
+            await edit_community(db, community, edited_community, by=interaction.user)
 
         self.set_community(community)
         embed = await self.get_embed(interaction)

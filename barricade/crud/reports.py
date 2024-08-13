@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from barricade import schemas
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
-from barricade.discord.audit import audit_report_deleted, audit_token_created
+from barricade.discord.audit import audit_report_create, audit_report_delete, audit_report_edit, audit_token_create
 from barricade.discord.reports import get_report_embed, get_report_channel
 from barricade.exceptions import NotFoundError, AlreadyExistsError
 from barricade.hooks import EventHooks
@@ -79,20 +79,28 @@ async def create_token(
     await db.refresh(db_token)
 
     asyncio.create_task(
-        audit_token_created(db_token, by=by)
+        audit_token_create(db_token, by=by)
     )
 
     return db_token
 
 
 
-async def get_all_reports(db: AsyncSession, load_token: bool = False, limit: int = 100, offset: int = 0):
+async def get_all_reports(
+        db: AsyncSession,
+        community_id: int = None,
+        load_token: bool = False,
+        limit: int = 100,
+        offset: int = 0
+):
     """Retrieve all reports.
 
     Parameters
     ----------
     db : AsyncSession
         An asynchronous database session
+    community_id : int, optional
+        An ID of a community to filter reports by
     load_token : bool, optional
         Whether to also load the relational token property, by default False
     limit : int, optional
@@ -111,6 +119,10 @@ async def get_all_reports(db: AsyncSession, load_token: bool = False, limit: int
         options = (selectinload(models.Report.players),)
 
     stmt = select(models.Report).limit(limit).offset(offset).options(*options)
+
+    if community_id is not None:
+        stmt = stmt.join(models.Report.token).where(models.ReportToken.community_id == community_id)
+
     result = await db.scalars(stmt)
     return result.all()
 
@@ -178,7 +190,11 @@ async def is_player_reported(db: AsyncSession, player_id: str):
     result = await db.scalar(stmt)
     return bool(result)
 
-async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
+async def create_report(
+        db: AsyncSession,
+        report: schemas.ReportCreateParams,
+        by: str = None,
+):
     """Create a new report.
 
     This method will automatically commit after successfully creating
@@ -236,10 +252,17 @@ async def create_report(db: AsyncSession, report: schemas.ReportCreateParams):
     report_with_token = schemas.ReportWithToken.model_validate(db_report)
     await db.commit()
     EventHooks.invoke_report_create(report_with_token)
+    asyncio.create_task(
+        audit_report_create(report_with_token, by=by)
+    )
 
     return db_report
 
-async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
+async def edit_report(
+        db: AsyncSession,
+        report: schemas.ReportCreateParams,
+        by: str = None,
+):
     db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
         raise NotFoundError("No report exists with ID %s" % report.token_id)
@@ -291,17 +314,24 @@ async def edit_report(db: AsyncSession, report: schemas.ReportCreateParams):
     if (new_report != old_report):
         # Only invoke if something actually changed
         EventHooks.invoke_report_edit(new_report, old_report)
+        asyncio.create_task(
+            audit_report_edit(new_report, by=by)
+        )
 
     return db_report
 
-async def delete_report(db: AsyncSession, report_id: int, by: str = None):
+async def delete_report(
+        db: AsyncSession,
+        report_id: int,
+        by: str = None,
+):
     # Retrieve report
     db_report = await get_report_by_id(db, report_id, load_relations=True)
     if not db_report:
         raise NotFoundError("No report exists with ID %s" % report_id)
     
     # Retrieve stats for auditing
-    stats = dict[int, schemas.ResponseStats]
+    stats: dict[int, schemas.ResponseStats] = {}
     for pr in db_report.players:
         stats[pr.id] = await get_response_stats(db, pr)
 
@@ -312,7 +342,9 @@ async def delete_report(db: AsyncSession, report_id: int, by: str = None):
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
     EventHooks.invoke_report_delete(report)
-    asyncio.create_task(audit_report_deleted(report, stats, by=by))
+    asyncio.create_task(
+        audit_report_delete(report, stats, by=by)
+    )
 
     return True
 

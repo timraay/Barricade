@@ -60,7 +60,7 @@ async def create_community(
         community: schemas.CommunityCreateParams,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ):
     # Create the community
@@ -82,11 +82,27 @@ async def create_community(
 async def get_own_community(
         community: Annotated[
             schemas.CommunityWithRelations,
-            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_READ)
+            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_ME_READ.to_list())
         ]
 ):
     return community
 
+@router.put("/me", response_model=schemas.CommunityWithRelations)
+async def edit_own_community(
+        db: DatabaseDep,
+        params: schemas.CommunityEditParams,
+        community: Annotated[
+            schemas.CommunityWithRelations,
+            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
+        ],
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Depends(get_active_token)
+        ],
+):
+    await communities.edit_community(db, community, params)
+    await db.commit()
+    return community
 
 @router.put("/me/owner")
 async def transfer_own_community_ownership(
@@ -94,7 +110,7 @@ async def transfer_own_community_ownership(
         admin: AdminDep,
         community: Annotated[
             schemas.Community,
-            Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_MANAGE)
+            Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
         ],
         token: Annotated[
             web_schemas.TokenWithHash,
@@ -114,6 +130,20 @@ async def get_community(
 ):
     return community
 
+@router.put("/{community_id}", response_model=schemas.SafeCommunityWithRelations)
+async def edit_community(
+        db: DatabaseDep,
+        community: CommunityWithRelationsDep,
+        params: schemas.CommunityEditParams,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
+        ],
+):
+    await communities.edit_community(db, community, params, by=(token.user.username if token.user else "Web Token"))
+    await db.commit()
+    return community
+
 @router.put("/{community_id}/owner")
 async def transfer_community_ownership(
         db: DatabaseDep,
@@ -121,7 +151,7 @@ async def transfer_community_ownership(
         admin: AdminDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ) -> bool:
     try:

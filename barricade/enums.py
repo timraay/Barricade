@@ -74,7 +74,7 @@ class ReportReasonFlag(IntFlag):
         return self, custom_msg
     
     def to_list(self, custom_msg: str | None, with_emoji: bool = False):
-        reasons = []
+        reasons: list[str] = []
         for flag in self:
             if flag == ReportReasonFlag.CUSTOM:
                 if not custom_msg:

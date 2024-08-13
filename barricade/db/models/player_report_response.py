@@ -14,7 +14,7 @@ class PlayerReportResponse(ModelBase):
     __tablename__ = "player_report_responses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    pr_id: Mapped[int] = mapped_column(ForeignKey("player_reports.id"))
+    pr_id: Mapped[int] = mapped_column(ForeignKey("player_reports.id", ondelete="CASCADE"))
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     banned: Mapped[bool]
     reject_reason: Mapped[Optional[ReportRejectReason]] = mapped_column(Enum(ReportRejectReason), nullable=True)

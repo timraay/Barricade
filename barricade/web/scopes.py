@@ -6,12 +6,14 @@ def _convert_name(name: str):
 class Scopes(IntFlag):
     # Do NOT reorder or insert between
     STAFF = auto()
+    COMMUNITY_ME_READ = auto()
+    COMMUNITY_ME_MANAGE = auto()
     COMMUNITY_READ = auto()
     COMMUNITY_MANAGE = auto()
-    COMMUNITY_SUPERUSER = auto()
+    REPORT_ME_READ = auto()
+    REPORT_ME_MANAGE = auto()
     REPORT_READ = auto()
     REPORT_MANAGE = auto()
-    REPORT_SUPERUSER = auto()
 
     @classmethod
     def all(cls):
@@ -39,10 +41,12 @@ class Scopes(IntFlag):
 
 SCOPE_DESCRIPTIONS = {
     Scopes.STAFF: "Manage web users",
-    Scopes.COMMUNITY_READ: "See all communities and their admins",
-    Scopes.COMMUNITY_MANAGE: "Manage your own community",
-    Scopes.COMMUNITY_SUPERUSER: "Manage all communities and create new ones",
-    Scopes.REPORT_READ: "See all reports",
-    Scopes.REPORT_MANAGE: "Manage your own reports",
-    Scopes.REPORT_SUPERUSER: "Delete reports",
+    Scopes.COMMUNITY_ME_READ: "Retrieve information about your community",
+    Scopes.COMMUNITY_ME_MANAGE: "Make changes to your community",
+    Scopes.COMMUNITY_READ: "Retrieve all communities",
+    Scopes.COMMUNITY_MANAGE: "Manage all communities",
+    Scopes.REPORT_ME_READ: "Retrieve all reports made by your community",
+    Scopes.REPORT_ME_MANAGE: "Edit and delete reports made by your community",
+    Scopes.REPORT_READ: "Retrieve all reports",
+    Scopes.REPORT_MANAGE: "Manage all reports",
 }

@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 import logging
 from typing import Sequence, NamedTuple
 import aiohttp
-from uuid import UUID
 
 from barricade import schemas
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
@@ -64,19 +63,22 @@ class BattlemetricsIntegration(Integration):
         else:
             await self.validate_ban_list()
 
-    async def ban_player(self, params: schemas.IntegrationBanPlayerParams):
-        async with session_factory.begin() as db:
-            db_ban = await self.get_ban(db, params.player_id)
-            if db_ban is not None:
-                raise IntegrationBanError(params.player_id, "Player is already banned")
+    async def ban_player(self, response: schemas.Response):
+        player_id = response.player_report.player_id
+        report = response.player_report.report
 
-            reason = self.get_ban_reason(params.community)
+        async with session_factory.begin() as db:
+            db_ban = await self.get_ban(db, player_id)
+            if db_ban is not None:
+                raise IntegrationBanError(player_id, "Player is already banned")
+
+            reason = self.get_ban_reason(response.community)
             ban_id = await self.add_ban(
-                identifier=params.player_id,
+                identifier=player_id,
                 reason=reason,
-                note=f"Originally reported for {', '.join(params.reasons)}"
+                note=f"Originally reported for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}"
             )
-            await self.set_ban_id(db, params.player_id, ban_id)
+            await self.set_ban_id(db, player_id, ban_id)
 
     async def unban_player(self, player_id: str):
         async with session_factory.begin() as db:
@@ -96,25 +98,28 @@ class BattlemetricsIntegration(Integration):
 
             await db.delete(db_ban)
 
-    async def bulk_ban_players(self, params: Sequence[schemas.IntegrationBanPlayerParams]):
+    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
         ban_ids = []
         failed = []
-        for param in params:
-            db_ban = await self.get_ban(db, param.player_id)
+        for response in responses:
+            player_id = response.player_report.player_id
+            report = response.player_report.report
+
+            db_ban = await self.get_ban(db, player_id)
             if db_ban is not None:
                 continue
 
-            reason = self.get_ban_reason(param.community)
+            reason = self.get_ban_reason(response.community)
             try:
                 ban_id = await self.add_ban(
-                    identifier=param.player_id,
+                    identifier=player_id,
                     reason=reason,
-                    note=f"Originally reported for {', '.join(param.reasons)}"
+                    note=f"Originally reported for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}"
                 )
             except IntegrationBanError:
-                failed.append(param.player_id)
+                failed.append(player_id)
             else:
-                ban_ids.append((param.player_id, ban_id))
+                ban_ids.append((player_id, ban_id))
         
         async with session_factory.begin() as db:
             await self.set_multiple_ban_ids(db, *ban_ids)
@@ -122,18 +127,18 @@ class BattlemetricsIntegration(Integration):
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to ban players")
 
-    async def bulk_unban_players(self, responses: Sequence[Response]):
+    async def bulk_unban_players(self, player_ids: Sequence[str]):
         failed = []
         async with session_factory.begin() as db:
-            for response in responses:
-                db_ban = await self.get_ban(db, response)
+            for player_id in player_ids:
+                db_ban = await self.get_ban(db, player_id)
                 if not db_ban:
                     continue
 
                 try:
                     await self.remove_ban(db_ban.remote_id)
                 except IntegrationBanError:
-                    failed.append(response.player_report.player_id)
+                    failed.append(player_id)
                 else:
                     await db.delete(db_ban)
         
@@ -303,7 +308,7 @@ class BattlemetricsIntegration(Integration):
             "data": {
                 "type": "banList",
                 "attributes": {
-                    "name": f"HLL Barricade Ban List - {community.name} (ID: {community.id})",
+                    "name": f"HLL Barricade - {community.name} (ID: {community.id})",
                     "action": "kick",
                     "defaultIdentifiers": ["steamID"],
                     "defaultReasons": [self.get_ban_reason(community)],
@@ -330,7 +335,7 @@ class BattlemetricsIntegration(Integration):
         resp = await self._make_request(method="POST", url=url, data=data)
 
         assert resp["data"]["type"] == "banList"
-        self.config.banlist_id = UUID(resp["data"]["id"])
+        self.config.banlist_id = resp["data"]["id"]
 
     async def validate_ban_list(self):
         data = {"include": "owner"}
@@ -341,8 +346,13 @@ class BattlemetricsIntegration(Integration):
         except Exception as e:
             raise IntegrationValidationError("Failed to retrieve ban list") from e
 
-        assert resp["data"]["id"] == str(self.config.banlist_id)
-        assert resp["data"]["relationships"]["owner"]["data"]["id"] == self.config.organization_id
+        banlist_id = resp["data"]["id"]
+        if banlist_id != self.config.banlist_id:
+            raise IntegrationValidationError("Ban list UUID mismatch: Asked for %s but got %s", self.config.banlist_id, resp["data"]["id"])
+        
+        organization_id = resp["data"]["relationships"]["owner"]["data"]["id"]
+        if organization_id != self.config.organization_id:
+            raise IntegrationValidationError("Organization ID mismatch: Asked for %s but got %s", self.config.organization_id, resp["data"]["id"])
 
     async def get_api_scopes(self) -> set[str]:
         """Retrieves the tokens scopes from the oauth.

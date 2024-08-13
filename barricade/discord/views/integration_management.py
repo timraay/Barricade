@@ -4,7 +4,6 @@ import logging
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from uuid import UUID
 
 import discord
 from discord import ButtonStyle, Interaction
@@ -75,6 +74,7 @@ class IntegrationManagementView(View):
     def __init__(self, community: models.Community):
         super().__init__(timeout=60*30)
         self.community = community
+        self.comments: dict[int, str] = {}
         self.update_integrations()
 
     def update_integrations(self):
@@ -126,7 +126,7 @@ class IntegrationManagementView(View):
             else:
                 embed.add_field(
                     name=f"{row+1}. {integration.meta.name}",
-                    value=f"{name}\n`Disabled` \🔴",
+                    value=f"{name}\n`Disabled` \🔴\n{self.comments.get(integration.config.id, '')}",
                     inline=True
                 )
 
@@ -138,7 +138,7 @@ class IntegrationManagementView(View):
                 ))
             
             self.add_item(CallableButton(
-                partial(self.configure_integration, integration.config.id, integration.config.id),
+                partial(self.configure_integration, type(integration), integration.config.id),
                 style=ButtonStyle.gray if enabled else ButtonStyle.blurple,
                 label="Reconfigure",
                 row=row
@@ -179,9 +179,11 @@ class IntegrationManagementView(View):
             for integration, validation in zip(to_validate, validations):
                 if isinstance(validation, Exception):
                     if isinstance(validation, IntegrationValidationError):
-                        await integration.disable(False)
+                        await integration.disable()
+                        self.comments[integration.config.id] = str(validation)
                     else:
                         logging.error("Failed to validate integration with ID %s" % integration.config.id, exc_info=validation)
+                        self.comments[integration.config.id] = "Unexpected validation error"
             
             await self.edit()
         
@@ -231,9 +233,15 @@ class IntegrationManagementView(View):
             except IntegrationValidationError as e:
                 raise CustomException("Failed to configure integration!", str(e))
             
+            
             # Update config in DB
-            await integration.update(db)
+            if integration.config.id:
+                await integration.update(db)
+            else:
+                await integration.create()
             await db.refresh(self.community)
+
+            self.comments.pop(integration.config.id, None)
 
         await interaction.followup.send(embed=get_success_embed(
             f"Configured {integration.meta.name} integration!"
@@ -270,8 +278,14 @@ class IntegrationManagementView(View):
             # Validate config
             try:
                 await integration.validate(self.community)
+            except IntegrationValidationError as e:
+                self.comments[integration.config.id] = str(e)
+                raise CustomException("Failed to validate integration!", str(e))
             except Exception as e:
-                raise CustomException("Outdated integration configuration!", str(e), log_traceback=True)
+                self.comments[integration.config.id] = "Unexpected validation error"
+                raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
+            
+            self.comments.pop(integration.config.id, None)
             
             await integration.enable()
             await db.refresh(self.community)

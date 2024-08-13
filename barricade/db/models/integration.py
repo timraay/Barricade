@@ -3,7 +3,6 @@ from barricade.enums import IntegrationType
 
 from sqlalchemy import Integer, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from uuid import UUID
 
 from typing import Optional, TYPE_CHECKING
 

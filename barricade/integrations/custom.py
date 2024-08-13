@@ -173,9 +173,8 @@ class CustomIntegration(Integration):
 
             await self.set_ban_id(db, player_id, player_id)
 
-    async def unban_player(self, response: schemas.Response):
+    async def unban_player(self, player_id: str):
         async with session_factory.begin() as db:
-            player_id = response.player_report.player_id
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
@@ -204,11 +203,10 @@ class CustomIntegration(Integration):
                 async with session_factory.begin() as db:
                     await self.set_multiple_ban_ids(db, ban_ids)
 
-    async def bulk_unban_players(self, responses: Sequence[schemas.Response]):
+    async def bulk_unban_players(self, player_ids: Sequence[str]):
         async with session_factory() as db:
             player_ids: dict[str, str] = {}
-            for response in responses:
-                player_id = response.player_report.player_id
+            for player_id in player_ids:
                 ban = await self.get_ban(db, player_id)
                 player_ids[ban.remote_id] = player_id
 

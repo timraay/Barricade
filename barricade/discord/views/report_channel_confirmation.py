@@ -1,8 +1,10 @@
+import asyncio
 import discord
 from discord import ButtonStyle, Interaction, TextChannel
 
 from barricade.crud.communities import get_admin_by_id
 from barricade.db import session_factory
+from barricade.discord.audit import audit_community_edit
 from barricade.discord.utils import View, CallableButton, CustomException, get_question_embed, get_success_embed
 
 class ReportChannelConfirmationView(View):
@@ -15,8 +17,8 @@ class ReportChannelConfirmationView(View):
 
     async def send(self, interaction: Interaction):
         await interaction.response.send_message(embed=get_question_embed(
-            title=f"Do you want to set `#{self.channel.name}` as your new report feed?",
-            description="This channel should only be visible to your admins.",
+            title=f'Do you want to set "#{self.channel.name}" as your new report feed?',
+            description='This channel should only be visible to your admins.',
         ), view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
@@ -40,5 +42,13 @@ class ReportChannelConfirmationView(View):
                 owner.community.admin_role_id = None
 
             await interaction.response.edit_message(embed=get_success_embed(
-                title=f"Set `#{self.channel.name}` as the new report feed for {owner.community.name}!"
+                title=f'Set "#{self.channel.name}" as the new report feed for {owner.community.name}!'
             ), view=None)
+
+            await owner.community.awaitable_attrs.owner
+            asyncio.create_task(
+                audit_community_edit(
+                    community=owner.community,
+                    by=interaction.user,
+                )
+            )

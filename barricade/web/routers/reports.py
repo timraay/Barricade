@@ -49,7 +49,7 @@ async def create_report(
         db: DatabaseDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.REPORT_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.REPORT_MANAGE.to_list())
         ],
 ):
     db_admin = await communities.get_admin_by_id(db, report.admin_id)
@@ -64,8 +64,7 @@ async def create_report(
             detail="Admin is not part of a community"
         )
     
-    db_token = await reports.create_token(
-        db,
+    db_token = await reports.create_token(db,
         token=schemas.ReportTokenCreateParams(
             admin_id=db_admin.discord_id,
             community_id=db_admin.community_id,
@@ -73,12 +72,12 @@ async def create_report(
         by=(token.user.username if token.user else "Web Token")
     )
 
-    return await reports.create_report(
-        db,
+    return await reports.create_report(db,
         report=schemas.ReportCreateParams(
             **report.model_dump(exclude={"admin_id"}),
             token_id=db_token.id,
         ),
+        by=(token.user.username if token.user else "Web Token"),
     )
 
 async def validate_submission_token(
@@ -128,7 +127,7 @@ async def submit_report(
     return db_report
 
 @router.put("/reports/submit", response_model=schemas.SafeReportWithToken)
-async def submit_report(
+async def submit_report_edit(
         token: Annotated[models.ReportToken, Depends(validate_submission_token)],
         submission: schemas.ReportSubmission,
         db: DatabaseDep,
@@ -172,14 +171,15 @@ async def edit_report(
         db: DatabaseDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.REPORT_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.REPORT_MANAGE.to_list())
         ],
 ):
     params = report.model_dump()
     params["token_id"] = report_id
     try:
-        result = await reports.edit_report(
-            db, schemas.ReportCreateParams.model_validate(params),
+        result = await reports.edit_report(db,
+            report=schemas.ReportCreateParams.model_validate(params),
+            by=(token.user.username if token.user else "Web Token"),
         )
     except NotFoundError:
         raise HTTPException(
@@ -189,6 +189,41 @@ async def edit_report(
 
     return result
 
+@router.delete("/reports/{report_id}")
+async def delete_report(
+        report_id: int,
+        db: DatabaseDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.REPORT_MANAGE.to_list())
+        ],
+):
+    try:
+        return await reports.delete_report(db,
+            report_id=report_id,
+            by=(token.user.username if token.user else "Web Token"),
+        )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report does not exist"
+        )
+
+@router.get("/communities/me/reports", response_model=PaginatedResponse[schemas.Report])
+async def get_reports(
+        db: DatabaseDep,
+        paginator: PaginatorDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_READ.to_list())
+        ],
+):
+    result = await reports.get_all_reports(db,
+        community_id=token.community_id,
+        limit=paginator.limit,
+        offset=paginator.offset
+    )
+    return paginator.paginate(result)
 
 @router.post("/communities/me/reports", response_model=schemas.SafeReportWithToken)
 async def create_own_report(
@@ -196,7 +231,7 @@ async def create_own_report(
         db: DatabaseDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Depends(get_active_token_of_community)
+            Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_MANAGE.to_list())
         ],
 ):
     admin = await communities.get_admin_by_id(db, report.admin_id)
@@ -212,30 +247,55 @@ async def create_own_report(
         )
     return await create_report(report, db, token)
 
+@router.get("/communities/me/reports/{report_id}", response_model=schemas.SafeReportWithToken)
+async def get_own_report(
+        report: ReportWithTokenDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.REPORT_ME_READ.to_list())
+        ],
+):
+    if report.token.community_id != token.community_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report was not created by your community"
+        )
+    return report
 
 @router.put("/communities/me/reports/{report_id}", response_model=schemas.SafeReportWithToken)
 async def edit_own_report(
-        report_id: int,
-        report: schemas.ReportEditParams,
+        report: ReportWithTokenDep,
+        params: schemas.ReportEditParams,
         db: DatabaseDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token_of_community, scopes=Scopes.REPORT_MANAGE.to_list())
+            Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_MANAGE.to_list())
         ],
 ):
-    db_report = await reports.get_report_by_id(db, report_id, load_token=True)
-    if not db_report:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report does not exist"
-        )
-    if db_report.token.community_id != token.community_id:
+    if report.token.community_id != token.community_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Report was not created by your community"
         )
 
-    return await edit_report(report_id, report, db, token)
+    return await edit_report(report.id, params, db, token)
+
+@router.delete("/communities/me/reports/{report_id}")
+async def delete_own_report(
+        report: ReportWithTokenDep,
+        db: DatabaseDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_MANAGE.to_list())
+        ],
+):
+    if report.token.community_id != token.community_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report was not created by your community"
+        )
+
+    return await delete_report(report.id, db, token)
 
 
 def setup(app: FastAPI):

@@ -13,9 +13,6 @@ class IntegrationManager(Singleton):
         return integration
     
     def get_by_config(self, config: schemas.IntegrationConfig) -> Optional['Integration']:
-        if not isinstance(config, schemas.IntegrationConfig):
-            raise TypeError("Config must be a schema")
-        
         # Make sure config has an ID
         if config.id is None:
             raise ValueError("Config must have an ID")

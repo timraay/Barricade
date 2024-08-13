@@ -36,7 +36,7 @@ async def create_admin(
         admin: schemas.AdminCreateParams,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ):
     # Create the community
@@ -82,7 +82,7 @@ async def admin_join_community(
         community: CommunityDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ):
     try:
@@ -108,7 +108,7 @@ async def admin_leave_community(
         admin: AdminDep,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token, scopes=Scopes.COMMUNITY_SUPERUSER.to_list())
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ):
     try:
@@ -134,7 +134,7 @@ async def create_admin_for_own_community(
         admin: schemas.AdminCreateParams,
         token: Annotated[
             web_schemas.TokenWithHash,
-            Security(get_active_token_of_community)
+            Security(get_active_token_of_community, scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
         ],
 ):
     if admin.community_id != token.community_id:
@@ -151,7 +151,7 @@ async def admin_join_own_community(
     admin: AdminDep,
     community: Annotated[
         schemas.Community,
-        Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_MANAGE.to_list())
+        Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
     ],
     token: Annotated[
         web_schemas.TokenWithHash,
@@ -167,7 +167,7 @@ async def admin_leave_own_community(
     admin: AdminDep,
     token: Annotated[
         web_schemas.TokenWithHash,
-        Security(get_active_token_of_community, scopes=Scopes.COMMUNITY_MANAGE.to_list())
+        Security(get_active_token_of_community, scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
     ]
 ):
     if admin.community_id != token.community_id:

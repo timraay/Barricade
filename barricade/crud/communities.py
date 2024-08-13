@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.db import models
-from barricade.discord.audit import audit_community_admin_add, audit_community_admin_leave, audit_community_admin_remove, audit_community_change_owner, audit_community_created
+from barricade.discord.audit import audit_community_admin_add, audit_community_admin_leave, audit_community_admin_remove, audit_community_change_owner, audit_community_create, audit_community_edit
 from barricade.discord.communities import grant_admin_role, grant_owner_role, revoke_admin_roles
 from barricade.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
@@ -117,6 +117,31 @@ async def get_community_by_id(db: AsyncSession, community_id: int, load_relation
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
     return await db.get(models.Community, community_id, options=options)
+
+async def get_community_by_name(db: AsyncSession, name: str, load_relations: bool = False):
+    """Look up a community by its name.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    name : str
+        The name of the community
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+
+    Returns
+    -------
+    Community | None
+        The community model, or None if it does not exist
+    """
+    if load_relations:
+        options = (selectinload("*"),)
+    else:
+        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+
+    stmt = select(models.Community).where(models.Community.name == name).options(*options)
+    return await db.scalar(stmt)
     
 async def get_community_by_guild_id(db: AsyncSession, guild_id: int, load_relations: bool = False):
     """Look up a community by its forward Guild ID.
@@ -184,7 +209,7 @@ async def create_new_community(
     ----------
     db : AsyncSession
         An asyncronous database session
-    community : schemas.CommunityCreate
+    community : schemas.CommunityCreateParams
         Payload
 
     Returns
@@ -195,8 +220,14 @@ async def create_new_community(
     Raises
     ------
     AlreadyExistsError
+        A community with the same name already exists
+    AlreadyExistsError
         The owner already belongs to a community
     """
+    # Look if a community with the same name already exists
+    if await get_community_by_name(db, community.name):
+        raise AlreadyExistsError("Name is already in use")
+
     # Look if the owner exists already
     db_owner = await get_admin_by_id(db, community.owner_id)
     if not db_owner:
@@ -234,13 +265,59 @@ async def create_new_community(
     await grant_owner_role(db_owner.discord_id)
 
     asyncio.create_task(
-        audit_community_created(
+        audit_community_create(
             community=db_community,
             by=by,
         )
     )
 
     return db_community
+
+async def edit_community(
+        db: AsyncSession,
+        community: models.Community,
+        params: schemas.CommunityEditParams,
+        by: str = None,
+):
+    """Edit an existing community.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asyncronous database session
+    community : models.Community
+        The community to be edited
+    params : schemas.CommunityEditParams
+        Payload
+
+    Returns
+    -------
+    Community
+        The community model
+
+    Raises
+    ------
+    AlreadyExistsError
+        The updated name is already in use
+    """
+    # Look if a community with the same name already exists
+    if other_community := await get_community_by_name(db, params.name):
+        if other_community.id != community.id:
+            raise AlreadyExistsError("Name is already in use")
+
+    for key, val in params:
+        setattr(community, key, val)
+
+    await db.flush()
+    
+    asyncio.create_task(
+        audit_community_edit(
+            community=community,
+            by=by,
+        )
+    )
+
+    return community
 
 async def create_new_admin(
         db: AsyncSession,
@@ -253,7 +330,7 @@ async def create_new_admin(
     ----------
     db : AsyncSession
         An asynchronous database session
-    admin : schemas.AdminCreate
+    admin : schemas.AdminCreateParams
         Payload
 
     Returns

@@ -73,6 +73,7 @@ async def get_report_embed(
 
         admin_name = await get_admin_name(report.token.admin)
 
+        embed.timestamp = report.created_at
         embed.set_footer(
             text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
             icon_url=avatar_url

@@ -17,5 +17,5 @@ class ReportMessage(ModelBase):
     channel_id: Mapped[int] = mapped_column(BigInteger)
     message_id: Mapped[int] = mapped_column(BigInteger, index=True, unique=True)
 
-    report: Mapped['Report'] = relationship(back_populates="messages", cascade="all, delete")
-    community: Mapped['Community'] = relationship(back_populates="messages", cascade="all, delete")
+    report: Mapped['Report'] = relationship(back_populates="messages")
+    community: Mapped['Community'] = relationship(back_populates="messages")

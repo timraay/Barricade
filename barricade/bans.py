@@ -1,4 +1,5 @@
 import asyncio
+from functools import partial
 from typing import Coroutine, Sequence
 
 from discord import Embed
@@ -16,16 +17,14 @@ from barricade.integrations.manager import IntegrationManager
 
 async def forward_errors(
         callable: Coroutine,
-        *args,
         player_id: str,
         integration: schemas.IntegrationConfig,
         community: schemas.CommunityRef,
         embed: Embed,
         excs: Sequence[type[Exception]] | type[Exception] = None,
-        **kwargs
 ):
     try:
-        await callable(*args, **kwargs)
+        await callable()
     except Exception as e:
         if not excs or isinstance(e, excs):
             channel = get_forward_channel(community)
@@ -40,7 +39,7 @@ async def forward_errors(
                 value=f"{integration.integration_type.value} (#{integration.id})"
             )
 
-            view = RetryErrorView(callable, *args, **kwargs)
+            view = RetryErrorView(callable)
             await channel.send(view=view, embed=embed)
         raise
 
@@ -72,12 +71,7 @@ async def on_player_ban(response: schemas.Response):
 
         integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(config))
         coro = forward_errors(
-            integration.ban_player,
-            schemas.IntegrationBanPlayerParams(
-                player_id=response.player_report.player_id,
-                community=response.community,
-                reasons=reasons,
-            ),
+            partial(integration.ban_player, response),
             player_id=response.player_report.player,
             integration=integration.config,
             community=response.community,
@@ -108,8 +102,7 @@ async def on_player_unban(response: schemas.Response):
         integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
         player_id = response.player_report.player_id
         coro = forward_errors(
-            integration.unban_player,
-            player_id,
+            partial(integration.unban_player, player_id),
             player_id=player_id,
             integration=integration.config,
             community=response.community,
@@ -141,9 +134,9 @@ async def unban_players_detached_from_report(report: schemas.ReportWithRelations
             integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
             community = await ban.integration.awaitable_attrs.community
             coro = forward_errors(
-                integration.unban_player,
-                ban.player_id,
-                ban=ban,
+                partial(integration.unban_player, ban.player_id),
+                player_id=ban.player_id,
+                integration=integration.config,
                 community=community,
                 embed=embed,
             )
@@ -168,9 +161,9 @@ async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
             integration = manager.get_by_config(schemas.IntegrationConfig.model_validate(ban.integration))
             community = await ban.integration.awaitable_attrs.community
             coro = forward_errors(
-                integration.unban_player,
-                ban.player_id,
-                ban=ban,
+                partial(integration.unban_player, ban.player_id),
+                player_id=ban.player_id,
+                integration=integration.config,
                 community=community,
                 embed=embed,
             )

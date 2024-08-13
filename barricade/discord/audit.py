@@ -3,6 +3,8 @@ import discord
 from discord.utils import escape_markdown as esc_md
 import logging
 
+from pydantic import BaseModel
+
 from barricade import schemas
 from barricade.constants import DISCORD_AUDIT_CHANNEL_ID, DISCORD_REPORTS_CHANNEL_ID
 from barricade.discord.reports import get_report_embed
@@ -45,6 +47,18 @@ async def add_admin_field(embed: discord.Embed, admin: schemas.AdminRef, header:
         value=f"{esc_md(user.display_name)}\n{user.mention}"
     )
 
+def add_payload_field(embed: discord.Embed, schema: BaseModel):
+    return embed.add_field(
+        name="Payload",
+        value=f"```json\n{schema.model_dump_json(indent=2)[:1000]}\n```",
+        inline=False,
+    )
+
+def get_payload_embed(schema: BaseModel):
+    return discord.Embed(
+        description=f"**Payload**\n```json\n{schema.model_dump_json(indent=2)[:4000]}\n```",
+    )
+
 def get_avatar_url(user_id: int):
     user = bot.get_user(user_id)
     if not user:
@@ -63,7 +77,7 @@ async def _audit(*embeds: discord.Embed):
         logging.exception("Failed to audit message")
 
 
-async def audit_community_created(
+async def audit_community_create(
     community: schemas.Community,
     by: str = None,
 ):
@@ -76,6 +90,25 @@ async def audit_community_created(
     )
     await set_footer(embed, community.owner_id, by)
     add_community_field(embed, community)
+    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
+    await add_admin_field(embed, community.owner, "Owner")
+
+    await _audit(embed)
+
+async def audit_community_edit(
+    community: schemas.Community,
+    by: str = None,
+):
+    embed = discord.Embed(
+        color=discord.Colour.yellow(),
+        timestamp=datetime.now(tz=timezone.utc)
+    ).set_author(
+        icon_url=get_avatar_url(community.owner_id),
+        name="Community created",
+    )
+    await set_footer(embed, community.owner_id, by)
+    add_community_field(embed, community)
+    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
     await add_admin_field(embed, community.owner, "Owner")
 
     await _audit(embed)
@@ -155,7 +188,7 @@ async def audit_community_admin_leave(
 
     await _audit(embed)
 
-async def audit_token_created(
+async def audit_token_create(
     token: schemas.ReportTokenRef,
     by: str = None,
 ):
@@ -172,8 +205,9 @@ async def audit_token_created(
 
     await _audit(embed)
 
-async def audit_report_created(
-    report: schemas.ReportWithToken
+async def audit_report_create(
+    report: schemas.ReportWithToken,
+    by: str = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blue(),
@@ -182,7 +216,7 @@ async def audit_report_created(
         icon_url=get_avatar_url(report.token.admin_id),
         name="Report submitted",
     )
-    # set_footer(embed, report.token.admin_id)
+    await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
     embed.add_field(
@@ -192,11 +226,13 @@ async def audit_report_created(
             report.message_id
         ).jump_url
     )
+    payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
 
-    await _audit(embed)
+    await _audit(embed, payload)
 
-async def audit_report_edited(
-    report: schemas.ReportWithToken
+async def audit_report_edit(
+    report: schemas.ReportWithToken,
+    by: str = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blurple(),
@@ -205,7 +241,7 @@ async def audit_report_edited(
         icon_url=get_avatar_url(report.token.admin_id),
         name="Report edited",
     )
-    await set_footer(embed, report.token.admin_id)
+    await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
     embed.add_field(
@@ -215,10 +251,11 @@ async def audit_report_edited(
             report.message_id
         ).jump_url
     )
+    payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
 
-    await _audit(embed)
+    await _audit(embed, payload)
 
-async def audit_report_deleted(
+async def audit_report_delete(
     report: schemas.ReportWithToken,
     stats: dict[int, schemas.ResponseStats],
     by: str = None,
@@ -237,6 +274,7 @@ async def audit_report_deleted(
         name="Report",
         value="See below"
     )
-    report_embed = get_report_embed(report, stats, with_footer=False)
+    payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
+    report_embed = await get_report_embed(report, stats, with_footer=False)
 
-    await _audit(embed, report_embed)
+    await _audit(embed, payload, report_embed)

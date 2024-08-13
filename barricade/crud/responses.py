@@ -8,6 +8,22 @@ from barricade.enums import ReportRejectReason
 from barricade.hooks import EventHooks
 
 async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParams):
+    """Set or change a community's response to a reported player.
+
+    This immediately commits the transaction.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    prr : schemas.ResponseCreateParams
+        Payload
+
+    Returns
+    -------
+    models.PlayerReportResponse
+        The response
+    """
     stmt = select(models.PlayerReportResponse).where(
         models.PlayerReportResponse.pr_id == prr.pr_id,
         models.PlayerReportResponse.community_id == prr.community_id,
@@ -17,13 +33,13 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
     if not db_prr:
         db_prr = models.PlayerReportResponse(**prr.model_dump())
         db.add(db_prr)
-        await db.flush()
+        await db.commit()
         await db.refresh(db_prr)
 
     else:
         db_prr.banned = prr.banned
         db_prr.reject_reason = prr.reject_reason
-        await db.flush()
+        await db.commit()
 
     prr = schemas.Response.model_validate(db_prr)
     if prr.banned:
@@ -34,6 +50,22 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
     return db_prr
 
 async def get_community_responses_to_report(db: AsyncSession, report: schemas.Report, community_id: int):
+    """Get all of a community's responses to a specific report.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    report : schemas.Report
+        The report whose responses to obtain
+    community_id : int
+        The ID of the community who the responses should belong to
+
+    Returns
+    -------
+    Sequence[models.PlayerReportResponse]
+        All of a community's responses to the report
+    """
     stmt = select(models.PlayerReportResponse).where(
         models.PlayerReportResponse.community_id == community_id,
         models.PlayerReportResponse.pr_id.in_([
@@ -53,10 +85,7 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
     ).group_by(
         models.PlayerReportResponse.banned,
         models.PlayerReportResponse.reject_reason,
-    ).having(or_(
-        models.PlayerReportResponse.banned.is_(True),
-        models.PlayerReportResponse.reject_reason.is_not(None),
-    ))
+    )
 
     results = await db.execute(stmt)
     data = schemas.ResponseStats(
@@ -73,7 +102,8 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
             data.num_banned = result.amount
         else:
             data.num_rejected += result.amount
-            data.reject_reasons[result.reject_reason] += result.amount
+            if result.reject_reason:
+                data.reject_reasons[result.reject_reason] += result.amount
 
     return data
 
@@ -111,7 +141,7 @@ async def get_pending_responses(
     return list(responses.values())
 
 async def get_reports_for_player_with_no_community_response(db: AsyncSession, player_id: str, community_id: int):
-    """Get all reports of a player
+    """Get all reports of a specific player which the given community has not yet responded to.
 
     Parameters
     ----------
@@ -119,12 +149,12 @@ async def get_reports_for_player_with_no_community_response(db: AsyncSession, pl
         An asynchronous database session
     player_id : str
         The ID of the player
-    load_token : bool, optional
-        Whether to also load the relational token property, by default False
+    community_id : int
+        The ID of the community
 
     Returns
     -------
-    List[Report]
+    Sequence[models.Report]
         A sequence of report models
     """
     options = (selectinload(models.Report.players), selectinload(models.Report.token))
@@ -133,7 +163,14 @@ async def get_reports_for_player_with_no_community_response(db: AsyncSession, pl
         .join(models.Report.players) \
         .where(
             models.PlayerReport.player_id == player_id,
-            not_(exists(models.PlayerReport.responses))
+            not_(
+                select(models.PlayerReportResponse)
+                    .where(
+                        models.PlayerReportResponse.community_id == community_id,
+                        models.PlayerReportResponse.pr_id == models.PlayerReport.id
+                    )
+                    .exists()
+            )
         ) \
         .options(*options)
     result = await db.scalars(stmt)

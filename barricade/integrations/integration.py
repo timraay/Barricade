@@ -40,6 +40,9 @@ class Integration(ABC):
         self.config = config
         self.task: asyncio.Task | None = None
         self.lock = asyncio.Lock()
+
+    def __repr__(self):
+        return f"{type(self).__name__}[id={self.config.id}]"
     
     # --- Integration state
 
@@ -48,6 +51,7 @@ class Integration(ABC):
             raise RuntimeError("Integration was already created")
         
         async with session_factory.begin() as db:
+            self.config.enabled = False
             db_config = await create_integration_config(db, self.config)
             self.config = db_config
             manager.add(self)
@@ -82,14 +86,22 @@ class Integration(ABC):
             async with session_factory.begin() as db:
                 db_config = await self.update(db)
                 self.start_connection()
-                self.task = asyncio.create_task(self._loop)
+
+                if not self.task or self.task.done():
+                    self.task = asyncio.create_task(self._loop())
+                
                 return db_config
         except:
             # Reset state
             self.config.enabled = False
             self.stop_connection()
+
+            if self.task and not self.task.done():
+                self.task.cancel()
+
             raise
 
+    @is_saved
     async def disable(self) -> models.Integration:
         """Disable this integration.
 
@@ -113,17 +125,30 @@ class Integration(ABC):
             async with session_factory.begin() as db:
                 db_config = await self.update(db)
                 self.stop_connection()
+
+                if self.task and not self.task.done():
+                    self.task.cancel()
+                self.task = None
+                
                 return db_config
         except:
             # Reset state
             self.config.enabled = True
             self.start_connection()
+            
+            if self.task and self.task.done():
+                self.task = asyncio.create_task(self._loop())
+            
             raise
 
     async def _loop(self):
         while True:
             # Sleep 12-24 hours
             await asyncio.sleep(60 * 60 * random.randrange(12, 24))
+
+            if not self.config.enabled:
+                logging.error("Wanted to synchronize %r but was unexpectedly disabled")
+                return
 
             try:
                 await self.synchronize()
@@ -315,7 +340,7 @@ class Integration(ABC):
         Parameters
         ----------
         response : schemas.Response
-            The community's response to a rapported player
+            The community's response to a reported player
 
         Raises
         ------
@@ -325,14 +350,14 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def unban_player(self, response: schemas.Response):
+    async def unban_player(self, player_id: str):
         """Instruct the remote integration to unban a player, should
         they be banned.
 
         Parameters
         ----------
         response : schemas.Response
-            The community's response to a rapported player
+            The community's response to a reported player
 
         Raises
         ------
@@ -354,7 +379,7 @@ class Integration(ABC):
         Parameters
         ----------
         response : Sequence[schemas.Response]
-            The community's responses to all rapported players
+            The community's responses to all reported players
 
         Raises
         ------
@@ -364,7 +389,7 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def bulk_unban_players(self, responses: Sequence[schemas.Response]):
+    async def bulk_unban_players(self, player_ids: Sequence[str]):
         """Instruct the remote integration to unban multiple players.
         Depending on the implementation this may take a while.
 

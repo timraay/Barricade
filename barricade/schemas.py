@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Literal, Optional
-from uuid import UUID
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import ReportRejectReason, IntegrationType, ReportReasonFlag
@@ -88,13 +87,12 @@ class _CommunityBase(BaseModel):
     name: str
     tag: str
     contact_url: str
-    owner_id: int
 
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
 
     @field_serializer(
-            'owner_id', 'forward_guild_id', 'forward_channel_id',
+            'forward_guild_id', 'forward_channel_id',
             when_used='json-unless-none'
     )
     def convert_large_int_to_str(value: int):
@@ -157,6 +155,14 @@ class AdminRef(_AdminBase, _ModelFromAttributes):
 
 class CommunityRef(_CommunityBase, _ModelFromAttributes):
     id: int
+    owner_id: int
+    
+    @field_serializer(
+            'owner_id',
+            when_used='json-unless-none'
+    )
+    def convert_large_int_to_str(value: int):
+        return str(value)
 
     def __repr__(self) -> str:
         return f"Player[id={self.id}, name=\"{self.name}\"]"
@@ -268,7 +274,12 @@ class PlayerBan(PlayerBanRef):
 class AdminCreateParams(_AdminBase):
     pass
 
-class CommunityCreateParams(_CommunityBase):
+class CommunityEditParams(_CommunityBase):
+    forward_guild_id: Optional[int]
+    forward_channel_id: Optional[int]
+
+class CommunityCreateParams(CommunityEditParams):
+    owner_id: int
     owner_name: str
     forward_guild_id: Optional[int] = None
     forward_channel_id: Optional[int] = None
@@ -309,11 +320,6 @@ class PendingResponse(_ResponseBase):
 
 class PlayerBanCreateParams(_PlayerBanBase):
     pass
-
-class IntegrationBanPlayerParams(BaseModel):
-    player_id: str
-    reasons: list[str]
-    community: CommunityRef
 
 
 

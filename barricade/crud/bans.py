@@ -11,6 +11,7 @@ from barricade import schemas
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_community_responses_to_report
 from barricade.db import models
+from barricade.db.utils import compile_query
 from barricade.discord import bot
 from barricade.discord.reports import get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
@@ -123,7 +124,8 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequen
                         models.PlayerReportResponse.banned.is_(True),
                     )
             ))
-        )
+        ) \
+        .options(selectinload(models.PlayerBan.integration))
     
     if community_id is not None:
         stmt = stmt.where(models.Integration.community_id == community_id)

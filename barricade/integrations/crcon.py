@@ -1,23 +1,15 @@
 from datetime import datetime
 import re
-from typing import Sequence, TypedDict
-import aiohttp
+from typing import TypedDict
 import logging
 
 from barricade import schemas
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
 from barricade.db import session_factory
 from barricade.enums import Emojis, IntegrationType
-from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, NotFoundError,
-    AlreadyBannedError, IntegrationValidationError
-)
+from barricade.exceptions import IntegrationValidationError
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.integration import IntegrationMetaData
-from barricade.integrations.websocket import (
-    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType,
-    UnbanPlayersRequestPayload
-)
 
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
 
@@ -84,6 +76,14 @@ class CRCONIntegration(CustomIntegration):
             raise IntegrationValidationError("API URL does not end with \"/api\"")
         
         await self.validate_api_access()
+        
+        if not self.config.banlist_id:
+            try:
+                await self.create_blacklist(community)
+            except Exception as e:
+                raise IntegrationValidationError("Failed to create blacklist") from e
+        else:
+            await self.validate_blacklist()
 
     async def synchronize(self):
         remote_bans = await self.get_blacklist_bans()
@@ -127,6 +127,31 @@ class CRCONIntegration(CustomIntegration):
             (version_numbers[0] == 10 and version_numbers[1] <= 0)
         ):
             raise IntegrationValidationError('Oudated CRCON version')
+    
+    async def create_blacklist(self, community: schemas.Community):
+        resp = await self._make_request(
+            method="POST",
+            endpoint="/create_blacklist",
+            data={
+                "name": f"HLL Barricade - {community.name} (ID: {community.id})",
+                "sync_method": "kick_only",
+            }
+        )
+        self.config.banlist_id = str(resp["result"]["id"])
+    
+    async def validate_blacklist(self):
+        # we use get_blacklists instead of get_blacklist because the latter will also fetch
+        # and return all bans which makes it very inefficient for simply checking its existence.
+        resp = await self._make_request(
+            method="GET",
+            endpoint="/get_blacklists",
+        )
+        blacklists = resp["result"]
+        for blacklist in blacklists:
+            if str(blacklist["id"]) == self.config.banlist_id:
+                return
+        
+        raise IntegrationValidationError("Failed to retrieve blacklist")
 
     async def get_blacklist_bans(self):
         records: dict[str, BlacklistRecord] = {}
