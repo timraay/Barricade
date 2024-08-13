@@ -3,6 +3,8 @@ import re
 from typing import TypedDict
 import logging
 
+from aiohttp import ClientResponseError
+
 from barricade import schemas
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
 from barricade.db import session_factory
@@ -12,6 +14,14 @@ from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.integration import IntegrationMetaData
 
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
+
+REQUIRED_PERMISSIONS = {
+    "api.can_view_blacklists",
+    "api.can_create_blacklists",
+    "api.can_add_blacklist_records",
+    "api.can_change_blacklist_records",
+    "api.can_delete_blacklist_records",
+}
 
 class Blacklist(TypedDict):
     id: int
@@ -58,7 +68,7 @@ class CRCONIntegration(CustomIntegration):
         self.config: schemas.CRCONIntegrationConfigParams
     
     def get_ws_url(self):
-        return self.config.api_url + "/ws/barricade"
+        return self.config.api_url.removesuffix("/api") + "/ws/barricade"
 
     # --- Abstract method implementations
 
@@ -107,14 +117,18 @@ class CRCONIntegration(CustomIntegration):
 
     async def validate_api_access(self):
         try:
-            resp = await self._make_request(method="GET", endpoint="/is_logged_in")
+            resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
         except Exception as e:
+            if isinstance(e, ClientResponseError) and e.status == 401:
+                raise IntegrationValidationError("Invalid API key")
             raise IntegrationValidationError("Failed to connect") from e
-        is_auth = resp.get("authenticated")
-        if is_auth is False:
-            raise IntegrationValidationError("Invalid API key")
-        elif is_auth is not True:
-            raise IntegrationValidationError("Received unexpected API response")
+        
+        result = resp["result"]
+        is_superuser = result.get("is_superuser", False)
+        permissions = set(result.get("permissions", []))
+
+        if not is_superuser and not permissions.issuperset(REQUIRED_PERMISSIONS):
+            raise IntegrationValidationError("Missing permissions")
         
         resp = await self._make_request(method="GET", endpoint="/get_version")
         version = resp["result"].strip()

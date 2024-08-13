@@ -151,7 +151,7 @@ class Websocket:
         parsed_url = urlparse(self.address)
 
         # Overwrite scheme to be "ws"
-        parsed_url._replace(scheme="ws")
+        parsed_url = parsed_url._replace(scheme="ws")
 
         # Rebuild URL
         return urlunparse(list(parsed_url))
@@ -163,7 +163,10 @@ class Websocket:
         return self._ws.done() and not self._ws.cancelled()
     
     async def wait_until_connected(self, timeout: float = None):
-        return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
+        try:
+            return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
+        except asyncio.CancelledError:
+            raise RuntimeError("Websocket is stopped")
 
     def start(self):
         if self.is_started():
@@ -195,7 +198,6 @@ class Websocket:
                 # Automatically reconnect with exponential backoff
                 async for ws in reconnect(ws_factory):
                     # Once connected change the future to done
-                    print("connected!")
                     self._ws.set_result(ws)
 
                     try:
@@ -206,7 +208,6 @@ class Websocket:
                             except:
                                 logging.exception("Failed to handle incoming message: %s", message)
                     except websockets.ConnectionClosed:
-                        print()
                         # If the websocket was closed, try reconnecting
                         continue
                     finally:
@@ -284,15 +285,8 @@ class Websocket:
             waiter.set_result(response.response)
 
     async def execute(self, request_type: ClientRequestType, payload: dict | None) -> dict | None:
-        try:
-            # First make sure websocket is connected
-            ws = await self.wait_until_connected(2)
-        except asyncio.CancelledError:
-            # Websocket is stopped
-            raise RuntimeError("Websocket is stopped")
-        except asyncio.TimeoutError:
-            # Took too long to connect
-            raise
+        # First make sure websocket is connected
+        ws = await self.wait_until_connected(2)
 
         # Send request
         request = RequestBody(
@@ -316,6 +310,8 @@ class Websocket:
                     "Websocket did not respond in time to request, retransmitting and"
                     " waiting another 5 seconds: %r"
                 ), request)
+
+                ws = await self.wait_until_connected(2)
                 await ws.send(request_dump)
 
                 try:
