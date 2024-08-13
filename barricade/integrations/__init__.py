@@ -11,8 +11,8 @@ from .battlemetrics import BattlemetricsIntegration
 from .crcon import CRCONIntegration
 
 INTEGRATION_TYPES = (
-    BattlemetricsIntegration,
     CRCONIntegration,
+    BattlemetricsIntegration,
     CustomIntegration,
 )
 

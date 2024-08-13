@@ -246,6 +246,8 @@ class IntegrationManagementView(View):
         await interaction.followup.send(embed=get_success_embed(
             f"Configured {integration.meta.name} integration!"
         ))
+        await self.edit()
+
 
     # --- Button action handlers
 

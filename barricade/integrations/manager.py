@@ -1,3 +1,4 @@
+import logging
 from barricade import schemas
 from barricade.utils import Singleton
 
@@ -31,9 +32,11 @@ class IntegrationManager(Singleton):
             raise ValueError("An integration with ID %s already exists" % integration.config.id)
         
         self.__integrations[integration.config.id] = integration
+        logging.info("Added %r to manager", integration)
     
     def remove(self, integration_id: int):
         integration = self.__integrations.pop(integration_id, None)
         if not integration:
             raise ValueError("No integration found with ID %s" % integration_id)
+        logging.info("Removed %r from manager", integration)
     
