@@ -9,7 +9,6 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .community import Community
     from .player_ban import PlayerBan
-    from .web_token import WebToken
 
 class Integration(ModelBase):
     __tablename__ = "integrations"
