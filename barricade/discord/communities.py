@@ -1,7 +1,9 @@
-from discord import NotFound
+import asyncio
+from discord import Embed, ui
 from barricade import schemas
 from barricade.constants import DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID
 from barricade.discord.bot import bot
+from barricade.utils import safe_create_task
 
 def get_admin_roles():
     admin_role = bot.primary_guild.get_role(DISCORD_ADMIN_ROLE_ID)
@@ -53,3 +55,9 @@ def get_forward_channel(community: schemas.CommunityRef):
         return
     channel = guild.get_channel(community.forward_channel_id)
     return channel
+
+def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
+    channel = get_forward_channel(community)
+    if not channel:
+        return
+    safe_create_task(channel.send(*args, **kwargs))

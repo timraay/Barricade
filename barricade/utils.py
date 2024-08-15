@@ -1,4 +1,5 @@
 import asyncio
+from typing import Coroutine
 from cachetools import TTLCache
 from cachetools.keys import hashkey
 from functools import wraps
@@ -26,14 +27,15 @@ def async_ttl_cache(size: int, seconds: int):
         return wrapper
     return decorator
 
-def log_task_error(task: asyncio.Task, message: str = None):
-    def _task_inner_db(t: asyncio.Task):
-        if t.exception():
+def safe_create_task(coro: Coroutine, err_msg: str = None):
+    def _task_inner(t: asyncio.Task):
+        if exc := t.exception():
             logging.error(
-                message or "Unexpected error during task",
-                exc_info=t.exception()
+                err_msg or "Unexpected error during task",
+                exc_info=exc
             )
-    task.add_done_callback(_task_inner_db)
+    task = asyncio.create_task(coro)
+    task.add_done_callback(_task_inner)
     return task
 
 RE_PLAYER_STEAM_64_ID = re.compile(r"^\d{17}$")

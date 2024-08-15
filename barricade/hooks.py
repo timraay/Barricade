@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Callable, Coroutine, Any
 
 from barricade import schemas
-from barricade.utils import log_task_error
+from barricade.utils import log_task_error, safe_create_task
 
 class EventHooks(str, Enum):
     report_create = "report_create"
@@ -17,9 +17,9 @@ class EventHooks(str, Enum):
 
     def _invoke(self, *args):
         return [
-            log_task_error(
-                task=asyncio.create_task(hook(*args)),
-                message=f"Failed to invoke {self.name} hook {hook.__name__}"
+            safe_create_task(
+                coro=hook(*args),
+                err_msg=f"Failed to invoke {self.name} hook {hook.__name__}"
             ) for hook in self.get()
         ]
 

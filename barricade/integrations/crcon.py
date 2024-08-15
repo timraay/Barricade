@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from typing import TypedDict
 import logging
@@ -7,7 +7,10 @@ from aiohttp import ClientResponseError
 
 from barricade import schemas
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
+from barricade.crud.communities import get_community_by_id
 from barricade.db import session_factory
+from barricade.discord.communities import safe_send_to_community
+from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
 from barricade.exceptions import IntegrationValidationError
 from barricade.integrations.custom import CustomIntegration
@@ -98,6 +101,7 @@ class CRCONIntegration(CustomIntegration):
     async def synchronize(self):
         remote_bans = await self.get_blacklist_bans()
         async with session_factory.begin() as db:
+            community = await get_community_by_id(self.config.community_id)
             async for db_ban in get_bans_by_integration(db, self.config.id):
                 remote_ban = remote_bans.pop(db_ban.remote_id, None)
                 if not remote_ban:
@@ -110,8 +114,21 @@ class CRCONIntegration(CustomIntegration):
                         await expire_bans_of_player(_db, db_ban.player_id, db_ban.integration.community_id)
             
             for remote_ban in remote_bans.values():
-                logging.warn("Ban exists on the remote but not locally, removing: %r", remote_ban)
-                await self.remove_ban(remote_ban["id"])
+                if not remote_ban["is_active"]:
+                    continue
+
+                embed = get_danger_embed(
+                    "Found unrecognized ban on CRCON blacklist!",
+                    (
+                        f"-# Your Barricade blacklist contained [an active ban]({self.config.api_url.removesuffix('api')}#/blacklists) that Barricade does not recognize."
+                        " Please do not put any of your own bans on this blacklist.",
+                        "\n\n"
+                        "-# The ban has been expired. If you wish to restore it, move it to a different blacklist first. If this is a Barricade ban, feel free to ignore this."
+                    )
+                )
+                logging.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
+                await self.expire_ban(remote_ban.ban_id)
+                safe_send_to_community(community, embed=embed)
 
     # --- CRCON API wrappers
 
@@ -136,11 +153,11 @@ class CRCONIntegration(CustomIntegration):
         if not match:
             raise IntegrationValidationError('Unknown CRCON version "%s"' % version)
         version_numbers = [int(num) for num in match.groups()]
-        if (
-            version_numbers[0] < 10 or
-            (version_numbers[0] == 10 and version_numbers[1] <= 0)
-        ):
-            raise IntegrationValidationError('Oudated CRCON version')
+        # if (
+        #     version_numbers[0] < 10 or
+        #     (version_numbers[0] == 10 and version_numbers[1] <= 0)
+        # ):
+        #     raise IntegrationValidationError('Oudated CRCON version')
     
     async def create_blacklist(self, community: schemas.Community):
         resp = await self._make_request(
@@ -191,3 +208,12 @@ class CRCONIntegration(CustomIntegration):
 
             page += 1
         return records
+    
+    async def expire_ban(self, record_id: int):
+        await self._make_request(
+            "PUT", "/edit_blacklist_record",
+            data=dict(
+                record_id=record_id,
+                expires_at=datetime.now(tz=timezone.utc),
+            )
+        )
