@@ -14,18 +14,18 @@
 <img align="right" width="250" height="250" src="assets/icon.png">
 
 > [!IMPORTANT]
-> For any issues or feature requests, please [open an Issue](https://github.com/timraay/Barricade/issues) here on GitHub, or [ask in Discord](https://discord.gg/Pm5WfhB). Barricade staff cannot unban you, see the FAQ below on where to appeal.
+> For any issues or feature requests, please [open an Issue](https://github.com/timraay/Barricade/issues) here on GitHub, or [ask in Discord](https://discord.gg/bhAfvwJPWw). Barricade staff cannot unban you, see the FAQ below on where to appeal.
 
 The Hell Let Loose Barricade is a service by server admins for server admins, to protect their servers from cheaters and troublemakers through collaborative data sharing. Receive reports created by verified admins and apply bans with a single button press through seamless integration with your favorite admin tools.
 
-Only verified communities can use Barricade. Visit [the Server Hosting Discord](https://discord.gg/Pm5WfhB) to register your community.
+Only verified communities can use Barricade. Visit [the Server Hosting Discord](https://discord.gg/bhAfvwJPWw) to register your community.
 
 ## Setting up your community
 
 ### Prerequisites
 
 Before setting up your community to receive reports, make sure you have the following;
-- You are the owner of a registered community. You can register in [the Server Hosting Discord](https://discord.gg/Pm5WfhB).
+- You are the owner of a registered community. You can register in [the Server Hosting Discord](https://discord.gg/bhAfvwJPWw).
 - You have Manage Server rights on the Discord server you want to receive reports in.
 
 ### Steps
