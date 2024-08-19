@@ -31,8 +31,11 @@ class ReportsCog(commands.Cog):
                 db_community = db_admin.community
                 if not db_community:
                     raise access_denied_exc
+                db.expire_all()
+                db_community = await get_community_by_guild_id(db, guild_id=interaction.guild_id) # type: ignore
 
             else:
+                db.expire_all()
                 db_community = await get_community_by_guild_id(db, guild_id=interaction.guild_id) # type: ignore
                 if not db_community:
                     raise access_denied_exc
