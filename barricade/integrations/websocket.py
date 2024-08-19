@@ -136,7 +136,7 @@ class Websocket:
         self.token = token
 
         self._ws_task: asyncio.Task | None = None
-        # This future can have one of three states:
+        # This future can have one of four states:
         # - Pending: The websocket is trying to connect
         # - Cancelled: The websocket is/was disabled
         # - Exception: The connection was rejected

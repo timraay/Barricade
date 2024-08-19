@@ -156,8 +156,6 @@ class BattlemetricsIntegration(Integration):
         remote_bans = await self.get_ban_list_bans()
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.config.community_id)
-            if not db_community:
-                raise RuntimeError("Community could not be found")
             community = schemas.CommunityRef.model_validate(db_community)
 
             async for db_ban in get_bans_by_integration(db, self.config.id):

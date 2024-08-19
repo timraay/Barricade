@@ -43,7 +43,10 @@ class CommunitiesCog(commands.Cog):
                     "You need to be a community owner to do this!"
                 )
             
-            db_community = await get_community_by_id(db, db_owner.community.id)
+            community_id = db_owner.owned_community.id
+            
+            db.expire(db_owner)
+            db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
             view = IntegrationManagementView(community)
             await view.send(interaction)

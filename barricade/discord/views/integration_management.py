@@ -133,9 +133,12 @@ class IntegrationManagementView(View):
                 num_enabled += 1
 
             else:
+                value = f"{name}\n`Disabled` \\🔴"
+                if comment := self.comments.get(integration.config.id):
+                    value += f"\n-# {comment}"
                 embed.add_field(
                     name=f"{row+1}. {integration.meta.name}",
-                    value=f"{name}\n`Disabled` \\🔴\n{self.comments.get(integration.config.id, '')}",
+                    value=value,
                     inline=True
                 )
 

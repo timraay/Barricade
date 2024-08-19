@@ -104,7 +104,8 @@ class CRCONIntegration(CustomIntegration):
         
         remote_bans = await self.get_blacklist_bans()
         async with session_factory.begin() as db:
-            community = await get_community_by_id(db, self.config.community_id)
+            db_community = await get_community_by_id(db, self.config.community_id)
+            community = schemas.CommunityRef.model_validate(db_community)
             async for db_ban in get_bans_by_integration(db, self.config.id):
                 remote_ban = remote_bans.pop(db_ban.remote_id, None)
                 if not remote_ban:
@@ -131,7 +132,7 @@ class CRCONIntegration(CustomIntegration):
                 )
                 logging.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
                 await self.expire_ban(remote_ban["id"])
-                safe_send_to_community(schemas.CommunityRef.model_validate(community), embed=embed)
+                safe_send_to_community(community, embed=embed)
 
     # --- CRCON API wrappers
 

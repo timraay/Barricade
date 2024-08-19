@@ -9,10 +9,13 @@ from typing import Sequence
 
 from barricade import schemas
 from barricade.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
+from barricade.crud.communities import get_community_by_id
 from barricade.crud.integrations import create_integration_config, update_integration_config
 from barricade.db import session_factory
+from barricade.discord.communities import safe_send_to_community
+from barricade.discord.utils import get_danger_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import NotFoundError, AlreadyBannedError
+from barricade.exceptions import IntegrationValidationError, NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
 from barricade.utils import safe_create_task
@@ -108,11 +111,6 @@ class Integration(ABC):
 
         Updates and saves the config.
 
-        Parameters
-        ----------
-        db : AsyncSession
-            An asynchronous database session
-
         Returns
         -------
         models.Integration
@@ -149,6 +147,27 @@ class Integration(ABC):
 
             if not self.config.enabled:
                 logging.error("Wanted to synchronize %r but was unexpectedly disabled")
+                return
+            
+            async with session_factory() as db:
+                db_community = await get_community_by_id(db, self.config.community_id)
+                community = schemas.Community.model_validate(db_community)
+            
+            try:
+                await self.validate(community)
+            except Exception as e:
+                if isinstance(e, IntegrationValidationError):
+                    description = f"-# During validation we ran into the following issue:\n-# `{e}`"
+                else:
+                    description = f"-# During validation we ran into an unexpected issue. Please reach out to Barricade staff if this keeps reoccuring."
+                
+                safe_send_to_community(community, embed=get_danger_embed(
+                    f"Your {self.meta.name} integration was disabled!",
+                    description
+                ))
+                # We kind of have to pray that this doesn't fail for whatever reason.
+                # We can't await it, because we would cancel ourselves.
+                safe_create_task(self.disable())
                 return
 
             try:
