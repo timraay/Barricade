@@ -30,25 +30,21 @@ class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
     api_url: str = "https://api.battlemetrics.com"
 
-    integration_type: Literal[IntegrationType.BATTLEMETRICS] = IntegrationType.BATTLEMETRICS
-    banlist_id: Optional[str] = None
-
-class CRCONIntegrationConfigParams(IntegrationConfigParams):
-    id: int | None = None
-
-    integration_type: Literal[IntegrationType.COMMUNITY_RCON] = IntegrationType.COMMUNITY_RCON
-    organization_id: None = None
+    integration_type: Literal[IntegrationType.BATTLEMETRICS] = IntegrationType.BATTLEMETRICS # type: ignore
     banlist_id: Optional[str] = None
 
 class CustomIntegrationConfigParams(IntegrationConfigParams):
     id: int | None = None
 
-    integration_type: Literal[IntegrationType.CUSTOM] = IntegrationType.CUSTOM
-    organization_id: None = None
+    integration_type: Literal[IntegrationType.CUSTOM] = IntegrationType.CUSTOM # type: ignore
+    organization_id: None = None # type: ignore
     banlist_id: Optional[str] = None
 
+class CRCONIntegrationConfigParams(CustomIntegrationConfigParams):
+    integration_type: Literal[IntegrationType.COMMUNITY_RCON] = IntegrationType.COMMUNITY_RCON # type: ignore
+
 class SafeIntegrationConfig(SafeIntegrationConfigParams):
-    id: int
+    id: int # type: ignore
 
     def __eq__(self, value: object) -> bool:
         # Existing __eq__ only works consistently if both are explicitly the same class
@@ -56,16 +52,16 @@ class SafeIntegrationConfig(SafeIntegrationConfigParams):
             return self.model_dump() == value.model_dump()
         return super().__eq__(value)
 
-class IntegrationConfig(SafeIntegrationConfig, IntegrationConfigParams):
+class IntegrationConfig(SafeIntegrationConfig, IntegrationConfigParams): # type: ignore
     pass
 
-class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, IntegrationConfig):
+class BattlemetricsIntegrationConfig(BattlemetricsIntegrationConfigParams, IntegrationConfig): # type: ignore
     pass
 
-class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):
+class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig): # type: ignore
     pass
 
-class CustomIntegrationConfig(CustomIntegrationConfigParams, IntegrationConfig):
+class CustomIntegrationConfig(CustomIntegrationConfigParams, IntegrationConfig): # type: ignore
     pass
 
 
@@ -80,7 +76,7 @@ class _AdminBase(BaseModel):
 
     # Convert to str to avoid precision loss when sending via REST API
     @field_serializer('discord_id', when_used='json-unless-none')
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
 class _CommunityBase(BaseModel):
@@ -90,12 +86,13 @@ class _CommunityBase(BaseModel):
 
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
+    admin_role_id: Optional[int]
 
     @field_serializer(
             'forward_guild_id', 'forward_channel_id',
             when_used='json-unless-none'
     )
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
 class _PlayerBase(BaseModel):
@@ -108,7 +105,7 @@ class _ReportTokenBase(BaseModel):
     expires_at: datetime
 
     @field_serializer('admin_id', when_used='json-unless-none')
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
 class _ReportBase(BaseModel):
@@ -140,7 +137,7 @@ class _ReportMessageBase(BaseModel):
     message_id: int
     
     @field_serializer('message_id', when_used='json-unless-none')
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
 
@@ -161,7 +158,7 @@ class CommunityRef(_CommunityBase, _ModelFromAttributes):
             'owner_id',
             when_used='json-unless-none'
     )
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
     def __repr__(self) -> str:
@@ -223,7 +220,7 @@ class SafeCommunity(CommunityRef):
     integrations: list[SafeIntegrationConfig]
 
 class Community(SafeCommunity):
-    integrations: list[IntegrationConfig]
+    integrations: list[IntegrationConfig] # type: ignore
 
 class ReportTokenCreateParams(_ReportTokenBase):
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA)
@@ -244,7 +241,7 @@ class Report(ReportRef):
 class SafeReportWithToken(Report):
     token: SafeReportTokenRef
 class ReportWithToken(SafeReportWithToken):
-    token: ReportTokenRef
+    token: ReportTokenRef # type: ignore
 
 class ReportWithRelations(ReportWithToken):
     messages: list[ReportMessageRef]
@@ -258,7 +255,7 @@ class SafeCommunityWithRelations(SafeCommunity):
     tokens: list[ReportTokenRef]
     responses: list[Response]
 
-class CommunityWithRelations(Community, SafeCommunityWithRelations):
+class CommunityWithRelations(Community, SafeCommunityWithRelations): # type: ignore
     pass
 
 class Player(PlayerRef):
@@ -283,6 +280,7 @@ class CommunityCreateParams(CommunityEditParams):
     owner_name: str
     forward_guild_id: Optional[int] = None
     forward_channel_id: Optional[int] = None
+    admin_role_id: Optional[int] = None
 
 class PlayerCreateParams(_PlayerBase):
     pass
@@ -303,7 +301,7 @@ class ReportCreateParamsTokenless(ReportEditParams):
     admin_id: int
 
     @field_serializer('admin_id', when_used='json-unless-none')
-    def convert_large_int_to_str(value: int):
+    def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
 class ReportMessageCreateParams(_ReportMessageBase):
@@ -315,7 +313,7 @@ class ResponseCreateParams(_ResponseBase):
 class PendingResponse(_ResponseBase):
     player_report: PlayerReportRef
     community: CommunityRef
-    banned: Optional[bool] = None
+    banned: Optional[bool] = None # type: ignore
     reject_reason: Optional[ReportRejectReason] = None
 
 class PlayerBanCreateParams(_PlayerBanBase):

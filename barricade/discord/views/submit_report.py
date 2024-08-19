@@ -28,7 +28,8 @@ class GetSubmissionURLView(View):
                 raise CustomException("Only verified server admins can create reports!")
             
             # Update stored name
-            name = interaction.user.nick or interaction.user.display_name
+            user: discord.Member = interaction.user # type: ignore
+            name = user.nick or user.display_name
             if admin.name != name:
                 admin.name = name
 

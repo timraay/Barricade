@@ -12,14 +12,14 @@ from barricade.discord.communities import get_forward_channel
 from barricade.discord.reports import get_alert_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, NotFoundError,
+    IntegrationBanError, IntegrationCommandError, IntegrationFailureError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
 from barricade.integrations.integration import Integration, IntegrationMetaData
 from barricade.integrations.websocket import (
-    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType,
-    UnbanPlayersRequestPayload, Websocket, WebsocketRequestHandler
+    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, UnbanPlayersRequestConfigPayload,
+    UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
 )
 
 class IntegrationRequestHandler(WebsocketRequestHandler):
@@ -32,8 +32,11 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
     async def scan_players(self, payload: dict | None) -> dict | None:
         reported_player_ids: list[str] = []
 
+        player_ids: list[str] | None = payload.get("player_ids") if payload else None
+        if not player_ids:
+            raise WebsocketRequestException("Missing player_ids")
+
         # Go over all players to check whether they have been reported
-        player_ids: list[str] = payload["player_ids"]
         async with session_factory() as db:
             for player_id in player_ids:
                 # First look for a cached response, otherwise fetch from DB
@@ -77,7 +80,7 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if report.token.community_id == community_id:
                             message = await send_or_edit_report_management_message(report)
                         else:
-                            community = await get_community_by_id(db, community.id)
+                            db_community = await get_community_by_id(db, community.id)
                             responses = await get_pending_responses(db, community, report.players)
                             message = await send_or_edit_report_review_message(report, responses, community)
                         
@@ -100,8 +103,9 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                     else:
                         content = "A potentially dangerous player has joined your server!"
 
+                    reports_urls = list(zip(sorted_reports, (message.jump_url for message in messages)))
                     embed = get_alert_embed(
-                        report_urls=list(reversed(zip(sorted_reports, (message.jump_url for message in messages)))),
+                        reports_urls=list(reversed(reports_urls)),
                         player=player
                     )
 
@@ -201,19 +205,20 @@ class CustomIntegration(Integration):
         finally:
             if ban_ids:
                 async with session_factory.begin() as db:
-                    await self.set_multiple_ban_ids(db, ban_ids)
+                    await self.set_multiple_ban_ids(db, *ban_ids)
 
     async def bulk_unban_players(self, player_ids: Sequence[str]):
         async with session_factory() as db:
-            player_ids: dict[str, str] = {}
+            remote_ids: dict[str, str] = {}
             for player_id in player_ids:
                 ban = await self.get_ban(db, player_id)
-                player_ids[ban.remote_id] = player_id
+                if ban:
+                    remote_ids[ban.remote_id] = player_id
 
         successful_player_ids: list[str] = []
         try:
-            async for ban_id in self.remove_multiple_bans(ban_ids=player_ids.keys()):
-                successful_player_ids.append(player_ids[ban_id])
+            async for ban_id in self.remove_multiple_bans(ban_ids=list(remote_ids.keys())):
+                successful_player_ids.append(remote_ids[ban_id])
         finally:
             if successful_player_ids:
                 async with session_factory.begin() as db:
@@ -224,7 +229,7 @@ class CustomIntegration(Integration):
 
     # --- Websocket API wrappers
 
-    async def _make_request(self, method: str, endpoint: str, data: dict = None) -> dict:
+    async def _make_request(self, method: str, endpoint: str, data: dict | None = None) -> dict:
         """Make an API request.
 
         Parameters
@@ -255,14 +260,14 @@ class CustomIntegration(Integration):
             else:
                 kwargs = {"params": data}
 
-            async with session.request(method=method, url=url, **kwargs) as r:
+            async with session.request(method=method, url=url, **kwargs) as r: # type: ignore
                 r.raise_for_status()
                 content_type = r.headers.get('content-type', '')
 
                 if 'json' in content_type:
                     response = await r.json()
-                elif "text/html" in content_type:
-                    response = (await r.content.read()).decode()
+                # elif "text/html" in content_type:
+                #     response = (await r.content.read()).decode()
                 else:
                     raise Exception(f"Unsupported content type: {content_type}")
 
@@ -276,7 +281,7 @@ class CustomIntegration(Integration):
                     banlist_id=self.config.banlist_id,
                     reason="Banned via shared HLL Barricade report.",
                 )
-            ))
+            ).model_dump())
         except IntegrationCommandError as e:
             if e.response.get("error") != "Could not ban all players":
                 raise
@@ -293,17 +298,18 @@ class CustomIntegration(Integration):
             async for (player_id, ban_id) in self.add_multiple_bans(missing_player_ids, partial_retry=False):
                 yield player_id, ban_id
         else:
+            assert response is not None
             for player_id, ban_id in response["player_ids"]:
                 yield player_id, ban_id
 
     async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True):
         try:
             response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
-                ban_ids=ban_ids,
-                config=BanPlayersRequestConfigPayload(
+                ban_ids=list(ban_ids),
+                config=UnbanPlayersRequestConfigPayload(
                     banlist_id=self.config.banlist_id,
                 )
-            ))
+            ).model_dump())
         except IntegrationCommandError as e:
             if e.response.get("error") != "Could not unban all players":
                 raise
@@ -320,6 +326,7 @@ class CustomIntegration(Integration):
             async for ban_id in self.remove_multiple_bans(missing_ban_ids, partial_retry=False):
                 yield ban_id
         else:
+            assert response is not None
             for ban_id in response["ban_ids"]:
                 yield ban_id
 

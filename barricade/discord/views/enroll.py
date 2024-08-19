@@ -31,13 +31,13 @@ class EnrollView(View):
                 if admin.owned_community:
                     raise CustomException(
                         f"You are already registered as owner of {admin.community.name}!",
-                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}."
+                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}." # type: ignore
                     )
                 elif admin.community:
                     raise CustomException(
                         f"You are already an admin for {admin.community.name}!",
                         (
-                            f"Either resign using {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)} or"
+                            f"Either resign using {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)} or" # type: ignore
                             f" ask the existing owner to transfer ownership."
                         )
                     )
@@ -65,6 +65,11 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
             raise CustomException(
                 "Could not send application!",
                 "Channel not found. Reach out to an administrator."
+            )
+        if not isinstance(channel, discord.TextChannel):
+            raise CustomException(
+                "Could not send application!",
+                "Invalid channel configured. Reach out to an administrator."
             )
         
         params = schemas.CommunityCreateParams(
@@ -118,7 +123,7 @@ class EnrollAcceptView(View):
         self.add_item(self.button)
     
     async def accept_enrollment(self, interaction: Interaction):
-        content = interaction.message.embeds[0].fields[-1].value
+        content: str = interaction.message.embeds[0].fields[-1].value # type: ignore
         payload = content[8:-4] # Strip discord formatting
         params = schemas.CommunityCreateParams.model_validate_json(payload)
         

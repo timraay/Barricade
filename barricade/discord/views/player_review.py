@@ -41,7 +41,7 @@ class PlayerReportResponseButton(
         super().__init__(button)
     
     @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /):
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /): # type: ignore
         reject_reason = match["reject_reason"]
         if isinstance(reject_reason, str):
             reject_reason = ReportRejectReason[reject_reason]
@@ -80,15 +80,17 @@ class PlayerReportResponseButton(
         )
         
         async with session_factory() as db:
-            community = await get_community_by_id(db, self.community_id)
+            db_community = await get_community_by_id(db, self.community_id)
+            if not db_community:
+                raise CustomException("Community not found")
 
             # Make sure user has the Admin role
-            if not community.admin_role_id:
+            if not db_community.admin_role_id:
                 raise CustomException(
                     "You are not permitted to do that!",
-                    f"Ask <@{community.owner_id}> to configure an Admin role."
+                    f"Ask <@{db_community.owner_id}> to configure an Admin role."
                 )
-            if not discord.utils.get(interaction.user.roles, id=community.admin_role_id):
+            if not discord.utils.get(interaction.user.roles, id=db_community.admin_role_id): # type: ignore
                 raise CustomException(
                     "You are not permitted to do that!",
                     "You do not have this community's configured Admin role."
@@ -97,19 +99,21 @@ class PlayerReportResponseButton(
             # This will immediately commit
             db_prr = await set_report_response(db, prr)
 
-            players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players
+            db_players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players
+            community = schemas.CommunityRef.model_validate(db_prr.community)
+
             responses = {
                 player.id: schemas.PendingResponse(
                     pr_id=player.id,
-                    player_report=player,
+                    player_report=schemas.PlayerReportRef.model_validate(player),
                     community_id=db_prr.community_id,
-                    community=db_prr.community,
-                ) for player in players
+                    community=community,
+                ) for player in db_players
             }
             responses[prr.pr_id].banned = prr.banned
             responses[prr.pr_id].reject_reason = prr.reject_reason
 
-            if len(players) > 1 or players[0].id != prr.pr_id:
+            if len(db_players) > 1 or db_players[0].id != prr.pr_id:
                 # Load state of other reported players if needed
                 stmt = select(
                     models.PlayerReportResponse.pr_id,
@@ -120,7 +124,7 @@ class PlayerReportResponseButton(
                 ).where(
                     models.PlayerReportResponse.community_id == prr.community_id,
                     models.PlayerReport.id.in_(
-                        [player.id for player in players if player.id != prr.pr_id]
+                        [player.id for player in db_players if player.id != prr.pr_id]
                     )
                 )
                 result = await db.execute(stmt)
@@ -128,8 +132,9 @@ class PlayerReportResponseButton(
                     responses[row.pr_id].banned = row.banned
                     responses[row.pr_id].reject_reason = row.reject_reason
 
-            report = db_prr.player_report.report
-            await report.awaitable_attrs.token
+            db_report = db_prr.player_report.report
+            await db_report.awaitable_attrs.token
+            report = schemas.ReportWithToken.model_validate(db_report)
 
             stats: dict[int, schemas.ResponseStats] = {}
             for player in report.players:
@@ -142,11 +147,13 @@ class PlayerReportResponseButton(
     
     async def refresh_report_view(self, interaction: Interaction):
         async with session_factory() as db:
-            report = await get_report_by_id(db, self.report_id, load_token=True)
-            if not report:
+            db_report = await get_report_by_id(db, self.report_id, load_token=True)
+            if not db_report:
                 raise CustomException("Report with ID %s no longer exists!" % self.pr_id)
+            report = schemas.ReportWithToken.model_validate(db_report)
 
-            community = await get_community_by_id(db, self.community_id)
+            db_community = await get_community_by_id(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
 
             stats: dict[int, schemas.ResponseStats] = {}
             for player in report.players:
@@ -239,7 +246,7 @@ class PlayerReviewView(View):
     async def get_embed(
         report: schemas.ReportWithToken,
         responses: list[schemas.PendingResponse],
-        stats: dict[int, schemas.ResponseStats] = None
+        stats: dict[int, schemas.ResponseStats] | None = None
     ):
         embed = await get_report_embed(report, stats)
 

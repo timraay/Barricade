@@ -5,6 +5,7 @@ from discord import Interaction
 from discord import app_commands
 from discord.ext import commands
 
+from barricade import schemas
 from barricade.db import session_factory
 from barricade.constants import DISCORD_GUILD_ID
 from barricade.crud.communities import get_admin_by_id, get_community_by_id
@@ -36,22 +37,23 @@ class CommunitiesCog(commands.Cog):
     async def manage_integrations(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user owns a community
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
             
-            await owner.community.awaitable_attrs.integrations
-            view = IntegrationManagementView(owner.community)
+            db_community = await get_community_by_id(db, db_owner.community.id)
+            community = schemas.Community.model_validate(db_community)
+            view = IntegrationManagementView(community)
             await view.send(interaction)
 
     @config_group.command(name="reports-channel", description="Set a channel as your community's report feed")
     async def set_reports_channel(self, interaction: Interaction, channel: discord.TextChannel):
         async with session_factory() as db:
             # Make sure the user owns a community
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
@@ -82,14 +84,14 @@ class CommunitiesCog(commands.Cog):
     async def set_admin_role(self, interaction: Interaction, role: discord.Role):
         async with session_factory() as db:
             # Make sure the user owns a community
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
             
-            if owner.community.forward_guild_id:
-                guild = self.bot.get_guild(owner.community.forward_guild_id)
+            if db_owner.community.forward_guild_id:
+                guild = self.bot.get_guild(db_owner.community.forward_guild_id)
                 if guild and guild != role.guild:
                     raise CustomException(
                         "Role must be from the same server as your Reports feed!",
@@ -103,13 +105,14 @@ class CommunitiesCog(commands.Cog):
     async def view_community_config(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user owns a community
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
             
-            channel = get_forward_channel(owner.community)
+            community = schemas.CommunityRef.model_validate(db_owner.community)
+            channel = get_forward_channel(community)
 
             embed = discord.Embed()
             embed.add_field(
@@ -117,7 +120,7 @@ class CommunitiesCog(commands.Cog):
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-channel')}*"
                     f"\n> -# The text channel where you receive new reports."
-                    f"\n- {channel.mention if channel else 'Unknown' if owner.community.forward_channel_id else 'None'}"
+                    f"\n- {channel.mention if channel else 'Unknown' if db_owner.community.forward_channel_id else 'None'}"
                 ),
                 inline=True
             )
@@ -126,7 +129,7 @@ class CommunitiesCog(commands.Cog):
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'admin-role')}*"
                     f"\n> -# The role that can review reports."
-                    f"\n- {'<@&'+str(owner.community.admin_role_id)+'>' if owner.community.admin_role_id else 'None'}"
+                    f"\n- {'<@&'+str(db_owner.community.admin_role_id)+'>' if db_owner.community.admin_role_id else 'None'}"
                 ),
                 inline=True
             )
@@ -144,7 +147,8 @@ class CommunitiesCog(commands.Cog):
                 raise CustomException(
                     "This community does not exist!"
                 )
-        view = CommunityOverviewView(db_community, interaction.user)
+            _community = schemas.Community.model_validate(db_community)
+        view = CommunityOverviewView(_community, interaction.user) # type: ignore
         await view.send(interaction)
 
 async def setup(bot: 'Bot'):

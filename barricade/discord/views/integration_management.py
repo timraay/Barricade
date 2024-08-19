@@ -71,9 +71,9 @@ async def get_name_hyperlink(integration: Integration):
 
 
 class IntegrationManagementView(View):
-    def __init__(self, community: models.Community):
+    def __init__(self, community: schemas.Community):
         super().__init__(timeout=60*30)
-        self.community = community
+        self.community = schemas.Community.model_validate(community)
         self.comments: dict[int, str] = {}
         self.update_integrations()
 
@@ -82,9 +82,17 @@ class IntegrationManagementView(View):
         of integrations known to this view."""
         self.integrations: dict[int, Integration] = {}
         manager = IntegrationManager()
+
         for db_integration in self.community.integrations:
-            integration = manager.get_by_config(db_integration)
-            self.integrations[integration.config.id] = integration
+            config = schemas.IntegrationConfig.model_validate(db_integration)
+            
+            integration = manager.get_by_config(config)
+            if not integration:
+                logging.error("Integration with config %r should be registered by manager but was not" % config)
+                continue
+
+            assert integration.config.id is not None
+            self.integrations[integration.config.id] = integration # type: ignore
 
     # --- Sending and editing
 
@@ -96,6 +104,7 @@ class IntegrationManagementView(View):
         row = 0
         num_enabled = 0
         for row, integration in enumerate(self.integrations.values()):
+            assert integration.config.id is not None
             enabled = integration.config.enabled
             name = await get_name_hyperlink(integration)
 
@@ -107,10 +116,10 @@ class IntegrationManagementView(View):
                 disabled=True
             ))
 
-            if integration.config.enabled:
+            if enabled:
                 embed.add_field(
                     name=f"{row+1}. {integration.meta.name}",
-                    value=f"{name}\n**`Enabled`** \🟢",
+                    value=f"{name}\n**`Enabled`** \\🟢",
                     inline=True
                 )
             
@@ -126,7 +135,7 @@ class IntegrationManagementView(View):
             else:
                 embed.add_field(
                     name=f"{row+1}. {integration.meta.name}",
-                    value=f"{name}\n`Disabled` \🔴\n{self.comments.get(integration.config.id, '')}",
+                    value=f"{name}\n`Disabled` \\🔴\n{self.comments.get(integration.config.id, '')}",
                     inline=True
                 )
 
@@ -178,6 +187,7 @@ class IntegrationManagementView(View):
 
             for integration, validation in zip(to_validate, validations):
                 if isinstance(validation, Exception):
+                    assert integration.config.id is not None
                     if isinstance(validation, IntegrationValidationError):
                         await integration.disable()
                         self.comments[integration.config.id] = str(validation)
@@ -203,11 +213,12 @@ class IntegrationManagementView(View):
     # --- Utilities
 
     async def validate_ownership(self, db: AsyncSession, user_id: int):
-        community = await get_community_by_id(db, self.community.id)
-        if not community:
+        db_community = await get_community_by_id(db, self.community.id)
+        if not db_community:
             raise CustomException("This community no longer exists!")
+        community = schemas.Community.model_validate(db_community)
         
-        if self.community.id != community.id or self.community.owner_id != user_id:
+        if self.community.id != db_community.id or self.community.owner_id != user_id:
             raise CustomException("You need to be the community owner to do this!")
         
         self.community = community
@@ -239,6 +250,7 @@ class IntegrationManagementView(View):
                 await integration.update(db)
             else:
                 await integration.create()
+                assert integration.config.id is not None
             await db.refresh(self.community)
 
             self.comments.pop(integration.config.id, None)
@@ -263,11 +275,11 @@ class IntegrationManagementView(View):
 
         match integration_cls.meta.type:
             case IntegrationType.BATTLEMETRICS:
-                await configure_battlemetrics_integration(interaction, self, config)
+                await configure_battlemetrics_integration(interaction, self, config) # type: ignore
             case IntegrationType.COMMUNITY_RCON:
-                await configure_crcon_integration(interaction, self, config)
+                await configure_crcon_integration(interaction, self, config) # type: ignore
             case IntegrationType.CUSTOM:
-                await configure_custom_integration(interaction, self, config)
+                await configure_custom_integration(interaction, self, config) # type: ignore
             case _:
                 logging.error("Tried configuring integration with unknown type %s", integration_cls.meta.type)
                 raise CustomException("Unknown integration type \"%s\"" % integration_cls.meta.type)
@@ -276,6 +288,7 @@ class IntegrationManagementView(View):
         async with session_factory() as db:
             await self.validate_ownership(db, interaction.user.id)
             integration = self.get_integration(integration_id)
+            assert integration.config.id is not None
 
             # Validate config
             try:

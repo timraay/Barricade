@@ -70,6 +70,12 @@ async def _audit(*embeds: discord.Embed):
     if not DISCORD_AUDIT_CHANNEL_ID:
         return
     channel = bot.get_channel(DISCORD_AUDIT_CHANNEL_ID)
+    if not channel:
+        logging.warn("Tried to send to audit but channel with ID %s could not be found", DISCORD_AUDIT_CHANNEL_ID)
+        return
+    elif not isinstance(channel, discord.TextChannel):
+        logging.warn("Tried to send to audit but channel with ID %s is not a text channel", DISCORD_AUDIT_CHANNEL_ID)
+        return
 
     try:
         await channel.send(embeds=embeds)
@@ -79,7 +85,7 @@ async def _audit(*embeds: discord.Embed):
 
 async def audit_community_create(
     community: schemas.Community,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.green(),
@@ -97,7 +103,7 @@ async def audit_community_create(
 
 async def audit_community_edit(
     community: schemas.Community,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.yellow(),
@@ -116,7 +122,7 @@ async def audit_community_edit(
 async def audit_community_change_owner(
     old_owner: schemas.AdminRef,
     new_owner: schemas.Admin,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.yellow(),
@@ -126,7 +132,8 @@ async def audit_community_change_owner(
         name="Community ownership transferred",
     )
     await set_footer(embed, old_owner.discord_id, by)
-    add_community_field(embed, new_owner.community)
+    if new_owner.community:
+        add_community_field(embed, new_owner.community)
     await add_admin_field(embed, old_owner, "Old Owner")
     await add_admin_field(embed, new_owner, "New Owner")
 
@@ -135,7 +142,7 @@ async def audit_community_change_owner(
 async def audit_community_admin_add(
     community: schemas.CommunityRef,
     admin: schemas.AdminRef,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.green(),
@@ -153,7 +160,7 @@ async def audit_community_admin_add(
 async def audit_community_admin_remove(
     community: schemas.CommunityRef,
     admin: schemas.AdminRef,
-    by: str | discord.User = None,
+    by: str | discord.User | None = None,
 ):
     if isinstance(by, discord.User) and by.id == admin.discord_id:
         return await audit_community_admin_leave(community, admin)
@@ -190,7 +197,7 @@ async def audit_community_admin_leave(
 
 async def audit_token_create(
     token: schemas.ReportTokenRef,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.dark_blue(),
@@ -207,7 +214,7 @@ async def audit_token_create(
 
 async def audit_report_create(
     report: schemas.ReportWithToken,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blue(),
@@ -232,7 +239,7 @@ async def audit_report_create(
 
 async def audit_report_edit(
     report: schemas.ReportWithToken,
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blurple(),
@@ -258,7 +265,7 @@ async def audit_report_edit(
 async def audit_report_delete(
     report: schemas.ReportWithToken,
     stats: dict[int, schemas.ResponseStats],
-    by: str = None,
+    by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.dark_purple(),

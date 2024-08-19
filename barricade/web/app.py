@@ -7,6 +7,7 @@ from barricade import integrations
 from barricade.db import create_tables
 from barricade.discord import bot
 from barricade.constants import DISCORD_BOT_TOKEN, WEB_DOCS_VISIBLE
+from barricade.utils import safe_create_task
 from barricade.web import routers
 
 @asynccontextmanager
@@ -20,7 +21,7 @@ async def lifespan(app: FastAPI):
     try:
         # Start the Discord bot
         await bot.login(DISCORD_BOT_TOKEN)
-        asyncio.create_task(bot.connect(reconnect=True))
+        safe_create_task(bot.connect(reconnect=True))
         await bot.wait_until_ready()
         
         logging.info("Started bot %s (ID: %s)", bot.user.name, bot.user.id)

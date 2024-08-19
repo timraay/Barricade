@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, APIRouter, HTTPException, Security, status
 from barricade import schemas
 from barricade.crud import communities
 from barricade.exceptions import AlreadyExistsError, TooManyAdminsError, NotFoundError, AdminOwnsCommunityError
-from barricade.db import DatabaseDep
+from barricade.db import DatabaseDep, models
 from barricade.web import schemas as web_schemas
 from barricade.web.paginator import PaginatorDep, PaginatedResponse
 from barricade.web.routers.communities import AdminDep, AdminWithRelationsDep, CommunityDep
@@ -150,7 +150,7 @@ async def admin_join_own_community(
     db: DatabaseDep,
     admin: AdminDep,
     community: Annotated[
-        schemas.Community,
+        models.Community,
         Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
     ],
     token: Annotated[

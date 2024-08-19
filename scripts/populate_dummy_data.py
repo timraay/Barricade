@@ -3,7 +3,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from barricade import schemas
 from barricade.constants import DISCORD_BOT_TOKEN
-from barricade.crud import communities, reports, responses
+from barricade.crud import communities, reports
 from barricade.db import session_factory, engine, create_tables
 from barricade.discord import bot
 from barricade.enums import ReportReasonFlag
@@ -32,6 +32,7 @@ async def main():
             owner_id=425249228185534485,
             forward_guild_id=695232527123742742,
             forward_channel_id=729998051288285256,
+            admin_role_id=696127274549772359,
             owner_name="Abu"
         ))
         print("--", "Created community 1")

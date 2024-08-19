@@ -16,7 +16,7 @@ class SetupCog(commands.GroupCog, group_name='setup'):
 
     @app_commands.command(name="send-submission-start-message")
     async def create_submission_start_message(self, interaction: Interaction):
-        await interaction.channel.send(
+        await interaction.channel.send( # type: ignore
             content=(
                 "## Submitting a report"
                 "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
@@ -38,7 +38,7 @@ class SetupCog(commands.GroupCog, group_name='setup'):
 
     @app_commands.command(name="send-community-enroll-message")
     async def create_community_enroll_message(self, interaction: Interaction):
-        await interaction.channel.send(
+        await interaction.channel.send( # type: ignore
             content=(
                 "### Are you the owner of a Hell Let Loose server?"
                 "\nRequest to join the Bunker to claim the"

@@ -15,6 +15,7 @@ from barricade.enums import IntegrationType
 from barricade.exceptions import NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
+from barricade.utils import safe_create_task
 
 manager = IntegrationManager()
 
@@ -52,13 +53,13 @@ class Integration(ABC):
         
         async with session_factory.begin() as db:
             self.config.enabled = False
-            db_config = await create_integration_config(db, self.config)
+            db_config = await create_integration_config(db, self.config) # type: ignore
             self.config = db_config
             manager.add(self)
     
     @is_saved
     async def update(self, db: AsyncSession):
-        db_config = await update_integration_config(db, self.config)
+        db_config = await update_integration_config(db, self.config) # type: ignore
         self.config = db_config
         return db_config
 
@@ -88,7 +89,7 @@ class Integration(ABC):
                 self.start_connection()
 
                 if not self.task or self.task.done():
-                    self.task = asyncio.create_task(self._loop())
+                    self.task = safe_create_task(self._loop())
                 
                 return db_config
         except:
@@ -137,7 +138,7 @@ class Integration(ABC):
             self.start_connection()
             
             if self.task and self.task.done():
-                self.task = asyncio.create_task(self._loop())
+                self.task = safe_create_task(self._loop())
             
             raise
 
@@ -186,7 +187,7 @@ class Integration(ABC):
         """
         return await get_ban_by_player_and_integration(db,
             player_id=player_id,
-            integration_id=self.config.id,
+            integration_id=self.config.id, # type: ignore
         )
 
     @is_saved
@@ -214,7 +215,7 @@ class Integration(ABC):
         """
         ban = schemas.PlayerBanCreateParams(
             player_id=player_id,
-            integration_id=self.config.id,
+            integration_id=self.config.id, # type: ignore
             remote_id=ban_id,
         )
         try:
@@ -239,11 +240,11 @@ class Integration(ABC):
             ban IDs.
         """
         bans = [
-            schemas.PlayerBan(
+            schemas.PlayerBanCreateParams(
                 player_id=player_id,
-                integration_id=self.config.id,
+                integration_id=self.config.id, # type: ignore
                 remote_id=ban_id,
-            ).model_dump()
+            )
             for player_id, ban_id in playerids_banids
         ]
         await bulk_create_bans(db, bans)
@@ -287,7 +288,7 @@ class Integration(ABC):
             models.PlayerBan.integration_id==self.config.id,
         )
     
-    def get_ban_reason(self, community: schemas.Community) -> str:
+    def get_ban_reason(self, community: schemas.CommunityRef) -> str:
         return (
             "Banned via shared HLL Barricade report. Appeal"
             f" at {community.contact_url}"

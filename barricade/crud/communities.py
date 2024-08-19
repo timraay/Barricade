@@ -12,6 +12,7 @@ from barricade.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
 )
+from barricade.utils import safe_create_task
 
 async def get_all_admins(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
     """Retrieve all admins.
@@ -200,8 +201,8 @@ async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_rela
 
 async def create_new_community(
         db: AsyncSession,
-        community: schemas.CommunityCreateParams,
-        by: str = None,
+        params: schemas.CommunityCreateParams,
+        by: str | None = None,
 ):
     """Create a new community.
 
@@ -209,7 +210,7 @@ async def create_new_community(
     ----------
     db : AsyncSession
         An asyncronous database session
-    community : schemas.CommunityCreateParams
+    params : schemas.CommunityCreateParams
         Payload
 
     Returns
@@ -225,30 +226,30 @@ async def create_new_community(
         The owner already belongs to a community
     """
     # Look if a community with the same name already exists
-    if await get_community_by_name(db, community.name):
+    if await get_community_by_name(db, params.name):
         raise AlreadyExistsError("Name is already in use")
 
     # Look if the owner exists already
-    db_owner = await get_admin_by_id(db, community.owner_id)
+    db_owner = await get_admin_by_id(db, params.owner_id)
     if not db_owner:
         # If no record exists, create new Admin record
         # Add the community_id later once the Community is created
         owner = schemas.AdminCreateParams(
-            discord_id=community.owner_id,
+            discord_id=params.owner_id,
             community_id=None,
-            name=community.owner_name,
+            name=params.owner_name,
         )
         db_owner = await create_new_admin(db, owner)
     elif db_owner.community_id:
         # Owner is already part of a community
         raise AlreadyExistsError("Owner is already part of a community")
-    elif db_owner.name != community.owner_name:
+    elif db_owner.name != params.owner_name:
         # Update saved name of owner
-        db_owner.name = community.owner_name
+        db_owner.name = params.owner_name
     
     # Create the Community
     db_community = models.Community(
-        **community.model_dump(exclude={"owner_name", "owner_id"}),
+        **params.model_dump(exclude={"owner_name", "owner_id"}),
         owner=db_owner,
     )
     db.add(db_community)
@@ -261,12 +262,14 @@ async def create_new_community(
     await db.flush()
     await db_community.awaitable_attrs.owner
 
+    community = schemas.Community.model_validate(db_community)
+
     # Grant role to the owner
     await grant_owner_role(db_owner.discord_id)
 
-    asyncio.create_task(
+    safe_create_task(
         audit_community_create(
-            community=db_community,
+            community=community,
             by=by,
         )
     )
@@ -275,9 +278,9 @@ async def create_new_community(
 
 async def edit_community(
         db: AsyncSession,
-        community: models.Community,
+        db_community: models.Community,
         params: schemas.CommunityEditParams,
-        by: str = None,
+        by: str | None = None,
 ):
     """Edit an existing community.
 
@@ -285,7 +288,7 @@ async def edit_community(
     ----------
     db : AsyncSession
         An asyncronous database session
-    community : models.Community
+    db_community : models.Community
         The community to be edited
     params : schemas.CommunityEditParams
         Payload
@@ -302,27 +305,27 @@ async def edit_community(
     """
     # Look if a community with the same name already exists
     if other_community := await get_community_by_name(db, params.name):
-        if other_community.id != community.id:
+        if other_community.id != db_community.id:
             raise AlreadyExistsError("Name is already in use")
 
     for key, val in params:
-        setattr(community, key, val)
+        setattr(db_community, key, val)
 
     await db.flush()
     
-    asyncio.create_task(
+    safe_create_task(
         audit_community_edit(
-            community=community,
+            community=schemas.Community.model_validate(db_community),
             by=by,
         )
     )
 
-    return community
+    return db_community
 
 async def create_new_admin(
         db: AsyncSession,
-        admin: schemas.AdminCreateParams,
-        by: str = None,
+        params: schemas.AdminCreateParams,
+        by: str | None = None,
 ):
     """Create a new admin.
 
@@ -330,7 +333,7 @@ async def create_new_admin(
     ----------
     db : AsyncSession
         An asynchronous database session
-    admin : schemas.AdminCreateParams
+    params : schemas.AdminCreateParams
         Payload
 
     Returns
@@ -347,34 +350,38 @@ async def create_new_admin(
     NotFoundError
         No community with the given ID exists
     """
-    if await get_admin_by_id(db, admin.discord_id):
+    if await get_admin_by_id(db, params.discord_id):
         raise AlreadyExistsError
     
-    if admin.community_id:
-        db_community = await get_community_by_id(db, admin.community_id)
+    db_community = None
+    if params.community_id:
+        db_community = await get_community_by_id(db, params.community_id)
         if not db_community:
-            raise NotFoundError("Community does not exist")
+            raise NotFoundError("Community with ID %s does not exist" % params.community_id)
         elif len(db_community.admins) > MAX_ADMIN_LIMIT:
             # -1 to exclude owner, +1 to include the new admin
             raise TooManyAdminsError
 
-    db_admin = models.Admin(**admin.model_dump())
+    db_admin = models.Admin(**params.model_dump())
     db.add(db_admin)
     await db.flush()
     await db.refresh(db_admin)
 
-    if db_admin.community_id:
-        await grant_admin_role(admin.discord_id)
-        asyncio.create_task(
-            audit_community_admin_add(db_community, db_admin, by=by)
+
+    if db_community:
+        community = schemas.CommunityRef.model_validate(db_community)
+        admin = schemas.AdminRef.model_validate(db_admin)
+        await grant_admin_role(params.discord_id)
+        safe_create_task(
+            audit_community_admin_add(community, admin, by=by)
         )
 
     return db_admin
 
 async def admin_leave_community(
         db: AsyncSession,
-        admin: models.Admin,
-        by: str = None,
+        db_admin: models.Admin,
+        by: str | None = None,
 ):
     """Remove an admin from a community.
 
@@ -397,30 +404,35 @@ async def admin_leave_community(
     AdminOwnsCommunityError
         The admin is a community owner
     """
-    if admin.community_id is None:
-        raise NotFoundError
+    if db_admin.community_id is None:
+        raise NotFoundError("Admin with ID %s is not part of a community" % db_admin.discord_id)
     
-    community: models.Community = await admin.awaitable_attrs.community
+    db_community: models.Community = await db_admin.awaitable_attrs.community
+
+    admin = schemas.Admin.model_validate(db_admin)
+    community = schemas.CommunityRef.model_validate(db_community)
+    
     if community.owner_id == admin.discord_id:
         raise AdminOwnsCommunityError(admin)
+    
 
-    admin.community_id = None
+    db_admin.community_id = None
     await db.flush()
-    await db.refresh(admin)
+    await db.refresh(db_admin)
 
     await revoke_admin_roles(admin.discord_id, strict=False)
 
-    asyncio.create_task(
+    safe_create_task(
         audit_community_admin_remove(community, admin, by=by)
     )
 
-    return admin
+    return db_admin
 
 async def admin_join_community(
         db: AsyncSession,
-        admin: models.Admin,
-        community: models.Community,
-        by: str = None,
+        db_admin: models.Admin,
+        db_community: models.Community,
+        by: str | None = None,
 ):
     """Add an admin to a community.
 
@@ -428,9 +440,9 @@ async def admin_join_community(
     ----------
     db : AsyncSession
         An asynchronous database session
-    admin : models.Admin
+    db_admin : models.Admin
         The admin to add
-    community : models.Community
+    db_community : models.Community
         The community to add the admin to
 
     Returns
@@ -445,34 +457,37 @@ async def admin_join_community(
     TooManyAdminsError
         The community is not allowed any more admins
     """
-    if admin.community_id:
-        if admin.community_id == community.id:
-            return admin
+    if db_admin.community_id:
+        if db_admin.community_id == db_community.id:
+            return db_admin
         else:
-            raise AlreadyExistsError(admin)
+            raise AlreadyExistsError(db_admin)
         
-    if len(await community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
+    if len(await db_community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
         # -1 to exclude owner, +1 to include the new admin
         raise TooManyAdminsError
         
-    admin.community_id = community.id
+    db_admin.community_id = db_community.id
     await db.flush()
 
-    await grant_admin_role(admin.discord_id)
+    community = schemas.CommunityRef.model_validate(db_community)
+    admin = schemas.AdminRef.model_validate(db_admin)
 
-    await db.refresh(admin)
+    await grant_admin_role(db_admin.discord_id)
 
-    asyncio.create_task(
+    await db.refresh(db_admin)
+
+    safe_create_task(
         audit_community_admin_add(community, admin, by=by)
     )
 
-    return admin
+    return db_admin
 
 async def transfer_ownership(
         db: AsyncSession,
-        community: models.Community,
-        admin: models.Admin,
-        by: str = None,
+        community_id: int,
+        admin_id: int,
+        by: str | None = None,
 ):
     """Transfer ownership of a community.
 
@@ -480,10 +495,10 @@ async def transfer_ownership(
     ----------
     db : AsyncSession
         An asynchronous database session
-    community : models.Community
-        The community
-    admin : models.Admin
-        The admin to transfer ownership to
+    community_id : int
+        The ID of the community
+    admin_id : int
+        The ID of the admin to transfer ownership to
 
     Returns
     -------
@@ -492,25 +507,39 @@ async def transfer_ownership(
 
     Raises
     ------
+    NotFoundError
+        The community or admin are not found
     AdminNotAssociatedError
         The admin does not belong to the community
     """
-    if community.owner_id == admin.discord_id:
+    db_community = await get_community_by_id(db, community_id)
+    if not db_community:
+        raise NotFoundError("Community with ID %s does not exist" % community_id)
+    community = schemas.Community.model_validate(db_community)
+
+    db_admin = await get_admin_by_id(db, admin_id)
+    if not db_admin:
+        raise NotFoundError("Admin with ID %s does not exist" % admin_id)
+    admin = schemas.Admin.model_validate(db_admin)
+
+    if db_community.owner_id == db_admin.discord_id:
         return False
     
-    if admin.community_id != community.id:
+    if db_admin.community_id != db_community.id:
         raise AdminNotAssociatedError(admin, community)
     
-    old_owner: models.Admin = await community.awaitable_attrs.owner
-    community.owner_id = admin.discord_id
-    await db.flush()
-    await db.refresh(community)
-    await db.refresh(admin)
+    db_old_owner: models.Admin = await db_community.awaitable_attrs.owner
+    old_owner = schemas.AdminRef.model_validate(db_old_owner)
 
-    await grant_owner_role(community.owner_id)
+    db_community.owner_id = db_admin.discord_id
+    await db.flush()
+    await db.refresh(db_community)
+    await db.refresh(db_admin)
+
+    await grant_owner_role(db_community.owner_id)
     await grant_admin_role(old_owner.discord_id, strict=False)
 
-    asyncio.create_task(
+    safe_create_task(
         audit_community_change_owner(old_owner, admin, by=by)
     )
 

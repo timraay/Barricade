@@ -1,11 +1,11 @@
-import asyncio
-import discord
 from discord import ButtonStyle, Interaction, Role
 
-from barricade.crud.communities import get_admin_by_id
+from barricade import schemas
+from barricade.crud.communities import get_admin_by_id, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.audit import audit_community_edit
 from barricade.discord.utils import View, CallableButton, CustomException, get_question_embed, get_success_embed
+from barricade.utils import safe_create_task
 
 class AdminRoleConfirmationView(View):
     def __init__(self, role: Role):
@@ -23,21 +23,23 @@ class AdminRoleConfirmationView(View):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
-            owner.community.admin_role_id = self.role.id
+            db_owner.community.admin_role_id = self.role.id
 
             await interaction.response.edit_message(embed=get_success_embed(
-                title=f'Set "@{self.role.name}" as the new admin role for {owner.community.name}!'
+                title=f'Set "@{self.role.name}" as the new admin role for {db_owner.community.name}!'
             ), view=None)
 
-            await owner.community.awaitable_attrs.owner
-            asyncio.create_task(
+            db_community = await get_community_by_id(db, db_owner.community.id)
+            community = schemas.Community.model_validate(db_community)
+
+            safe_create_task(
                 audit_community_edit(
-                    community=owner.community,
-                    by=interaction.user,
+                    community=community,
+                    by=interaction.user, # type: ignore
                 )
             )

@@ -26,7 +26,7 @@ WEB_DOCS_VISIBLE = os.getenv('WEB_DOCS_VISIBLE', '1').strip().lower() not in (''
 
 # Load DB parameters from env
 DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_PORT = os.getenv('DB_PORT', 5432)
+DB_PORT = int(os.getenv('DB_PORT', 5432))
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 # Create DB url
@@ -43,7 +43,10 @@ DB_URL = URL.create(
 ACCESS_TOKEN_EXPIRE_DELTA = timedelta(days=1)
 
 # Discord bot's token
-DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+DISCORD_BOT_TOKEN: str = os.getenv('DISCORD_BOT_TOKEN') # type: ignore
+if not DISCORD_BOT_TOKEN:
+    raise Exception("DISCORD_BOT_TOKEN not set")
+
 # Path to directory with discord.py cogs
 DISCORD_COGS_PATH = Path("./barricade/discord/cogs")
 # Main Discord guild's ID
@@ -63,6 +66,7 @@ DISCORD_AUDIT_CHANNEL_ID = int(os.getenv('DISCORD_AUDIT_CHANNEL_ID') or 0)
 MAX_ADMIN_LIMIT = 3
 
 # The URL of the report form. Must end in a "?".
+# Note that this cannot just be changed. There's a lot of constants in barricade.urls as well.
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"
 # Time it takes for report tokens (used for submitting reports) to expire
 REPORT_TOKEN_EXPIRE_DELTA = timedelta(hours=1)

@@ -99,9 +99,12 @@ class CRCONIntegration(CustomIntegration):
             await self.validate_blacklist()
 
     async def synchronize(self):
+        if not self.config.id:
+            raise RuntimeError("Integration has not yet been saved")
+        
         remote_bans = await self.get_blacklist_bans()
         async with session_factory.begin() as db:
-            community = await get_community_by_id(self.config.community_id)
+            community = await get_community_by_id(db, self.config.community_id)
             async for db_ban in get_bans_by_integration(db, self.config.id):
                 remote_ban = remote_bans.pop(db_ban.remote_id, None)
                 if not remote_ban:
@@ -110,7 +113,7 @@ class CRCONIntegration(CustomIntegration):
                 elif not remote_ban["is_active"]:
                     # The player was unbanned, change responses of all reports where
                     # the player is banned
-                    with session_factory.begin() as _db:
+                    async with session_factory.begin() as _db:
                         await expire_bans_of_player(_db, db_ban.player_id, db_ban.integration.community_id)
             
             for remote_ban in remote_bans.values():
@@ -121,14 +124,14 @@ class CRCONIntegration(CustomIntegration):
                     "Found unrecognized ban on CRCON blacklist!",
                     (
                         f"-# Your Barricade blacklist contained [an active ban]({self.config.api_url.removesuffix('api')}#/blacklists) that Barricade does not recognize."
-                        " Please do not put any of your own bans on this blacklist.",
+                        " Please do not put any of your own bans on this blacklist."
                         "\n\n"
                         "-# The ban has been expired. If you wish to restore it, move it to a different blacklist first. If this is a Barricade ban, feel free to ignore this."
                     )
                 )
                 logging.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
-                await self.expire_ban(remote_ban.ban_id)
-                safe_send_to_community(community, embed=embed)
+                await self.expire_ban(remote_ban["id"])
+                safe_send_to_community(schemas.CommunityRef.model_validate(community), embed=embed)
 
     # --- CRCON API wrappers
 

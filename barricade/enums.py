@@ -84,7 +84,7 @@ class ReportReasonFlag(IntFlag):
                 else:
                     reasons.append(custom_msg)
             else:
-                reason = ReportReasonDetails[flag.name]
+                reason = ReportReasonDetails[flag.name] # type: ignore
                 if with_emoji:
                     reasons.append(f"{reason.value.emoji} {reason.value.pretty_name}")
                 else:

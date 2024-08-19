@@ -7,7 +7,7 @@ from barricade.db import models
 from barricade.enums import ReportRejectReason
 from barricade.hooks import EventHooks
 
-async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParams):
+async def set_report_response(db: AsyncSession, params: schemas.ResponseCreateParams):
     """Set or change a community's response to a reported player.
 
     This immediately commits the transaction.
@@ -16,7 +16,7 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
     ----------
     db : AsyncSession
         An asynchronous database session
-    prr : schemas.ResponseCreateParams
+    params : schemas.ResponseCreateParams
         Payload
 
     Returns
@@ -25,20 +25,20 @@ async def set_report_response(db: AsyncSession, prr: schemas.ResponseCreateParam
         The response
     """
     stmt = select(models.PlayerReportResponse).where(
-        models.PlayerReportResponse.pr_id == prr.pr_id,
-        models.PlayerReportResponse.community_id == prr.community_id,
+        models.PlayerReportResponse.pr_id == params.pr_id,
+        models.PlayerReportResponse.community_id == params.community_id,
     ).limit(1)
     db_prr = await db.scalar(stmt)
 
     if not db_prr:
-        db_prr = models.PlayerReportResponse(**prr.model_dump())
+        db_prr = models.PlayerReportResponse(**params.model_dump())
         db.add(db_prr)
         await db.commit()
         await db.refresh(db_prr)
 
     else:
-        db_prr.banned = prr.banned
-        db_prr.reject_reason = prr.reject_reason
+        db_prr.banned = params.banned
+        db_prr.reject_reason = params.reject_reason
         await db.commit()
 
     prr = schemas.Response.model_validate(db_prr)

@@ -69,7 +69,13 @@ async def delete_web_user(
         token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
         db: DatabaseDep
 ):
-    db_user = await get_user_by_username_dependency(db, user.username)
+    db_user = await get_user_by_username(db, user.username)
+    if db_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Web user does not exist"
+        )
+    
     await db.delete(db_user)
     await db.commit()
     return True
@@ -88,6 +94,7 @@ async def update_current_user_password(
         token: Annotated[models.WebToken, Depends(get_active_token_of_user)],
         db: DatabaseDep
 ):
+    assert token.user is not None
     if not verify_password(old_password, token.user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import hashlib
+import logging
 from typing import Annotated
 import uuid
 
@@ -194,11 +195,14 @@ async def get_active_token(
         await db.flush()
         raise credentials_exception
 
-    permitted_scopes = Scopes(
-        db_token.scopes
-        if db_token.scopes is not None
-        else db_token.user.scopes
-    )
+    if db_token.scopes is not None:
+        permitted_scopes = Scopes(db_token.scopes)
+    elif db_token.user is not None:
+        permitted_scopes = Scopes(db_token.user.scopes)
+    else:
+        logging.warn("No scopes found on token with ID %r", db_token.id)
+        permitted_scopes = Scopes(0)
+
     required_scopes = Scopes.from_list(security_scopes.scopes)
     missing_scopes = required_scopes ^ (required_scopes & permitted_scopes)
 
@@ -239,6 +243,7 @@ def get_active_token_community(load_relations: bool):
         token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token_of_community)],
         db: DatabaseDep,
     ):
+        assert token.community_id is not None
         result = await get_community_by_id(
             db,
             community_id=token.community_id,

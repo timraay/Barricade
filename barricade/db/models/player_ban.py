@@ -13,7 +13,7 @@ class PlayerBan(ModelBase):
     __tablename__ = "player_bans"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
+    player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
     integration_id: Mapped[int] = mapped_column(ForeignKey("integrations.id"))
 
     remote_id: Mapped[str]

@@ -25,13 +25,14 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             models.Community.id != report.token.community_id
         )
         result = await db.scalars(stmt)
-        communities = result.all()
+        db_communities = result.all()
 
-        if not communities:
+        if not db_communities:
             return
 
-        for community in communities:
+        for db_community in db_communities:
             try:
+                community = schemas.CommunityRef.model_validate(db_community)
                 if not get_forward_channel(community):
                     return
                 
@@ -46,7 +47,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
                 await send_or_edit_report_review_message(report, responses, community)
 
             except:
-                logging.exception("Failed to forward %r to %r", report, community)
+                logging.exception("Failed to forward %r to %r", report, db_community)
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_token_owner(report: schemas.ReportWithToken):
@@ -74,7 +75,9 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
                     await send_or_edit_report_management_message(report)
                 else:
                     # Create pending responses
-                    community = await get_community_by_id(db, message_data.community_id)
+                    db_community = await get_community_by_id(db, message_data.community_id)
+                    community = schemas.Community.model_validate(db_community)
+
                     responses = await get_pending_responses(db, community, report.players)
                     await send_or_edit_report_review_message(report, responses, community)
             except:
@@ -104,7 +107,7 @@ async def send_or_edit_report_review_message(
     report: schemas.ReportWithToken,
     responses: list[schemas.PendingResponse],
     community: schemas.CommunityRef,
-    stats: dict[str, schemas.ResponseStats] = None,
+    stats: dict[int, schemas.ResponseStats] | None = None,
 ):
     if report.token.community_id == community.id:
         # Since the community created the report, they should not
@@ -151,7 +154,7 @@ async def send_or_edit_message(
     embed: discord.Embed,
     view: discord.ui.View,
     content: str | None = None,
-    admin: schemas.AdminRef = None
+    admin: schemas.AdminRef | None = None
 ):
     db_message = await db.get(models.ReportMessage, (report.id, community.id))
     # If this was already sent before, try editing first

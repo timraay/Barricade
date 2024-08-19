@@ -91,8 +91,8 @@ async def get_own_community(
 async def edit_own_community(
         db: DatabaseDep,
         params: schemas.CommunityEditParams,
-        community: Annotated[
-            schemas.CommunityWithRelations,
+        db_community: Annotated[
+            models.Community,
             Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
         ],
         token: Annotated[
@@ -100,16 +100,16 @@ async def edit_own_community(
             Depends(get_active_token)
         ],
 ):
-    await communities.edit_community(db, community, params)
+    await communities.edit_community(db, db_community, params)
     await db.commit()
-    return community
+    return db_community
 
 @router.put("/me/owner")
 async def transfer_own_community_ownership(
         db: DatabaseDep,
         admin: AdminDep,
-        community: Annotated[
-            schemas.Community,
+        db_community: Annotated[
+            models.Community,
             Security(get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
         ],
         token: Annotated[
@@ -117,7 +117,7 @@ async def transfer_own_community_ownership(
             Depends(get_active_token)
         ],
 ) -> bool:
-    return await transfer_community_ownership(db, community, admin, token)
+    return await transfer_community_ownership(db, db_community, admin, token)
 
 
 @router.get("/{community_id}", response_model=schemas.SafeCommunityWithRelations)
@@ -156,7 +156,7 @@ async def transfer_community_ownership(
 ) -> bool:
     try:
         return await communities.transfer_ownership(
-            db, community, admin,
+            db, community.id, admin.discord_id,
             by=(token.user.username if token.user else "Web Token")
         )
     except AdminNotAssociatedError:

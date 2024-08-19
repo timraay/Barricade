@@ -30,7 +30,7 @@ class BaseConfirmationView(View, ABC):
     
     @staticmethod
     @abstractmethod
-    def get_button_style(self) -> ButtonStyle:
+    def get_button_style() -> ButtonStyle:
         pass
 
     @abstractmethod
@@ -44,7 +44,8 @@ class BaseConfirmationView(View, ABC):
 
 class AdminAddConfirmationView(BaseConfirmationView):
 
-    def get_button_style(self):
+    @staticmethod
+    def get_button_style():
         return ButtonStyle.green
     
     async def send(self, interaction: Interaction):
@@ -57,7 +58,7 @@ class AdminAddConfirmationView(BaseConfirmationView):
         async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, self.member.id)
             if admin:
-                await admin_join_community(db, admin, self.community, by=interaction.user)
+                await admin_join_community(db, admin, self.community, by=interaction.user) # type: ignore
             else:
                 await create_new_admin(db, schemas.AdminCreateParams(
                     discord_id=self.member.id,
@@ -71,7 +72,8 @@ class AdminAddConfirmationView(BaseConfirmationView):
 
 class AdminRemoveConfirmationView(BaseConfirmationView):
 
-    def get_button_style(self):
+    @staticmethod
+    def get_button_style():
         return ButtonStyle.green
     
     async def send(self, interaction: Interaction):
@@ -86,7 +88,7 @@ class AdminRemoveConfirmationView(BaseConfirmationView):
                 raise CustomException("Admin not found!")
             if admin.community_id != self.community.id:
                 raise CustomException("Admin is not part of your community!")
-            await admin_leave_community(db, admin, by=interaction.user)
+            await admin_leave_community(db, admin, by=interaction.user) # type: ignore
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"Removed {self.member_name} as admin for {self.community.name}!")
@@ -94,7 +96,8 @@ class AdminRemoveConfirmationView(BaseConfirmationView):
 
 class OwnershipTransferConfirmationView(BaseConfirmationView):
 
-    def get_button_style(self):
+    @staticmethod
+    def get_button_style():
         return ButtonStyle.red
     
     async def send(self, interaction: Interaction):
@@ -105,13 +108,9 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            admin = await get_admin_by_id(db, self.member.id)
-            if not admin:
-                raise CustomException("Admin not found!")
+            await transfer_ownership(db, self.member.id, self.community.id, by=interaction.user) # type: ignore
             community = await get_community_by_id(db, self.community.id)
-            if not community:
-                raise CustomException("Community not found!")
-            await transfer_ownership(db, community, admin, by=interaction.user)
+            assert community is not None
             self.community = community
 
         await interaction.response.edit_message(embed=get_success_embed(
@@ -120,7 +119,8 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
 
 class LeaveCommunityConfirmationView(BaseConfirmationView):
 
-    def get_button_style(self):
+    @staticmethod
+    def get_button_style():
         return ButtonStyle.red
     
     async def send(self, interaction: Interaction):
@@ -134,7 +134,7 @@ class LeaveCommunityConfirmationView(BaseConfirmationView):
             admin = await get_admin_by_id(db, self.member.id)
             if not admin:
                 raise CustomException("Admin not found!")
-            await admin_leave_community(db, admin, by=interaction.user)
+            await admin_leave_community(db, admin, by=interaction.user) # type: ignore
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"You left {self.community.name}!")

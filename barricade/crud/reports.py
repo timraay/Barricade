@@ -12,6 +12,7 @@ from barricade.discord.audit import audit_report_create, audit_report_delete, au
 from barricade.discord.reports import get_report_embed, get_report_channel
 from barricade.exceptions import NotFoundError, AlreadyExistsError
 from barricade.hooks import EventHooks
+from barricade.utils import safe_create_task
 
 async def get_token_by_value(db: AsyncSession, token_value: str):
     """Look up a token by its value.
@@ -36,8 +37,8 @@ async def get_token_by_value(db: AsyncSession, token_value: str):
 
 async def create_token(
         db: AsyncSession,
-        token: schemas.ReportTokenCreateParams,
-        by: str = None,
+        params: schemas.ReportTokenCreateParams,
+        by: str | None = None,
 ):
     """Create a new token.
 
@@ -62,24 +63,26 @@ async def create_token(
     AlreadyExistsError
         The admin's community differs from the given community ID
     """
-    if token.expires_at < datetime.now(tz=timezone.utc):
+    if params.expires_at < datetime.now(tz=timezone.utc):
         raise ValueError("Token would already be expired")
     
-    admin = await db.get(models.Admin, token.admin_id)
+    admin = await db.get(models.Admin, params.admin_id)
     if not admin:
-        raise NotFoundError("No admin with ID %s" % token.admin_id)
-    if admin.community_id != token.community_id:
-        raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, token.community_id))
+        raise NotFoundError("No admin with ID %s" % params.admin_id)
+    if admin.community_id != params.community_id:
+        raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
 
     db_token = models.ReportToken(
-        **token.model_dump()
+        **params.model_dump()
     )
     db.add(db_token)
     await db.flush()
     await db.refresh(db_token)
 
-    asyncio.create_task(
-        audit_token_create(db_token, by=by)
+    token = schemas.ReportTokenRef.model_validate(db_token)
+
+    safe_create_task(
+        audit_token_create(token, by=by)
     )
 
     return db_token
@@ -88,7 +91,7 @@ async def create_token(
 
 async def get_all_reports(
         db: AsyncSession,
-        community_id: int = None,
+        community_id: int | None = None,
         load_token: bool = False,
         limit: int = 100,
         offset: int = 0
@@ -192,8 +195,8 @@ async def is_player_reported(db: AsyncSession, player_id: str):
 
 async def create_report(
         db: AsyncSession,
-        report: schemas.ReportCreateParams,
-        by: str = None,
+        params: schemas.ReportCreateParams,
+        by: str | None = None,
 ):
     """Create a new report.
 
@@ -212,14 +215,14 @@ async def create_report(
     Report
         The report model
     """
-    report_payload = report.model_dump(exclude={"token_id", "players"})
+    report_payload = params.model_dump(exclude={"token_id", "players"})
     report_payload.update({
-        "id": report.token_id,
+        "id": params.token_id,
         "message_id": 0
     })
 
     db_players = []
-    for player in report.players:
+    for player in params.players:
         # This flushes, and since we don't want a partially initialized report
         # flushed, we do this first.
         db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
@@ -230,7 +233,7 @@ async def create_report(
         # player.bm_rcon_url = db_player.bm_rcon_url
 
     db_report = models.Report(**report_payload)
-    for player, db_player in zip(report.players, db_players):
+    for player, db_player in zip(params.players, db_players):
         models.PlayerReport(
             report=db_report,
             player=db_player,
@@ -243,17 +246,18 @@ async def create_report(
     db_report = await get_report_by_id(db, db_report.id, load_token=True)
     if not db_report:
         raise RuntimeError("Report no longer exists")
-    
-    embed = await get_report_embed(db_report)
+
+    report = schemas.ReportWithToken.model_validate(db_report)
+
+    embed = await get_report_embed(report)
     channel = get_report_channel()
     message = await channel.send(embed=embed)
     db_report.message_id = message.id
 
-    report_with_token = schemas.ReportWithToken.model_validate(db_report)
     await db.commit()
-    EventHooks.invoke_report_create(report_with_token)
-    asyncio.create_task(
-        audit_report_create(report_with_token, by=by)
+    EventHooks.invoke_report_create(report)
+    safe_create_task(
+        audit_report_create(report, by=by)
     )
 
     return db_report
@@ -261,7 +265,7 @@ async def create_report(
 async def edit_report(
         db: AsyncSession,
         report: schemas.ReportCreateParams,
-        by: str = None,
+        by: str | None = None,
 ):
     db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
@@ -314,7 +318,7 @@ async def edit_report(
     if (new_report != old_report):
         # Only invoke if something actually changed
         EventHooks.invoke_report_edit(new_report, old_report)
-        asyncio.create_task(
+        safe_create_task(
             audit_report_edit(new_report, by=by)
         )
 
@@ -323,7 +327,7 @@ async def edit_report(
 async def delete_report(
         db: AsyncSession,
         report_id: int,
-        by: str = None,
+        by: str | None = None,
 ):
     # Retrieve report
     db_report = await get_report_by_id(db, report_id, load_relations=True)
@@ -332,7 +336,8 @@ async def delete_report(
     
     # Retrieve stats for auditing
     stats: dict[int, schemas.ResponseStats] = {}
-    for pr in db_report.players:
+    for db_pr in db_report.players:
+        pr = schemas.PlayerReportRef.model_validate(db_pr)
         stats[pr.id] = await get_response_stats(db, pr)
 
     # Delete it
@@ -342,7 +347,7 @@ async def delete_report(
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
     EventHooks.invoke_report_delete(report)
-    asyncio.create_task(
+    safe_create_task(
         audit_report_delete(report, stats, by=by)
     )
 

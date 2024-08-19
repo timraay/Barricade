@@ -1,6 +1,6 @@
 from fastapi import Request, Query, Depends
 from pydantic import BaseModel, AnyHttpUrl
-from typing import Annotated, Generic, TypeVar, Optional
+from typing import Annotated, Generic, Sequence, TypeVar, Optional
 
 class PaginatedResponseLinks(BaseModel):
     prev: Optional[AnyHttpUrl] = None
@@ -22,7 +22,7 @@ class PaginatorParams:
         self.offset = offset
         self.limit = limit
 
-    def _get_prev_url(self, items: list[M]):
+    def _get_prev_url(self, items: Sequence[M]):
         if self.offset == 0:
             return None
 
@@ -33,7 +33,7 @@ class PaginatorParams:
             limit=limit
         ))
 
-    def _get_next_url(self, items: list[M]):
+    def _get_next_url(self, items: Sequence[M]):
         if len(items) < self.limit:
             return None
         else:
@@ -42,13 +42,14 @@ class PaginatorParams:
                 limit=self.limit
             ))
 
-    def paginate(self, items: list[M]):
+    def paginate(self, items: Sequence[M]):
         return PaginatedResponse(
             limit=self.limit,
-            items=items,
+            items=list(items),
             links=PaginatedResponseLinks(
-                prev=self._get_prev_url(items),
-                next=self._get_next_url(items),
+                # Let pydantic convert these
+                prev=self._get_prev_url(items), # type: ignore
+                next=self._get_next_url(items), # type: ignore
             )
         )
 

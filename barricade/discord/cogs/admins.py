@@ -33,7 +33,7 @@ class AdminsCog(commands.Cog):
         if member.guild.id != DISCORD_GUILD_ID:
             return
         
-        with session_factory() as db:
+        async with session_factory() as db:
             admin = await get_admin_by_id(db, discord_id=member.id)
             # Return if member is not an admin of any community
             if not admin or not admin.community:
@@ -71,7 +71,7 @@ class AdminsCog(commands.Cog):
                         f"{esc_md(user.nick or user.display_name)} is already part of another community!",
                         (
                             "Ask them to leave their current community first by using the"
-                           f" {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
+                           f" {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}" # type: ignore
                            " command."
                         )
                     )
@@ -105,8 +105,8 @@ class AdminsCog(commands.Cog):
                 raise CustomException(
                     f"You cannot remove yourself from your own community!",
                     (
-                       f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)} to"
-                       f" transfer ownership, then {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}"
+                       f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)} to" # type: ignore
+                       f" transfer ownership, then {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)}" # type: ignore
                         " to leave."
                     )
                 )
@@ -145,7 +145,7 @@ class AdminsCog(commands.Cog):
                 raise CustomException(
                     f"{esc_md(user.nick or user.display_name)} is not part of {esc_md(owner.community.name)}!",
                     (
-                        f"Use {await get_command_mention(interaction.client.tree, 'add-admin', guild_only=True)}"
+                        f"Use {await get_command_mention(interaction.client.tree, 'add-admin', guild_only=True)}" # type: ignore
                         " first to add them to your community, before transfering ownership to them."
                     )
                 )
@@ -172,12 +172,12 @@ class AdminsCog(commands.Cog):
                 raise CustomException(
                     "You must transfer ownership first!",
                     (
-                        f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)}"
+                        f"Use {await get_command_mention(interaction.client.tree, 'transfer-ownership', guild_only=True)}" # type: ignore
                         " to transfer ownership to another community admin."
                     )
                 )
             
-            view = LeaveCommunityConfirmationView(admin.community, interaction.user)
+            view = LeaveCommunityConfirmationView(admin.community, interaction.user) # type: ignore
             await view.send(interaction)
     
 async def setup(bot: 'Bot'):

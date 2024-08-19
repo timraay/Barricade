@@ -11,13 +11,9 @@ from barricade import schemas
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_community_responses_to_report
 from barricade.db import models
-from barricade.db.utils import compile_query
 from barricade.discord import bot
-from barricade.discord.reports import get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.exceptions import AlreadyExistsError
-from barricade.forwarding import delete_private_report_messages
-from barricade.hooks import EventHooks
 
 async def get_ban_by_id(db: AsyncSession, ban_id: int, load_relations: bool = False):
     """Look up a ban by its ID.
@@ -165,13 +161,17 @@ async def expire_bans_of_player(db: AsyncSession, player_id: str, community_id: 
         )
         db_messages = await db.scalars(stmt)
         for db_message in db_messages:
-            db_report = await get_report_by_id(db_message.report_id, load_token=True)
-            db_responses = await get_community_responses_to_report(db, db_report, community_id)
-
+            db_report = await get_report_by_id(db, db_message.report_id, load_token=True)
             report = schemas.ReportWithToken.model_validate(db_report)
-            
-            view = PlayerReviewView(db_responses)
-            embed = await view.get_embed(report, db_responses)
+
+            db_responses = await get_community_responses_to_report(db, report, community_id)
+            responses = [
+                schemas.PendingResponse.model_validate(db_response)
+                for db_response in db_responses
+            ]
+
+            view = PlayerReviewView(responses)
+            embed = await view.get_embed(report, responses)
 
             try:
                 message = bot.get_partial_message(db_message.channel_id, db_message.message_id)

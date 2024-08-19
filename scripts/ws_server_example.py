@@ -43,8 +43,8 @@ class BarricadeConnectionManager:
         finally:
             self.disconnect(ws)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, ws: 'BarricadeWebSocket'):
+        self.active_connections.remove(ws)
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
@@ -122,8 +122,9 @@ class BarricadeWebSocket:
         
         # Set response
         if response.failed:
+            response_data = response.response or {}
             waiter.set_exception(
-                BarricadeRequestError(response.response.get("error", ""))
+                BarricadeRequestError(response_data.get("error", ""))
             )
         else:
             waiter.set_result(response.response)

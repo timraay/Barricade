@@ -5,7 +5,7 @@ from barricade.web.schemas import WebUserCreateParams
 from barricade.web.scopes import Scopes
 from barricade.web.security import create_user
 
-async def main(username: str = None, password: str = None):
+async def main(username: str | None = None, password: str | None = None):
     username = username or input("Username: ")
     password = password or input("Password: ")
 

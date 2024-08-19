@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from typing import Literal, overload
 
 import discord
 from discord.ext import commands
@@ -71,7 +72,16 @@ class Bot(commands.Bot):
         else:
             return await self.fetch_user(user_id)
     
-    async def get_or_fetch_member(self, member_id: int, strict: bool = True):
+    @overload
+    async def get_or_fetch_member(self, member_id: int) -> discord.Member: ...
+    @overload
+    async def get_or_fetch_member(self, member_id: int, strict: Literal[True]) -> discord.Member: ...
+    @overload
+    async def get_or_fetch_member(self, member_id: int, strict: Literal[False]) -> discord.Member | None: ...
+    @overload
+    async def get_or_fetch_member(self, member_id: int, strict: bool = True) -> discord.Member | None: ...
+
+    async def get_or_fetch_member(self, member_id: int, strict: bool = True) -> discord.Member | None:
         guild = self.primary_guild
         member = guild.get_member(member_id)
         if member:
@@ -91,7 +101,7 @@ class Bot(commands.Bot):
         await message.delete()
 
 def command_prefix(bot: Bot, message: discord.Message):
-    return bot.user.mention + " "
+    return bot.user.mention + " " # type: ignore
 
 bot = Bot(
     intents=discord.Intents.default(),
@@ -105,7 +115,7 @@ async def on_interaction_error(interaction: discord.Interaction, error: Exceptio
 
 @bot.command()
 @commands.is_owner()
-async def reload(ctx: commands.Context, cog_name: str = None):
+async def reload(ctx: commands.Context, cog_name: str | None = None):
     async def reload_cog(ctx: commands.Context, cog_name):
         try:
             await bot.reload_extension(f"cogs.{cog_name}")

@@ -1,11 +1,12 @@
-import asyncio
 import discord
 from discord import ButtonStyle, Interaction, TextChannel
 
+from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
 from barricade.db import session_factory
 from barricade.discord.audit import audit_community_edit
 from barricade.discord.utils import View, CallableButton, CustomException, get_question_embed, get_success_embed
+from barricade.utils import safe_create_task
 
 class ReportChannelConfirmationView(View):
     def __init__(self, channel: TextChannel):
@@ -46,9 +47,11 @@ class ReportChannelConfirmationView(View):
             ), view=None)
 
             await owner.community.awaitable_attrs.owner
-            asyncio.create_task(
+            community = schemas.Community.model_validate(owner.community)
+
+            safe_create_task(
                 audit_community_edit(
-                    community=owner.community,
-                    by=interaction.user,
+                    community=community,
+                    by=interaction.user, # type: ignore
                 )
             )

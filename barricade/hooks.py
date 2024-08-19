@@ -1,10 +1,9 @@
-import asyncio
 from collections import defaultdict
 from enum import Enum
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine
 
 from barricade import schemas
-from barricade.utils import log_task_error, safe_create_task
+from barricade.utils import safe_create_task
 
 class EventHooks(str, Enum):
     report_create = "report_create"
@@ -13,7 +12,7 @@ class EventHooks(str, Enum):
     player_ban = "player_ban"
     player_unban = "player_unban"
 
-    __hooks__: dict['EventHooks', list[Callable[[Any], Coroutine]]] = defaultdict(list)
+    __hooks__: dict['EventHooks', list[Callable[..., Coroutine]]] = defaultdict(list)
 
     def _invoke(self, *args):
         return [
@@ -26,7 +25,7 @@ class EventHooks(str, Enum):
     def get(self):
         return EventHooks.__hooks__[self]
     
-    def register(self, func: Callable[[Any], Coroutine]):
+    def register(self, func: Callable[..., Coroutine]):
         self.get().append(func)
         return func
 

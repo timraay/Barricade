@@ -65,7 +65,7 @@ async def create_report(
         )
     
     db_token = await reports.create_token(db,
-        token=schemas.ReportTokenCreateParams(
+        params=schemas.ReportTokenCreateParams(
             admin_id=db_admin.discord_id,
             community_id=db_admin.community_id,
         ),
@@ -73,7 +73,7 @@ async def create_report(
     )
 
     return await reports.create_report(db,
-        report=schemas.ReportCreateParams(
+        params=schemas.ReportCreateParams(
             **report.model_dump(exclude={"admin_id"}),
             token_id=db_token.id,
         ),
@@ -210,7 +210,7 @@ async def delete_report(
         )
 
 @router.get("/communities/me/reports", response_model=PaginatedResponse[schemas.Report])
-async def get_reports(
+async def get_own_reports(
         db: DatabaseDep,
         paginator: PaginatorDep,
         token: Annotated[

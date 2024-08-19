@@ -1,5 +1,4 @@
-import asyncio
-from discord import Embed, ui
+import discord
 from barricade import schemas
 from barricade.constants import DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID
 from barricade.discord.bot import bot
@@ -49,11 +48,17 @@ async def revoke_admin_roles(user_id: int, strict: bool = True):
     await user.remove_roles(admin_role, owner_role)
     return True
 
-def get_forward_channel(community: schemas.CommunityRef):
+def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    if not community.forward_guild_id or not community.forward_channel_id:
+        return
+    
     guild = bot.get_guild(community.forward_guild_id)
     if not guild:
         return
+    
     channel = guild.get_channel(community.forward_channel_id)
+    if channel and not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Forward channel %r is not a TextChannel" % channel)
     return channel
 
 def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):

@@ -5,7 +5,7 @@ import inspect
 import json
 import logging
 import random
-from typing import AsyncIterator, Awaitable, Callable, Coroutine
+from typing import AsyncIterator, Awaitable, Callable
 import pydantic
 import websockets
 import itertools
@@ -43,7 +43,7 @@ class ResponseBody(pydantic.BaseModel):
     failed: bool = False
 
 class UnbanPlayersRequestConfigPayload(pydantic.BaseModel):
-    banlist_id: str
+    banlist_id: str | None
 class BanPlayersRequestConfigPayload(UnbanPlayersRequestConfigPayload):
     reason: str
 
@@ -115,6 +115,9 @@ async def reconnect(ws_factory: websockets.legacy.client.Connect) -> AsyncIterat
             # Connection succeeded - reset backoff delay
             backoff_delay = BACKOFF_MIN
 
+class WebsocketRequestException(Exception):
+    pass
+
 class WebsocketRequestHandler:
     def __init__(self, ws: 'Websocket'):
         self.ws = ws
@@ -126,13 +129,13 @@ class Websocket:
     def __init__(
         self,
         address: str,
-        token: str = None,
+        token: str | None = None,
         request_handler_factory: Callable[['Websocket'], WebsocketRequestHandler] = WebsocketRequestHandler,
     ):
         self.address = address
         self.token = token
 
-        self._ws_task: asyncio.Task = None
+        self._ws_task: asyncio.Task | None = None
         # This future can have one of three states:
         # - Pending: The websocket is trying to connect
         # - Cancelled: The websocket is/was disabled
@@ -162,7 +165,7 @@ class Websocket:
     def is_connected(self):
         return self._ws.done() and not self._ws.cancelled()
     
-    async def wait_until_connected(self, timeout: float = None):
+    async def wait_until_connected(self, timeout: float | None = None):
         try:
             return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
         except asyncio.CancelledError:
@@ -175,7 +178,7 @@ class Websocket:
         self._ws_task = asyncio.create_task(self._ws_loop())
         self._ws = asyncio.Future()
     
-    def stop(self) -> bool:
+    def stop(self):
         if self._ws_task:
             self._ws_task.cancel()
             self._ws_task = None
@@ -222,7 +225,7 @@ class Websocket:
             if not self._ws.done():
                 self._ws.cancel()
 
-    async def handle_message(self, message: str):
+    async def handle_message(self, message: str | bytes):
         content = json.loads(message)
         try:
             request = content["request"]
@@ -240,7 +243,6 @@ class Websocket:
             return
 
     async def handle_request(self, request: RequestBody):
-        print("New request: %r" % request)
         handler: Callable[[dict | None], Awaitable[dict | None]] | None
         handler = getattr(self.request_handler, request.request.value, None)
         if not inspect.iscoroutinefunction(handler):
@@ -252,6 +254,8 @@ class Websocket:
             except NotImplementedError:
                 logging.warning('Missing implementation for command %s', request.request)
                 response = request.response_error("No such command")
+            except WebsocketRequestException as e:
+                response = request.response_error(str(e))
             except Exception as e:
                 logging.exception("Unexpected error while handling %r", request)
                 response = request.response_error(str(e))
@@ -274,15 +278,16 @@ class Websocket:
             return
         
         # Set response
+        response_body: dict = response.response # type: ignore
         if response.failed:
             waiter.set_exception(
                 IntegrationCommandError(
-                    response.response,
-                    response.response.get("error", ""),
+                    response_body,
+                    response_body.get("error", ""),
                 )
             )
         else:
-            waiter.set_result(response.response)
+            waiter.set_result(response_body)
 
     async def execute(self, request_type: ClientRequestType, payload: dict | None) -> dict | None:
         # First make sure websocket is connected

@@ -65,7 +65,7 @@ class ReportPaginator(View):
 
             self.page = page
             report = self.reports[page]
-            missing_stats = {pr for pr in report.players if pr.id not in self.stats}
+            missing_stats = [pr for pr in report.players if pr.id not in self.stats]
             
             # Get default view
             if report.token.community_id == self.community.id:
@@ -77,7 +77,10 @@ class ReportPaginator(View):
                 async with session_factory() as db:
                     # Load responses
                     db_responses = await get_community_responses_to_report(db, report, self.community.id)
-                    responses = self.get_pending_responses(db_responses)
+                    responses = self.get_pending_responses([
+                        schemas.Response.model_validate(db_response)
+                        for db_response in db_responses
+                    ])
                     await self.fetch_response_stats(db, *missing_stats)
                 view = PlayerReviewView(responses)
             
@@ -89,7 +92,7 @@ class ReportPaginator(View):
             self.page = old_page
             raise
 
-    async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReport):
+    async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReportRef):
         for pr in player_reports:
             stats = await get_response_stats(db, pr)
             self.stats[pr.id] = stats

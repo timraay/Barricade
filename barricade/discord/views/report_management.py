@@ -31,7 +31,7 @@ class ReportManagementButton(
         super().__init__(button)
     
     @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /):
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /): # type: ignore
         return cls(
             button=item,
             command=match["command"],
@@ -43,11 +43,10 @@ class ReportManagementButton(
         async with session_factory.begin() as db:
             match self.command:
                 case "del":
-                    # TODO: Add confirmation
                     # TODO? Only allow admins to delete
                     async def confirm_delete(_interaction: Interaction):
-                        await delete_report(db, self.report_id, by=interaction.user)
-                        await interaction.message.delete()
+                        await delete_report(db, self.report_id, by=interaction.user) # type: ignore
+                        await interaction.message.delete() # type: ignore
                         await _interaction.response.edit_message(
                             embed=get_success_embed(f"Report #{self.report_id} deleted!"),
                             view=None
@@ -105,7 +104,7 @@ class ReportManagementView(View):
     @staticmethod
     async def get_embed(
         report: schemas.ReportWithToken,
-        stats: dict[int, schemas.ResponseStats] = None
+        stats: dict[int, schemas.ResponseStats] | None = None
     ):
         embed = await get_report_embed(report, stats=stats, with_footer=False)
         embed.color = discord.Colour(0xfee75c) # yellow

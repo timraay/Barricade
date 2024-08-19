@@ -27,7 +27,7 @@ def async_ttl_cache(size: int, seconds: int):
         return wrapper
     return decorator
 
-def safe_create_task(coro: Coroutine, err_msg: str = None):
+def safe_create_task(coro: Coroutine, err_msg: str | None = None):
     def _task_inner(t: asyncio.Task):
         if exc := t.exception():
             logging.error(

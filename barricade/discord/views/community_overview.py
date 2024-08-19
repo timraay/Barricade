@@ -43,7 +43,8 @@ class CommunityOverviewView(View):
     
     async def open_edit_modal(self, interaction: Interaction):
         async with session_factory() as db:
-            community = await get_community_by_id(db, self.community.id)
+            db_community = await get_community_by_id(db, self.community.id)
+            community = schemas.Community.model_validate(db_community)
             self.set_community(community)
 
             if self.community.owner_id != interaction.user.id:
@@ -54,17 +55,20 @@ class CommunityOverviewView(View):
     
     async def submit_edit_modal(self, interaction: Interaction, modal: 'CommunityEditModal'):
         async with session_factory.begin() as db:
-            community = await get_community_by_id(db, self.community.id)
-
+            db_community = await get_community_by_id(db, self.community.id)
+            if not db_community:
+                raise CustomException("You are no longer part of a community!")
+            
+            community = schemas.Community.model_validate(db_community)
             if community.owner_id != interaction.user.id:
                 raise CustomException("You no longer own this community!")
 
-            edited_community = schemas.CommunityEditParams.model_validate(community)
-            edited_community.name = modal.name.value
-            edited_community.tag = modal.tag.value
-            edited_community.contact_url = modal.contact_url.value
+            params = schemas.CommunityEditParams.model_validate(db_community)
+            params.name = modal.name.value
+            params.tag = modal.tag.value
+            params.contact_url = modal.contact_url.value
 
-            await edit_community(db, community, edited_community, by=interaction.user)
+            await edit_community(db, db_community, params, by=interaction.user) # type: ignore
 
         self.set_community(community)
         embed = await self.get_embed(interaction)
@@ -82,7 +86,7 @@ class CommunityOverviewView(View):
 
         channel = get_forward_channel(self.community)
         if channel:
-            embed.set_thumbnail(url=channel.guild.icon.url)
+            embed.set_thumbnail(url=channel.guild.icon.url if channel.guild.icon else None)
             
         if self.is_admin or self.is_owner:
             if not self.community.forward_channel_id:
@@ -123,7 +127,7 @@ class CommunityOverviewView(View):
                 name="> Available commands (Admin)",
                 value=(
                     ">>> -# "
-                    + await get_command_mention(interaction.client.tree, "leave-community", guild_only=True)
+                    + await get_command_mention(interaction.client.tree, "leave-community", guild_only=True) # type: ignore
                     + " - Leave this community"
                 ),
                 inline=False
@@ -133,11 +137,11 @@ class CommunityOverviewView(View):
                 name="> Available commands (Owner)",
                 value=(
                     ">>> -# "
-                    + await get_command_mention(interaction.client.tree, "add-admin", guild_only=True)
+                    + await get_command_mention(interaction.client.tree, "add-admin", guild_only=True) # type: ignore
                     + " - Add an admin to your community\n-# "
-                    + await get_command_mention(interaction.client.tree, "remove-admin", guild_only=True)
+                    + await get_command_mention(interaction.client.tree, "remove-admin", guild_only=True) # type: ignore
                     + " - Remove an admin from your community\n-# "
-                    + await get_command_mention(interaction.client.tree, "transfer-ownership", guild_only=True)
+                    + await get_command_mention(interaction.client.tree, "transfer-ownership", guild_only=True) # type: ignore
                     + " - Transfer ownership to one of your admins"
                 ),
                 inline=False

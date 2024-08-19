@@ -1,3 +1,4 @@
+import logging
 import discord
 from discord.utils import escape_markdown as esc_md
 
@@ -10,12 +11,16 @@ from barricade.enums import Emojis, ReportReasonFlag
 from barricade.utils import get_player_id_type, PlayerIDType
 
 def get_report_channel():
-    return bot.primary_guild.get_channel(DISCORD_REPORTS_CHANNEL_ID)
-
+    channel = bot.primary_guild.get_channel(DISCORD_REPORTS_CHANNEL_ID)
+    if not channel:
+        raise RuntimeError("Report channel could not be found")
+    elif not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Report channel is not a text channel")
+    return channel
 
 async def get_report_embed(
         report: schemas.ReportWithToken,
-        stats: dict[int, schemas.ResponseStats] = None,
+        stats: dict[int, schemas.ResponseStats] | None = None,
         with_footer: bool = True
 ) -> discord.Embed:
     embed = discord.Embed(
@@ -23,7 +28,7 @@ async def get_report_embed(
         description=esc_md(report.body),
     )
     embed.set_author(
-        icon_url=bot.user.avatar.url,
+        icon_url=bot.user.avatar.url if bot.user.avatar else None, # type: ignore
         name="\n".join(
             ReportReasonFlag(report.reasons_bitflag).to_list(report.reasons_custom, with_emoji=True)
         )
@@ -64,12 +69,11 @@ async def get_report_embed(
         )
 
     if with_footer:
-        try:
-            user = await bot.get_or_fetch_member(report.token.admin_id)
-        except discord.NotFound:
-            avatar_url = None
-        else:
+        user = await bot.get_or_fetch_member(report.token.admin_id, strict=False)
+        if user and user.avatar:
             avatar_url = user.avatar.url
+        else:
+            avatar_url = None
 
         admin_name = await get_admin_name(report.token.admin)
 

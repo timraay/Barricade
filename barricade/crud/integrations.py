@@ -10,7 +10,7 @@ async def create_integration_config(
         params: schemas.IntegrationConfigParams,
 ):
     db_integration = models.Integration(
-        **params.model_dump(exclude="integration_type"),
+        **params.model_dump(exclude={"integration_type"}),
         integration_type=params.integration_type # may be ClassVar
     )
     db.add(db_integration)
@@ -27,7 +27,7 @@ async def update_integration_config(
         config: schemas.IntegrationConfig,
 ):
     stmt = update(models.Integration).values(
-        **config.model_dump(exclude="integration_type"),
+        **config.model_dump(exclude={"integration_type"}),
         integration_type=config.integration_type # may be ClassVar
     ).where(
         models.Integration.id == config.id

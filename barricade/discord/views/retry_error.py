@@ -1,13 +1,11 @@
 
-from typing import Coroutine
+from typing import Callable, Coroutine
 from discord import ButtonStyle, Interaction
-from barricade import schemas
-from barricade.discord.communities import get_forward_channel
-from barricade.discord.utils import CallableButton, View, get_error_embed
+from barricade.discord.utils import CallableButton, View
 
 
 class RetryErrorView(View):
-    def __init__(self, callback: Coroutine, *args, **kwargs):
+    def __init__(self, callback: Callable[..., Coroutine], *args, **kwargs):
         super().__init__(timeout=60*60*24)
 
         self.callback = callback
@@ -21,5 +19,5 @@ class RetryErrorView(View):
         await self.callback(*self.callback_args, **self.callback_kwargs)
 
         # Retry was successful so we delete the message
-        await interaction.delete_original_response(view=self)
+        await interaction.message.delete() # type: ignore
         await interaction.response.defer()

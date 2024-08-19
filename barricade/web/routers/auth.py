@@ -39,7 +39,7 @@ async def login_for_access_token(
 @router.post("/token", response_model=schemas.Token)
 async def create_access_token(
         token_data: schemas.TokenCreateParams,
-        token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
+        _: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
         db: DatabaseDep,
 ):
     db_token, token_value = await create_token(db=db, token=token_data)

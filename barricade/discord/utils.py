@@ -82,28 +82,28 @@ class CallableSelect(ui.Select):
         await self._callback(interaction, self.values, *self._args, **self._kwargs)
 
 
-def get_error_embed(title: str, description: str = None):
+def get_error_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color.from_rgb(221, 46, 68))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/emojis/808045512393621585.png')
     if description:
         embed.description = description
     return embed
 
-def get_success_embed(title: str, description: str = None):
+def get_success_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(7844437))
     embed.set_author(name=title, icon_url="https://cdn.discordapp.com/emojis/809149148356018256.png")
     if description:
         embed.description = description
     return embed
 
-def get_question_embed(title: str, description: str = None):
+def get_question_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(3315710))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/attachments/729998051288285256/924971834343059496/unknown.png')
     if description:
         embed.description = description
     return embed
 
-def get_danger_embed(title: str, description: str = None):
+def get_danger_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(0xffcc4d))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/attachments/695232527123742745/1188991491150991470/warning.png')
     if description:
@@ -193,7 +193,7 @@ class Modal(ui.Modal):
         await handle_error(interaction, error)
 
 @async_ttl_cache(size=100, seconds=60*60*24)
-async def get_command_mention(tree: discord.app_commands.CommandTree, name: str, subcommands: str = None, guild_only: bool = False):
+async def get_command_mention(tree: discord.app_commands.CommandTree, name: str, subcommands: str | None = None, guild_only: bool = False):
     if guild_only:
         commands = await tree.fetch_commands(guild=discord.Object(DISCORD_GUILD_ID))
     else:

@@ -17,10 +17,10 @@ INTEGRATION_TYPES = (
 )
 
 def type_to_integration(integration_type: IntegrationType) -> type[Integration]:
-    return next((
+    return next(
         integration for integration in INTEGRATION_TYPES
         if integration.meta.type == integration_type
-    ), None)
+    )
 
 async def load_all():
     manager = IntegrationManager()
