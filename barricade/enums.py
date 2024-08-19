@@ -92,12 +92,12 @@ class ReportReasonFlag(IntFlag):
         return reasons
 
 class Emojis(StrEnum):
-    STEAM = "<:steam:1246502628297539625>"
-    XBOX = "<:xbox:1246502635218141275>"
-    TICK_YES = "<:tick_yes:1246502633351680111>"
-    TICK_MAYBE = "<:tick_maybe:1246503269115756735>"
-    TICK_NO = "<:tick_no:1246502631904645291>"
-    OWNER = "<:owner:1246838964141297715>"
-    CONTACT = "<:contact:1246838962329354251>"
-    CRCON = "<:crcon:1270322997437136926>"
-    BATTLEMETRICS = "<:battlemetrics:1270322990525055047>"
+    STEAM = "<:steam:1275098550182740101>"
+    XBOX = "<:xbox:1275098583590240256>"
+    TICK_YES = "<:tick_yes:1275098575356952689>"
+    TICK_MAYBE = "<:tick_maybe:1275098558567022633>"
+    TICK_NO = "<:tick_no:1275098566515363911>"
+    OWNER = "<:owner:1275098484264927328>"
+    CONTACT = "<:contact:1275098526556356638>"
+    CRCON = "<:crcon:1275098538581430346>"
+    BATTLEMETRICS = "<:battlemetrics:1275098517345669140>"
