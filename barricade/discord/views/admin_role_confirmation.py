@@ -34,7 +34,10 @@ class AdminRoleConfirmationView(View):
                 title=f'Set "@{self.role.name}" as the new admin role for {db_owner.community.name}!'
             ), view=None)
 
-            db_community = await get_community_by_id(db, db_owner.community.id)
+            community_id = db_owner.community.id
+
+            db.expire_all()
+            db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
             safe_create_task(

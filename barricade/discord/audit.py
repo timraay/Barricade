@@ -110,12 +110,12 @@ async def audit_community_edit(
         timestamp=datetime.now(tz=timezone.utc)
     ).set_author(
         icon_url=get_avatar_url(community.owner_id),
-        name="Community created",
+        name="Community edited",
     )
     await set_footer(embed, community.owner_id, by)
     add_community_field(embed, community)
-    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
     await add_admin_field(embed, community.owner, "Owner")
+    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
 
     await _audit(embed)
 

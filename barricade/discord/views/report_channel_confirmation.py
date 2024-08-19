@@ -2,7 +2,7 @@ import discord
 from discord import ButtonStyle, Interaction, TextChannel
 
 from barricade import schemas
-from barricade.crud.communities import get_admin_by_id
+from barricade.crud.communities import get_admin_by_id, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.audit import audit_community_edit
 from barricade.discord.utils import View, CallableButton, CustomException, get_question_embed, get_success_embed
@@ -24,30 +24,34 @@ class ReportChannelConfirmationView(View):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            owner = await get_admin_by_id(db, interaction.user.id)
-            if not owner or not owner.owned_community:
+            db_owner = await get_admin_by_id(db, interaction.user.id)
+            if not db_owner or not db_owner.owned_community:
                 raise CustomException(
                     "You need to be a community owner to do this!"
                 )
-            owner.community.forward_guild_id = self.channel.guild.id
-            owner.community.forward_channel_id = self.channel.id
+            db_owner.community.forward_guild_id = self.channel.guild.id
+            db_owner.community.forward_channel_id = self.channel.id
 
             if (
-                owner.community.admin_role_id
+                db_owner.community.admin_role_id
                 and not discord.utils.get(
                     self.channel.guild.roles,
-                    id=owner.community.admin_role_id
+                    id=db_owner.community.admin_role_id
                 )
             ):
                 # If the admin role is no longer part of the updated guild, remove it
-                owner.community.admin_role_id = None
+                db_owner.community.admin_role_id = None
 
             await interaction.response.edit_message(embed=get_success_embed(
-                title=f'Set "#{self.channel.name}" as the new report feed for {owner.community.name}!'
+                title=f'Set "#{self.channel.name}" as the new report feed for {db_owner.community.name}!'
             ), view=None)
 
-            await owner.community.awaitable_attrs.owner
-            community = schemas.Community.model_validate(owner.community)
+            
+            community_id = db_owner.community.id
+
+            db.expire_all()
+            db_community = await get_community_by_id(db, community_id)
+            community = schemas.Community.model_validate(db_community)
 
             safe_create_task(
                 audit_community_edit(
