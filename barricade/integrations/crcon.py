@@ -68,7 +68,7 @@ class CRCONIntegration(CustomIntegration):
 
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
-        self.config: schemas.CRCONIntegrationConfigParams
+        self.config: schemas.CRCONIntegrationConfigParams # type: ignore
     
     def get_ws_url(self):
         return self.config.api_url.removesuffix("/api") + "/ws/barricade"
