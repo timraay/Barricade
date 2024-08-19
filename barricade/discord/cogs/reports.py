@@ -31,11 +31,8 @@ class ReportsCog(commands.Cog):
                 db_community = db_admin.community
                 if not db_community:
                     raise access_denied_exc
-                db.expire_all()
-                db_community = await get_community_by_guild_id(db, guild_id=interaction.guild_id) # type: ignore
 
             else:
-                db.expire_all()
                 db_community = await get_community_by_guild_id(db, guild_id=interaction.guild_id) # type: ignore
                 if not db_community:
                     raise access_denied_exc
@@ -45,7 +42,7 @@ class ReportsCog(commands.Cog):
                 if not discord.utils.get(interaction.user.roles, id=db_community.admin_role_id): # type: ignore
                     raise access_denied_exc
 
-            community = schemas.Community.model_validate(db_community)
+            community = schemas.CommunityRef.model_validate(db_community)
 
             db_reports = await get_reports_for_player(db, player_id=player_id, load_token=True)
             if not db_reports:
