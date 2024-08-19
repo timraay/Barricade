@@ -1,8 +1,3 @@
-> [!CAUTION]
-> <div align="center">
-> <h2><b>THIS PROJECT IS CURRENTLY STILL UNDER ACTIVE DEVELOPMENT.<br>IN ITS CURRENT STATE IT IS INCOMPLETE, MESSY, BROKEN, AND INSECURE.</b></h2>
-> </div>
-
 <img align="right" src="assets/banner.png">
 
 <div align="center">
@@ -32,7 +27,7 @@ Before setting up your community to receive reports, make sure you have the foll
 
 1. #### Invite HLL Barricade to your Discord server.
 
-    Use [this link](https://discord.com/oauth2/authorize?client_id=1190718626286813244&scope=bot+applications.commands&permissions=199680) to invite the Discord bot. Allow it all the requested permissions. Barricade won't be able to operate properly without them.
+    Use [this link](https://discord.com/oauth2/authorize?client_id=1190718626286813244) to invite the Discord bot. Allow it all the requested permissions. Barricade won't be able to operate properly without them.
 
 2. #### Configure which channel reports need to be sent to.
 
