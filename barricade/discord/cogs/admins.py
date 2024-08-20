@@ -17,8 +17,6 @@ from barricade.discord.views.admin_confirmation import (
     OwnershipTransferConfirmationView,
     LeaveCommunityConfirmationView
 )
-from barricade.discord.views.integration_management import IntegrationManagementView
-from barricade.discord.views.report_channel_confirmation import ReportChannelConfirmationView
 
 if TYPE_CHECKING:
     from barricade.discord.bot import Bot
@@ -47,7 +45,7 @@ class AdminsCog(commands.Cog):
                 await grant_admin_role(member.id)
 
     
-    @app_commands.command(name="add-admin", description="Add one of your community's admins to the Barricade")
+    @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def add_admin_to_community(self, interaction: Interaction, user: discord.Member):
@@ -89,7 +87,7 @@ class AdminsCog(commands.Cog):
             view = AdminAddConfirmationView(owner.community, user)
             await view.send(interaction)
 
-    @app_commands.command(name="remove-admin", description="Remove an admin's access from the Barricade")
+    @app_commands.command(name="remove-admin", description="Remove an admin's access from the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def remove_admin_from_community(self, interaction: Interaction, user: discord.Member):
@@ -158,7 +156,7 @@ class AdminsCog(commands.Cog):
             view = OwnershipTransferConfirmationView(owner.community, user)
             await view.send(interaction)
 
-    @app_commands.command(name="leave-community", description="Remove your admin access from the Barricade")
+    @app_commands.command(name="leave-community", description="Remove your admin access from the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.default_permissions(manage_guild=True)
     async def leave_community_as_admin(self, interaction: Interaction):
