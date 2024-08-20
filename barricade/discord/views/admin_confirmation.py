@@ -60,11 +60,15 @@ class AdminAddConfirmationView(BaseConfirmationView):
             if admin:
                 await admin_join_community(db, admin, self.community, by=interaction.user) # type: ignore
             else:
-                await create_new_admin(db, schemas.AdminCreateParams(
-                    discord_id=self.member.id,
-                    community_id=self.community.id,
-                    name=self.member.nick or self.member.display_name
-                ))
+                await create_new_admin(
+                    db,
+                    schemas.AdminCreateParams(
+                        discord_id=self.member.id,
+                        community_id=self.community.id,
+                        name=self.member.nick or self.member.display_name
+                    ),
+                    by=interaction.user, # type: ignore
+                )
 
         await interaction.response.edit_message(embed=get_success_embed(
             title=esc_md(f"Added {self.member_name} as admin for {self.community.name}!")

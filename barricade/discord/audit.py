@@ -12,7 +12,7 @@ from .bot import bot
 
 async def set_footer(embed: discord.Embed, user_id: int, by: str | discord.User | None = None):
     if by:
-        if isinstance(by, discord.User):
+        if isinstance(by, (discord.User, discord.Member)):
             return embed.set_footer(text=by.display_name, icon_url=by.display_avatar.url)
         else:
             return embed.set_footer(text=by)
@@ -163,7 +163,7 @@ async def audit_community_admin_remove(
     admin: schemas.AdminRef,
     by: str | discord.User | None = None,
 ):
-    if isinstance(by, discord.User) and by.id == admin.discord_id:
+    if isinstance(by, (discord.User, discord.Member)) and by.id == admin.discord_id:
         return await audit_community_admin_leave(community, admin)
 
     embed = discord.Embed(
