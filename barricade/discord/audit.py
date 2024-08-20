@@ -97,8 +97,8 @@ async def audit_community_create(
     )
     await set_footer(embed, community.owner_id, by)
     add_community_field(embed, community)
-    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
     await add_admin_field(embed, owner, "Owner")
+    add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
 
     await _audit(embed)
 
