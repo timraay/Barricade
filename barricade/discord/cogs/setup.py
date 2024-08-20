@@ -9,7 +9,7 @@ from barricade.discord.views.enroll import EnrollView
 from barricade.discord.views.submit_report import GetSubmissionURLView
 
 @app_commands.guilds(DISCORD_GUILD_ID)
-@app_commands.default_permissions(manage_messages=True)
+@app_commands.default_permissions(manage_guild=True)
 class SetupCog(commands.GroupCog, group_name='setup'):
     def __init__(self, bot: Bot):
         self.bot = bot

@@ -31,9 +31,7 @@ class CommunitiesCog(commands.Cog):
     def __init__(self, bot: 'Bot'):
         self.bot = bot
 
-    @app_commands.command(name="integrations", description="Enable, disable, or configure your integrations")
-    @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.default_permissions(manage_guild=True)
+    @config_group.command(name="integrations", description="Enable, disable, or configure your integrations")
     async def manage_integrations(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user owns a community
@@ -133,6 +131,14 @@ class CommunitiesCog(commands.Cog):
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'admin-role')}*"
                     f"\n> -# The role that can review reports."
                     f"\n- {'<@&'+str(db_owner.community.admin_role_id)+'>' if db_owner.community.admin_role_id else 'None'}"
+                ),
+                inline=True
+            )
+            embed.add_field(
+                name="Integrations",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'integrations')}*"
+                    f"\n-# *Use the command above to see your integrations.*"
                 ),
                 inline=True
             )
