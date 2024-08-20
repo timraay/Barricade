@@ -54,6 +54,12 @@ async def create_new_web_user(
         token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
         db: DatabaseDep
 ):
+    if await get_user_by_username(db, user.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
+        )
+    
     db_user = models.WebUser(
         **user.model_dump(exclude={"password"}),
         hashed_password=get_password_hash(user.password),
