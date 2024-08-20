@@ -50,7 +50,7 @@ async def get_all_web_users(
 
 @router.post("", response_model=schemas.WebUser)
 async def create_new_web_user(
-    user: schemas.WebUserCreateParams,
+        user: schemas.WebUserCreateParams,
         token: Annotated[schemas.TokenWithHash, Security(get_active_token, scopes=Scopes.STAFF.to_list())],
         db: DatabaseDep
 ):
@@ -59,8 +59,9 @@ async def create_new_web_user(
         hashed_password=get_password_hash(user.password),
     )
     db.add(db_user)
-    await db.commit()
+    await db.flush()
     await db.refresh(db_user)
+    await db.commit()
     return db_user
 
 @router.delete("")
