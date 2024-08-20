@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
         safe_create_task(bot.connect(reconnect=True))
         await bot.wait_until_ready()
         
+        assert bot.user is not None
         logging.info("Started bot %s (ID: %s)", bot.user.name, bot.user.id)
     
         # Start serving requests
