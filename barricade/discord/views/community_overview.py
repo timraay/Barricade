@@ -177,7 +177,7 @@ class CommunityBaseModal(Modal):
 
     contact_url = TextInput(
         label="Contact URL",
-        placeholder='eg. "discord.gg/ABC',
+        placeholder='eg. "discord.gg/ABC"',
         min_length=8,
         max_length=64,
     )
