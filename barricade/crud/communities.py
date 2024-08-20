@@ -260,9 +260,9 @@ async def create_new_community(
     # Update the owner's community
     db_owner.community_id = db_community.id
     await db.flush()
-    await db_community.awaitable_attrs.owner
 
-    community = schemas.Community.model_validate(db_community)
+    community = schemas.CommunityRef.model_validate(db_community)
+    owner = schemas.AdminRef.model_validate(db_owner)
 
     # Grant role to the owner
     await grant_owner_role(db_owner.discord_id)
@@ -270,6 +270,7 @@ async def create_new_community(
     safe_create_task(
         audit_community_create(
             community=community,
+            owner=owner,
             by=by,
         )
     )
