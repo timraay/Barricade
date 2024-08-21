@@ -83,9 +83,7 @@ class IntegrationManagementView(View):
         self.integrations: dict[int, Integration] = {}
         manager = IntegrationManager()
 
-        for db_integration in self.community.integrations:
-            config = schemas.IntegrationConfig.model_validate(db_integration)
-            
+        for config in self.community.integrations:
             integration = manager.get_by_config(config)
             if not integration:
                 logging.error("Integration with config %r should be registered by manager but was not" % config)
@@ -254,7 +252,6 @@ class IntegrationManagementView(View):
             else:
                 await integration.create()
                 assert integration.config.id is not None
-            await db.refresh(self.community)
 
             self.comments.pop(integration.config.id, None)
 
@@ -306,7 +303,6 @@ class IntegrationManagementView(View):
             self.comments.pop(integration.config.id, None)
             
             await integration.enable()
-            await db.refresh(self.community)
 
         await interaction.response.send_message(embed=get_success_embed(
             f"Enabled {integration.meta.name} integration!",
@@ -319,7 +315,6 @@ class IntegrationManagementView(View):
             await self.validate_ownership(db, interaction.user.id)
             integration = self.get_integration(integration_id)
             await integration.disable()
-            await db.refresh(self.community)
         
         embed = get_success_embed(
             f"Disabled {integration.meta.name} integration!",

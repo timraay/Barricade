@@ -343,7 +343,7 @@ class Integration(ABC):
 
         Parameters
         ----------
-        community : models.Community
+        community : schemas.Community
             The community owning this integration
 
         Raises
