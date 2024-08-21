@@ -271,7 +271,7 @@ class PlayerBan(PlayerBanRef):
 class AdminCreateParams(_AdminBase):
     pass
 
-class CommunityEditParams(_CommunityBase):
+class CommunityEditParams(_CommunityBase, _ModelFromAttributes):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
 
