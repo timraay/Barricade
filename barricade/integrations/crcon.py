@@ -138,22 +138,13 @@ class CRCONIntegration(CustomIntegration):
 
     async def validate_api_access(self):
         try:
-            resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
+            resp = await self._make_request(method="GET", endpoint="/get_version")
         except Exception as e:
             if isinstance(e, ClientResponseError) and e.status == 401:
                 raise IntegrationValidationError("Invalid API key")
             raise IntegrationValidationError("Failed to connect") from e
         
-        result = resp["result"]
-        is_superuser = result.get("is_superuser", False)
-        permissions = set([
-            p["permission"] for p in result.get("permissions", [])
-        ])
-
-        if not is_superuser and not permissions.issuperset(REQUIRED_PERMISSIONS):
-            raise IntegrationValidationError("Missing permissions")
-        
-        resp = await self._make_request(method="GET", endpoint="/get_version")
+        # Check if version is sufficient
         version = resp["result"].strip()
         match = RE_VERSION.match(version)
         if not match:
@@ -161,6 +152,17 @@ class CRCONIntegration(CustomIntegration):
         version_numbers = [int(num) for num in match.groups()]
         if version_numbers[0] < 10:
             raise IntegrationValidationError('Oudated CRCON version, v10 or above is required')
+        
+        # Check if the user has all the required perms
+        resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
+        result = resp["result"]
+        is_superuser = result.get("is_superuser", False)
+        permissions = set([
+            p["permission"] for p in result.get("permissions", [])
+        ])
+
+        if not is_superuser and not permissions.issuperset(REQUIRED_PERMISSIONS):
+            raise IntegrationValidationError("Token owner has insufficient permissions")
     
     async def create_blacklist(self, community: schemas.Community):
         resp = await self._make_request(
