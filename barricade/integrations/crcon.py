@@ -201,7 +201,7 @@ class CRCONIntegration(CustomIntegration):
                 "GET", "/get_blacklist_bans",
                 data=dict(
                     blacklist_id=self.config.banlist_id,
-                    exclude_expired=True,
+                    exclude_expired=1,
                     page_size=page_size,
                     page=page,
                 )    
