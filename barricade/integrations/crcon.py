@@ -140,8 +140,6 @@ class CRCONIntegration(CustomIntegration):
         try:
             resp = await self._make_request(method="GET", endpoint="/get_version")
         except Exception as e:
-            if isinstance(e, ClientResponseError) and e.status == 401:
-                raise IntegrationValidationError("Invalid API key")
             raise IntegrationValidationError("Failed to connect") from e
         
         # Check if version is sufficient
@@ -154,7 +152,12 @@ class CRCONIntegration(CustomIntegration):
             raise IntegrationValidationError('Oudated CRCON version, v10 or above is required')
         
         # Check if the user has all the required perms
-        resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
+        try:
+            resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
+        except Exception as e:
+            if isinstance(e, ClientResponseError) and e.status == 401:
+                raise IntegrationValidationError("Invalid API key")
+            raise IntegrationValidationError("Failed to connect") from e
         result = resp["result"]
         is_superuser = result.get("is_superuser", False)
         permissions = set([
