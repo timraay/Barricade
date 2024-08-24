@@ -107,7 +107,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin_by_id(db, interaction.user.id)
-            if not db_admin or not db_admin.owned_community:
+            if not db_admin or not db_admin.community:
                 raise CustomException(
                     "You need to be a community admin to do this!"
                 )
