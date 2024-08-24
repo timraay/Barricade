@@ -24,30 +24,31 @@ class ReportChannelConfirmationView(View):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            db_owner = await get_admin_by_id(db, interaction.user.id)
-            if not db_owner or not db_owner.owned_community:
+            db_admin = await get_admin_by_id(db, interaction.user.id)
+            if not db_admin or not db_admin.community:
                 raise CustomException(
-                    "You need to be a community owner to do this!"
+                    "You need to be a community admin to do this!"
                 )
-            db_owner.community.forward_guild_id = self.channel.guild.id
-            db_owner.community.forward_channel_id = self.channel.id
+            db_admin.community.forward_guild_id = self.channel.guild.id
+            db_admin.community.forward_channel_id = self.channel.id
+            await db.flush()
 
             if (
-                db_owner.community.admin_role_id
+                db_admin.community.admin_role_id
                 and not discord.utils.get(
                     self.channel.guild.roles,
-                    id=db_owner.community.admin_role_id
+                    id=db_admin.community.admin_role_id
                 )
             ):
                 # If the admin role is no longer part of the updated guild, remove it
-                db_owner.community.admin_role_id = None
+                db_admin.community.admin_role_id = None
 
             await interaction.response.edit_message(embed=get_success_embed(
-                title=f'Set "#{self.channel.name}" as the new report feed for {db_owner.community.name}!'
+                title=f'Set "#{self.channel.name}" as the new report feed for {db_admin.community.name}!'
             ), view=None)
 
             
-            community_id = db_owner.community.id
+            community_id = db_admin.community.id
 
             db.expire_all()
             db_community = await get_community_by_id(db, community_id)

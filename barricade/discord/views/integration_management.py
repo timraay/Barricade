@@ -10,7 +10,7 @@ from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
-from barricade.crud.communities import get_community_by_id, get_community_by_owner_id
+from barricade.crud.communities import get_admin_by_id, get_community_by_id, get_community_by_owner_id
 from barricade.db import models, session_factory
 from barricade.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from barricade.enums import IntegrationType
@@ -44,15 +44,6 @@ async def configure_custom_integration(
 ):
     modal = ConfigureCustomIntegrationModal(view, default_values=config)
     await interaction.response.send_modal(modal)
-
-async def get_owned_community(db: AsyncSession, user_id: int):
-    community = await get_community_by_owner_id(db, user_id)
-    if not community:
-        raise CustomException(
-            "You need to be a community owner to do this!",
-        )
-    schemas.Community.model_validate(community)
-    return community
 
 def get_config_from_community(community: models.Community, integration_id: int):
     for integration in community.integrations:
@@ -213,14 +204,15 @@ class IntegrationManagementView(View):
     
     # --- Utilities
 
-    async def validate_ownership(self, db: AsyncSession, user_id: int):
+    async def validate_adminship(self, db: AsyncSession, user_id: int):
         db_community = await get_community_by_id(db, self.community.id)
         if not db_community:
             raise CustomException("This community no longer exists!")
         community = schemas.Community.model_validate(db_community)
         
-        if self.community.id != db_community.id or self.community.owner_id != user_id:
-            raise CustomException("You need to be the community owner to do this!")
+        db_admin = await get_admin_by_id(db, user_id)
+        if not db_admin or self.community.id != db_community.id or self.community.id != db_admin.community_id:
+            raise CustomException("You need to be the community admin to do this!")
         
         self.community = community
         self.update_integrations()
@@ -236,8 +228,8 @@ class IntegrationManagementView(View):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         async with session_factory.begin() as db:
-            # Make sure user is owner
-            await self.validate_ownership(db, interaction.user.id)
+            # Make sure user is admin
+            await self.validate_adminship(db, interaction.user.id)
 
             # Validate config
             try:
@@ -265,7 +257,7 @@ class IntegrationManagementView(View):
 
     async def configure_integration(self, integration_cls: type[Integration], integration_id: int | None, interaction: Interaction):
         async with session_factory() as db:
-            await self.validate_ownership(db, interaction.user.id)
+            await self.validate_adminship(db, interaction.user.id)
 
         if integration_id:
             integration = self.get_integration(integration_id)
@@ -286,7 +278,7 @@ class IntegrationManagementView(View):
 
     async def enable_integration(self, integration_id: int, interaction: Interaction):
         async with session_factory() as db:
-            await self.validate_ownership(db, interaction.user.id)
+            await self.validate_adminship(db, interaction.user.id)
             integration = self.get_integration(integration_id)
             assert integration.config.id is not None
 
@@ -312,7 +304,7 @@ class IntegrationManagementView(View):
 
     async def disable_integration(self, integration_id: int, interaction: Interaction):
         async with session_factory() as db:
-            await self.validate_ownership(db, interaction.user.id)
+            await self.validate_adminship(db, interaction.user.id)
             integration = self.get_integration(integration_id)
             await integration.disable()
         

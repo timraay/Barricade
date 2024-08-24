@@ -23,18 +23,19 @@ class AdminRoleConfirmationView(View):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            db_owner = await get_admin_by_id(db, interaction.user.id)
-            if not db_owner or not db_owner.owned_community:
+            db_admin = await get_admin_by_id(db, interaction.user.id)
+            if not db_admin or not db_admin.community:
                 raise CustomException(
-                    "You need to be a community owner to do this!"
+                    "You need to be a community admin to do this!"
                 )
-            db_owner.community.admin_role_id = self.role.id
+            db_admin.community.admin_role_id = self.role.id
+            await db.flush()
 
             await interaction.response.edit_message(embed=get_success_embed(
-                title=f'Set "@{self.role.name}" as the new admin role for {db_owner.community.name}!'
+                title=f'Set "@{self.role.name}" as the new admin role for {db_admin.community.name}!'
             ), view=None)
 
-            community_id = db_owner.community.id
+            community_id = db_admin.community.id
 
             db.expire_all()
             db_community = await get_community_by_id(db, community_id)
