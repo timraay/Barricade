@@ -6,10 +6,11 @@ from discord import app_commands
 from discord.ext import commands
 from discord.utils import escape_markdown as esc_md
 
+from barricade import schemas
 from barricade.db import session_factory
 from barricade.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
 from barricade.crud.communities import get_admin_by_id
-from barricade.discord.communities import grant_admin_role, grant_owner_role
+from barricade.discord.communities import update_user_roles
 from barricade.discord.utils import CustomException, get_command_mention
 from barricade.discord.views.admin_confirmation import (
     AdminAddConfirmationView,
@@ -32,17 +33,16 @@ class AdminsCog(commands.Cog):
             return
         
         async with session_factory() as db:
-            admin = await get_admin_by_id(db, discord_id=member.id)
+            db_admin = await get_admin_by_id(db, discord_id=member.id)
             # Return if member is not an admin of any community
-            if not admin or not admin.community:
+            if not db_admin or not db_admin.community:
                 return
             
-            if admin.owned_community:
-                # Grant owner role if user owns a community
-                await grant_owner_role(member.id)
-            else:
-                # Grant admin role otherwise
-                await grant_admin_role(member.id)
+            admin = schemas.Admin.model_validate(db_admin)
+            assert admin.community is not None
+            
+            # Grant roles
+            await update_user_roles(member.id, community=admin.community)
 
     
     @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")

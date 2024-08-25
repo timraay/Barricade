@@ -79,6 +79,15 @@ class CommunityOverviewView(View):
         )
 
     async def get_embed(self, interaction: Interaction):
+        if self.community.is_pc and self.community.is_console:
+            platform = "PC & Console"
+        elif self.community.is_pc:
+            platform = "PC"
+        elif self.community.is_console:
+            platform = "Console"
+        else:
+            platform = "Unknown ⚠️"
+
         embed = Embed(
             title=f"{self.community.tag} {self.community.name}",
             color=Color.blurple(),
@@ -120,6 +129,11 @@ class CommunityOverviewView(View):
         embed.add_field(
             name=f"Admins ({len(self.community.admins)}/{MAX_ADMIN_LIMIT + 1})",
             value="\n".join(admin_list),
+        )
+
+        embed.add_field(
+            name="Platform",
+            value=platform,
         )
 
         if self.is_admin:

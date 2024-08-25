@@ -83,6 +83,8 @@ class _CommunityBase(BaseModel):
     name: str
     tag: str
     contact_url: str
+    is_pc: bool
+    is_console: bool
 
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]

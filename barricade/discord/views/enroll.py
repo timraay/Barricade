@@ -1,3 +1,4 @@
+from functools import partial
 import re
 from discord import ButtonStyle, Color, Interaction
 import discord
@@ -11,20 +12,27 @@ from barricade.discord.utils import View, CallableButton, CustomException, forma
 from barricade.discord.views.community_overview import CommunityBaseModal
 from barricade.enums import Emojis
 
-RE_BATTLEMETRICS_URL = re.compile(r"https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+")
+RE_BATTLEMETRICS_URL = re.compile(r"^https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+$")
+RE_SERVER_ADDRESS = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{3,5}$")
 
 class EnrollView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
         self.add_item(CallableButton(
-            self.send_owner_form,
+            partial(self.send_owner_form, True),
             style=ButtonStyle.blurple,
-            label="Request access",
-            custom_id="enroll"
+            label="Request access (PC)",
+            custom_id="enroll_pc"
+        ))
+        self.add_item(CallableButton(
+            partial(self.send_owner_form, False),
+            style=ButtonStyle.blurple,
+            label="Request access (Console)",
+            custom_id="enroll_console"
         ))
 
-    async def send_owner_form(self, interaction: Interaction):
+    async def send_owner_form(self, is_pc: bool, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
             if admin:
@@ -42,24 +50,30 @@ class EnrollView(View):
                         )
                     )
         
-        modal = EnrollModal()
+        if is_pc:
+            modal = PCEnrollModal()
+        else:
+            modal = ConsoleEnrollModal()
         await interaction.response.send_modal(modal)
 
 
 class EnrollModal(CommunityBaseModal, title="Sign up your community"):
-    battlemetrics_url = TextInput(
-        label="Battlemetrics URL",
-        placeholder='eg. "https://www.battlemetrics.com/servers/hll/12345"',
-    )
+    def get_params(self, interaction: Interaction):
+        return schemas.CommunityCreateParams(
+            name=self.name.value,
+            tag=self.tag.value,
+            contact_url=self.contact_url.value,
+            owner_id=interaction.user.id,
+            owner_name=interaction.user.display_name,
+            is_pc=False,
+            is_console=False,
+        )
+    
+    def get_server_value(self) -> str:
+        return "Unknown"
+
 
     async def on_submit(self, interaction: Interaction):
-        bm_url_match = RE_BATTLEMETRICS_URL.match(self.battlemetrics_url.value)
-        if not bm_url_match:
-            raise CustomException(
-                "Invalid Battlemetrics URL!",
-                "Please visit [Battlemetrics](https://www.battlemetrics.com/servers/hll), search for your server, click on it, and copy the URL."
-            )
-
         channel = interaction.client.get_channel(DISCORD_ENROLL_CHANNEL_ID)
         if not channel:
             raise CustomException(
@@ -72,13 +86,7 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
                 "Invalid channel configured. Reach out to an administrator."
             )
         
-        params = schemas.CommunityCreateParams(
-            name=self.name.value,
-            tag=self.tag.value,
-            contact_url=self.contact_url.value,
-            owner_id=interaction.user.id,
-            owner_name=interaction.user.display_name,
-        )
+        params = self.get_params(interaction)
         
         embed = discord.Embed(
             title=f"{params.tag} {params.name}",
@@ -96,7 +104,7 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
         )
         embed.add_field(
             name="Server",
-            value=format_url("View on Battlemetrics", bm_url_match.group()),
+            value=self.get_server_value(),
             inline=True,
         )
         embed.add_field(
@@ -110,6 +118,55 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
             "Application sent!",
             "Your application was submitted for review. You will automatically receive your roles once accepted."
         ), ephemeral=True)
+
+
+class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
+    battlemetrics_url = TextInput(
+        label="Battlemetrics URL",
+        placeholder='eg. "https://www.battlemetrics.com/servers/hll/12345"',
+    )
+
+    def get_params(self, interaction: Interaction):
+        params = super().get_params(interaction)
+        params.is_pc = True
+        return params
+    
+    def get_server_value(self):
+        return format_url("View on Battlemetrics", self.battlemetrics_url.value)
+
+    async def on_submit(self, interaction: Interaction):
+        bm_url_match = RE_BATTLEMETRICS_URL.match(self.battlemetrics_url.value)
+        if not bm_url_match:
+            raise CustomException(
+                "Invalid Battlemetrics URL!",
+                "Please visit [Battlemetrics](https://www.battlemetrics.com/servers/hll), search for your server, click on it, and copy the URL."
+            )
+
+        return await super().on_submit(interaction)
+
+class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
+    server_address = TextInput(
+        label="Address + Query Port",
+        placeholder='eg. "123.1.12.123:27165"',
+    )
+
+    def get_params(self, interaction: Interaction):
+        params = super().get_params(interaction)
+        params.is_console = True
+        return params
+    
+    def get_server_value(self):
+        return self.server_address.value
+
+    async def on_submit(self, interaction: Interaction):
+        server_addr_match = RE_SERVER_ADDRESS.match(self.server_address.value)
+        if not server_addr_match:
+            raise CustomException(
+                "Invalid combination of address and port!",
+                "Make sure you are using the correct address and that you are using the query port."
+            )
+
+        return await super().on_submit(interaction)
         
 class EnrollAcceptView(View):
     def __init__(self):

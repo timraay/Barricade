@@ -112,7 +112,7 @@ class OwnershipTransferConfirmationView(BaseConfirmationView):
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            await transfer_ownership(db, self.member.id, self.community.id, by=interaction.user) # type: ignore
+            await transfer_ownership(db, self.community.id, self.member.id, by=interaction.user) # type: ignore
             community = await get_community_by_id(db, self.community.id)
             assert community is not None
             self.community = community

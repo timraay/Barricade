@@ -6,8 +6,8 @@ from sqlalchemy.orm import selectinload
 from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.db import models
-from barricade.discord.audit import audit_community_admin_add, audit_community_admin_leave, audit_community_admin_remove, audit_community_change_owner, audit_community_create, audit_community_edit
-from barricade.discord.communities import grant_admin_role, grant_owner_role, revoke_admin_roles
+from barricade.discord.audit import audit_community_admin_add, audit_community_admin_remove, audit_community_change_owner, audit_community_create, audit_community_edit
+from barricade.discord.communities import revoke_user_roles, update_user_roles
 from barricade.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
@@ -265,7 +265,7 @@ async def create_new_community(
     owner = schemas.AdminRef.model_validate(db_owner)
 
     # Grant role to the owner
-    await grant_owner_role(db_owner.discord_id)
+    await update_user_roles(db_owner.discord_id, community=community)
 
     safe_create_task(
         audit_community_create(
@@ -368,11 +368,10 @@ async def create_new_admin(
     await db.flush()
     await db.refresh(db_admin)
 
-
     if db_community:
         community = schemas.CommunityRef.model_validate(db_community)
         admin = schemas.AdminRef.model_validate(db_admin)
-        await grant_admin_role(params.discord_id)
+        await update_user_roles(params.discord_id, community=community)
         safe_create_task(
             audit_community_admin_add(community, admin, by=by)
         )
@@ -421,7 +420,7 @@ async def admin_leave_community(
     await db.flush()
     await db.refresh(db_admin)
 
-    await revoke_admin_roles(admin.discord_id, strict=False)
+    await revoke_user_roles(admin.discord_id, strict=False)
 
     safe_create_task(
         audit_community_admin_remove(community, admin, by=by)
@@ -474,7 +473,7 @@ async def admin_join_community(
     community = schemas.CommunityRef.model_validate(db_community)
     admin = schemas.AdminRef.model_validate(db_admin)
 
-    await grant_admin_role(db_admin.discord_id)
+    await update_user_roles(db_admin.discord_id, community=community)
 
     await db.refresh(db_admin)
 
@@ -537,8 +536,9 @@ async def transfer_ownership(
     await db.refresh(db_community)
     await db.refresh(db_admin)
 
-    await grant_owner_role(db_community.owner_id)
-    await grant_admin_role(old_owner.discord_id, strict=False)
+    community = schemas.Community.model_validate(db_community)
+    await update_user_roles(db_community.owner_id, community=community)
+    await update_user_roles(old_owner.discord_id, community=community, strict=False)
 
     safe_create_task(
         audit_community_change_owner(old_owner, admin, by=by)

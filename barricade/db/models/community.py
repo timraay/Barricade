@@ -1,6 +1,6 @@
 from barricade.db import ModelBase
 
-from sqlalchemy import Integer, BigInteger, String, ForeignKey
+from sqlalchemy import Boolean, Integer, BigInteger, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from typing import Optional, TYPE_CHECKING
@@ -21,6 +21,9 @@ class Community(ModelBase):
     tag: Mapped[str]
     contact_url: Mapped[str]
     owner_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
+
+    is_pc: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    is_console: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     forward_guild_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     forward_channel_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
