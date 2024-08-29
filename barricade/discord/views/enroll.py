@@ -2,7 +2,9 @@ from functools import partial
 import re
 from discord import ButtonStyle, Color, Interaction
 import discord
-from discord.ui import TextInput, Button
+from discord.ui import TextInput
+from pydantic import ValidationError
+import pydantic_core
 from barricade import schemas
 from barricade.constants import DISCORD_ENROLL_CHANNEL_ID
 
@@ -145,9 +147,9 @@ class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
         return await super().on_submit(interaction)
 
 class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
-    server_address = TextInput(
-        label="Address + Query Port",
-        placeholder='eg. "123.1.12.123:27165"',
+    image_url = TextInput(
+        label="URL to image of server in browser",
+        placeholder='eg. "https://imgur.com/i/..."',
     )
 
     def get_params(self, interaction: Interaction):
@@ -156,14 +158,15 @@ class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
         return params
     
     def get_server_value(self):
-        return self.server_address.value
+        return format_url("View Image", str(pydantic_core.Url(self.image_url.value)))
 
     async def on_submit(self, interaction: Interaction):
-        server_addr_match = RE_SERVER_ADDRESS.match(self.server_address.value)
-        if not server_addr_match:
+        try:
+            pydantic_core.Url(self.image_url.value)
+        except ValidationError:
             raise CustomException(
-                "Invalid combination of address and port!",
-                "Make sure you are using the correct address and that you are using the query port."
+                "Invalid URL!",
+                "Please provide a valid URL to an image. The image must show your server in the server browser. [Imgur](https://imgur.com/upload) is recommended to quickly upload your image online."
             )
 
         return await super().on_submit(interaction)

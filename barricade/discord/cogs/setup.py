@@ -44,11 +44,15 @@ class SetupCog(commands.GroupCog, group_name='setup'):
                 "\nRequest to join the Bunker to claim the"
                 f" <@&{DISCORD_OWNER_ROLE_ID}> role and get access to **server-related announcements**"
                 " as well as **Barricade**, the community's collaborative ban sharing platform."
-                "\n\n"
-                "> Do not submit more than one request per community."
+                "\n"
+                "\n> Do not submit more than one request per community."
                 f"\n> Once accepted, you can grant access to **{MAX_ADMIN_LIMIT}** additional admins"
                 f" using the {await get_command_mention(self.bot.tree, 'add-admin', guild_only=True)}"
                 " command."
+                "\n"
+                "\n**Note to console server owners:**"
+                "\nTo verify your community owns a server we need a link to a picture with your server being visible in the server browser."
+                "\nWe recommend you upload the picture to [Imgur](<https://imgur.com/upload>), but other image hosting platforms are fine too."
                 "\n_ _"
             ),
             embed=discord.Embed(
