@@ -51,7 +51,7 @@ class SetupCog(commands.GroupCog, group_name='setup'):
                 " command."
                 "\n"
                 "\n**Note to console server owners:**"
-                "\nTo verify your community owns a server we need a link to a picture with your server being visible in the server browser."
+                "\nTo verify your community owns a server we need a link to a picture with your **game server** being visible either on **your server management panel** or in the **in-game server browser**."
                 "\nWe recommend you upload the picture to [Imgur](<https://imgur.com/upload>), but other image hosting platforms are fine too."
                 "\n_ _"
             ),

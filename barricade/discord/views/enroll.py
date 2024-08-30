@@ -148,7 +148,7 @@ class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
 
 class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
     image_url = TextInput(
-        label="URL to image of server in browser",
+        label="URL to image of HLL server in browser",
         placeholder='eg. "https://imgur.com/i/..."',
     )
 
@@ -161,13 +161,24 @@ class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
         return format_url("View Image", str(pydantic_core.Url(self.image_url.value)))
 
     async def on_submit(self, interaction: Interaction):
-        try:
-            pydantic_core.Url(self.image_url.value)
-        except ValidationError:
-            raise CustomException(
-                "Invalid URL!",
-                "Please provide a valid URL to an image. The image must show your server in the server browser. [Imgur](https://imgur.com/upload) is recommended to quickly upload your image online."
+        invalid_url_exc = CustomException(
+            "Invalid URL!",
+            (
+                "Please provide a valid URL to an image. The image must show your game server on your server management panel or in the server browser."
+                " Your server's name needs to be visible. [Imgur](https://imgur.com/upload) is recommended to quickly upload your image online."
             )
+        )
+        try:
+            url = pydantic_core.Url(self.image_url.value)
+        except ValidationError:
+            raise invalid_url_exc
+        
+        if not url.host:
+            raise invalid_url_exc
+        if url.host.startswith("discord."):
+            ext = url.unicode_string().lower().rsplit(".", 1)[-1]
+            if not ext or ext not in (".png", ".jpeg", ".jpg", ".gif", ".webp"):
+                raise invalid_url_exc
 
         return await super().on_submit(interaction)
         
