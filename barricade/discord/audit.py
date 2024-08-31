@@ -6,8 +6,8 @@ import logging
 from pydantic import BaseModel
 
 from barricade import schemas
-from barricade.constants import DISCORD_AUDIT_CHANNEL_ID, DISCORD_REPORTS_CHANNEL_ID
-from barricade.discord.reports import get_report_embed
+from barricade.constants import DISCORD_AUDIT_CHANNEL_ID
+from barricade.discord.reports import get_report_channel, get_report_embed
 from .bot import bot
 
 async def set_footer(embed: discord.Embed, user_id: int, by: str | discord.User | None = None):
@@ -227,12 +227,10 @@ async def audit_report_create(
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
+    report_channel = get_report_channel(report.token.platform)
     embed.add_field(
         name="Message",
-        value=bot.get_partial_message(
-            DISCORD_REPORTS_CHANNEL_ID,
-            report.message_id
-        ).jump_url
+        value=bot.get_partial_message(report_channel.id, report.message_id, report_channel.guild.id).jump_url
     )
     payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
 
@@ -252,12 +250,10 @@ async def audit_report_edit(
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
+    report_channel = get_report_channel(report.token.platform)
     embed.add_field(
         name="Message",
-        value=bot.get_partial_message(
-            DISCORD_REPORTS_CHANNEL_ID,
-            report.message_id
-        ).jump_url
+        value=bot.get_partial_message(report_channel.id, report.message_id, report_channel.guild.id).jump_url
     )
     payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
 

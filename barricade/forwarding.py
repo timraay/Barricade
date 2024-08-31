@@ -4,13 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.constants import DISCORD_REPORTS_CHANNEL_ID
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.responses import get_pending_responses
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_forward_channel
-from barricade.discord.reports import get_report_embed
+from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.hooks import EventHooks, add_hook
@@ -57,7 +56,8 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
         embed = await get_report_embed(report)
-        message = bot.get_partial_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
+        channel = get_report_channel(report.token.platform)
+        message = bot.get_partial_message(channel.id, report.message_id, channel.guild.id)
         await message.edit(embed=embed)
     except discord.HTTPException:
         pass
@@ -86,7 +86,8 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):
     try:
-        message = bot.get_partial_message(DISCORD_REPORTS_CHANNEL_ID, report.message_id)
+        channel = get_report_channel(report.token.platform)
+        message = bot.get_partial_message(channel.id, report.message_id, channel.guild.id)
         await message.delete()
     except discord.HTTPException:
         pass

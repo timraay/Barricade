@@ -1,4 +1,3 @@
-from enum import IntEnum
 import discord
 from discord import ButtonStyle, Interaction
 
@@ -7,18 +6,26 @@ from barricade.crud.communities import get_admin_by_id
 from barricade.crud.reports import create_token
 from barricade.db import session_factory
 from barricade.discord.utils import View, CallableButton, CustomException
-from barricade.enums import ReportReasonFlag
+from barricade.enums import Platform
 from barricade.urls import get_report_create_url
 
 class GetSubmissionURLView(View):
-    def __init__(self):
+    def __init__(self, platform: Platform):
         super().__init__(timeout=None)
+        self.platform = platform
+
+        if platform == Platform.PC:
+            custom_id = "get_submission_url_pc"
+        elif platform == Platform.CONSOLE:
+            custom_id = "get_submission_url_console"
+        else:
+            raise TypeError("Unknown platform %r" % platform)
 
         self.add_item(CallableButton(
             self.start_submission,
             style=ButtonStyle.blurple,
             label="Get submission URL",
-            custom_id="get_submission_url"
+            custom_id=custom_id
         ))
 
     async def start_submission(self, interaction: Interaction):
@@ -35,7 +42,8 @@ class GetSubmissionURLView(View):
 
             token = schemas.ReportTokenCreateParams(
                 admin_id=admin.discord_id,
-                community_id=admin.community_id
+                community_id=admin.community_id,
+                platform=self.platform,
             )
             db_token = await create_token(db, token)
         

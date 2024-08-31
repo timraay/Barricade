@@ -7,6 +7,7 @@ from barricade.discord.bot import Bot
 from barricade.discord.utils import get_command_mention, get_success_embed
 from barricade.discord.views.enroll import EnrollView
 from barricade.discord.views.submit_report import GetSubmissionURLView
+from barricade.enums import Platform
 
 @app_commands.guilds(DISCORD_GUILD_ID)
 @app_commands.default_permissions(manage_guild=True)
@@ -15,20 +16,26 @@ class SetupCog(commands.GroupCog, group_name='setup'):
         self.bot = bot
 
     @app_commands.command(name="send-submission-start-message")
-    async def create_submission_start_message(self, interaction: Interaction):
+    async def create_submission_start_message(self, interaction: Interaction, platform: Platform):
         await interaction.channel.send( # type: ignore
             content=(
                 "## Submitting a report"
                 "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
-                " That way, your evidence gets shared with other community admins, who can then"
-                " preemptively ban the player and prevent them from repeating their actions."
+                "\nYour evidence will be shared with other community admins, allowing them to"
+                " preemptively ban the player and prevent them from repeating their actions elsewhere."
                 "\n\n"
                 "> Only severe violations should warrant getting someone banned across many community servers."
                 "\n> As a rule of thumb, **only report players that do not deserve a second chance**."
                 "\n_ _"
             ),
-            embed=discord.Embed(title="Submit a report"),
-            view=GetSubmissionURLView()
+            embed=discord.Embed(
+                title="Submit a report",
+                description=(
+                    "-# Reporting requires a **burden of proof**."
+                    "\n-# Reports with insufficient evidence are subject to removal."
+                )
+            ),
+            view=GetSubmissionURLView(platform)
         )
 
         await interaction.response.send_message(

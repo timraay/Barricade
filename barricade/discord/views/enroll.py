@@ -175,10 +175,8 @@ class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
         
         if not url.host:
             raise invalid_url_exc
-        if url.host.startswith("discord."):
-            ext = url.unicode_string().lower().rsplit(".", 1)[-1]
-            if not ext or ext not in (".png", ".jpeg", ".jpg", ".gif", ".webp"):
-                raise invalid_url_exc
+        if "discord" in url.host and not (url.host.startswith("cdn.") or url.host.startswith("media")):
+            raise invalid_url_exc
 
         return await super().on_submit(interaction)
         

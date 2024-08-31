@@ -59,8 +59,9 @@ DISCORD_OWNER_ROLE_ID = int(os.getenv('DISCORD_OWNER_ROLE_ID') or 0)
 DISCORD_PC_ROLE_ID = int(os.getenv('DISCORD_PC_ROLE_ID') or 0)
 # ID of the Console role
 DISCORD_CONSOLE_ROLE_ID = int(os.getenv('DISCORD_CONSOLE_ROLE_ID') or 0)
-# ID of the main report channel
-DISCORD_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_REPORTS_CHANNEL_ID') or 0)
+# IDs of the main report channels
+DISCORD_PC_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_PC_REPORTS_CHANNEL_ID') or 0)
+DISCORD_CONSOLE_REPORTS_CHANNEL_ID = int(os.getenv('DISCORD_CONSOLE_REPORTS_CHANNEL_ID') or 0)
 # ID of the channel to send community create requests to
 DISCORD_ENROLL_CHANNEL_ID = int(os.getenv('DISCORD_ENROLL_CHANNEL_ID') or 0)
 # ID of the channel to send audit messages to

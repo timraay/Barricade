@@ -9,6 +9,7 @@ from discord.ext import commands
 
 from barricade.discord.utils import handle_error
 from barricade.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
+from barricade.enums import Platform
 
 __all__ = (
     "bot",
@@ -52,7 +53,8 @@ class Bot(commands.Bot):
         
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
-        self.add_view(GetSubmissionURLView())
+        self.add_view(GetSubmissionURLView(Platform.PC))
+        self.add_view(GetSubmissionURLView(Platform.CONSOLE))
         self.add_dynamic_items(
             PlayerReportResponseButton,
             ReportManagementButton,

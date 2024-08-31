@@ -29,6 +29,10 @@ class TooManyAdminsError(Exception):
     def __init__(self, *args):
         super().__init__(*args)
 
+class InvalidPlatformError(Exception):
+    """Raised when attempting to create a report token for a platform that
+    the community is not known for."""
+
 
 class IntegrationFailureError(Exception):
     """Generic exception raised when an integration fails to

@@ -3,19 +3,26 @@ import discord
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
-from barricade.constants import DISCORD_REPORTS_CHANNEL_ID
+from barricade.constants import DISCORD_CONSOLE_REPORTS_CHANNEL_ID, DISCORD_PC_REPORTS_CHANNEL_ID
 from barricade.discord.bot import bot
 from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
-from barricade.enums import Emojis, ReportReasonFlag
+from barricade.enums import Emojis, Platform, ReportReasonFlag
 from barricade.utils import get_player_id_type, PlayerIDType
 
-def get_report_channel():
-    channel = bot.primary_guild.get_channel(DISCORD_REPORTS_CHANNEL_ID)
+def get_report_channel(platform: Platform):
+    if platform == Platform.PC:
+        channel_id = DISCORD_PC_REPORTS_CHANNEL_ID
+    elif platform == Platform.CONSOLE:
+        channel_id = DISCORD_CONSOLE_REPORTS_CHANNEL_ID
+    else:
+        raise TypeError("Unknown platform %r" % platform)
+    
+    channel = bot.primary_guild.get_channel(channel_id)
     if not channel:
-        raise RuntimeError("Report channel could not be found")
+        raise RuntimeError("%s report channel could not be found", platform.name)
     elif not isinstance(channel, discord.TextChannel):
-        raise RuntimeError("Report channel is not a text channel")
+        raise RuntimeError("%s report channel is not a text channel", platform.name)
     return channel
 
 async def get_report_embed(

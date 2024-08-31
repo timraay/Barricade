@@ -6,6 +6,10 @@ class PlayerIDType(str, Enum):
     STEAM_64_ID = "steamID"
     UUID = "hllWindowsID"
 
+class Platform(str, Enum):
+    PC = "pc"
+    CONSOLE = "console"
+
 class ReportRejectReason(StrEnum):
     INSUFFICIENT = "Insufficient"
     INCONCLUSIVE = "Inconclusive"

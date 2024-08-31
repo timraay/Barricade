@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 
 from sqlalchemy import exists, select
@@ -6,11 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from barricade import schemas
+from barricade.crud.communities import get_admin_by_id
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
 from barricade.discord.audit import audit_report_create, audit_report_delete, audit_report_edit, audit_token_create
 from barricade.discord.reports import get_report_embed, get_report_channel
-from barricade.exceptions import NotFoundError, AlreadyExistsError
+from barricade.enums import Platform
+from barricade.exceptions import InvalidPlatformError, NotFoundError, AlreadyExistsError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
 
@@ -66,11 +67,18 @@ async def create_token(
     if params.expires_at < datetime.now(tz=timezone.utc):
         raise ValueError("Token would already be expired")
     
-    admin = await db.get(models.Admin, params.admin_id)
+    admin = await get_admin_by_id(db, params.admin_id)
     if not admin:
         raise NotFoundError("No admin with ID %s" % params.admin_id)
     if admin.community_id != params.community_id:
         raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
+    
+    if params.platform == Platform.PC:
+        if not admin.community.is_pc:
+            raise InvalidPlatformError("Community with ID %s is not a PC community" % admin.community_id)
+    elif params.platform == Platform.CONSOLE:
+        if not admin.community.is_console:
+            raise InvalidPlatformError("Community with ID %s is not a console community" % admin.community_id)
 
     db_token = models.ReportToken(
         **params.model_dump()
@@ -250,7 +258,7 @@ async def create_report(
     report = schemas.ReportWithToken.model_validate(db_report)
 
     embed = await get_report_embed(report)
-    channel = get_report_channel()
+    channel = get_report_channel(report.token.platform)
     message = await channel.send(embed=embed)
     db_report.message_id = message.id
 

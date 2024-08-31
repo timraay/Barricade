@@ -6,7 +6,7 @@ from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
 from barricade.db import session_factory, engine, create_tables
 from barricade.discord import bot
-from barricade.enums import ReportReasonFlag
+from barricade.enums import Platform, ReportReasonFlag
 
 async def main():
     await bot.login(DISCORD_BOT_TOKEN)
@@ -33,7 +33,9 @@ async def main():
             forward_guild_id=695232527123742742,
             forward_channel_id=729998051288285256,
             admin_role_id=696127274549772359,
-            owner_name="Abu"
+            owner_name="Abu",
+            is_pc=True,
+            is_console=True,
         ))
         print("--", "Created community 1")
         c2 = await communities.create_new_community(db, schemas.CommunityCreateParams(
@@ -43,7 +45,9 @@ async def main():
             owner_id=999254478274441277,
             forward_guild_id=None,
             forward_channel_id=None,
-            owner_name="C2 owner"
+            owner_name="C2 owner",
+            is_pc=True,
+            is_console=False,
         ))
         print("--", "Created community 2")
         c3 = await communities.create_new_community(db, schemas.CommunityCreateParams(
@@ -53,7 +57,9 @@ async def main():
             owner_id=1018259047947960320,
             forward_guild_id=None,
             forward_channel_id=None,
-            owner_name="C3 owner"
+            owner_name="C3 owner",
+            is_pc=True,
+            is_console=False,
         ))
         print("--", "Created community 3")
     print("--", "Committed communities")
@@ -70,12 +76,14 @@ async def main():
         t1 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c1.id,
             admin_id=c1.owner_id,
+            platform=Platform.PC,
         ))
         print("--", "Created token 1")
 
         t2 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c2.id,
             admin_id=c2.owner_id,
+            platform=Platform.PC,
         ))
         print("--", "Created token 2")
 
