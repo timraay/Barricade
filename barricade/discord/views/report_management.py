@@ -8,6 +8,7 @@ from barricade import schemas
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.crud.reports import delete_report, get_report_by_id
 from barricade.db import session_factory
+from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
 from barricade.exceptions import NotFoundError
@@ -41,9 +42,13 @@ class ReportManagementButton(
     @handle_error_wrap
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
+            db_report = await get_report_by_id(db, self.report_id, load_relations=True)
+            report = schemas.ReportWithRelations.model_validate(db_report)
+            if interaction.user.id != report.token.admin_id:
+                await assert_has_admin_role(interaction.user, report.token.community) # type: ignore
+
             match self.command:
                 case "del":
-                    # TODO? Only allow admins to delete
                     async def confirm_delete(_interaction: Interaction):
                         await delete_report(db, self.report_id, by=interaction.user) # type: ignore
                         await interaction.message.delete() # type: ignore
