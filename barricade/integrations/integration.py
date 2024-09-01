@@ -15,7 +15,7 @@ from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import IntegrationValidationError, NotFoundError, AlreadyBannedError
+from barricade.exceptions import IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
 from barricade.utils import safe_create_task
@@ -27,6 +27,14 @@ def is_saved(func):
     async def decorator(integration: 'Integration', *args, **kwargs):
         if integration.config.id is None:
             raise RuntimeError("Integration needs to be created first")
+        return await func(integration, *args, **kwargs)
+    return decorator
+
+def is_enabled(func):
+    @wraps(func)
+    async def decorator(integration: 'Integration', *args, **kwargs):
+        if not integration.config.enabled:
+            raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
         return await func(integration, *args, **kwargs)
     return decorator
 
@@ -92,7 +100,7 @@ class Integration(ABC):
                 self.start_connection()
 
                 if not self.task or self.task.done():
-                    self.task = safe_create_task(self._loop())
+                    self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
                 
                 return db_config
         except:
@@ -136,7 +144,7 @@ class Integration(ABC):
             self.start_connection()
             
             if self.task and self.task.done():
-                self.task = safe_create_task(self._loop())
+                self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
             
             raise
 
@@ -167,7 +175,10 @@ class Integration(ABC):
                 ))
                 # We kind of have to pray that this doesn't fail for whatever reason.
                 # We can't await it, because we would cancel ourselves.
-                safe_create_task(self.disable())
+                safe_create_task(
+                    self.disable(),
+                    err_msg=f"Exited loop for integration {self!r} but failed to disable the integration!",
+                )
                 return
 
             try:

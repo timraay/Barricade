@@ -18,7 +18,8 @@ class EventHooks(str, Enum):
         return [
             safe_create_task(
                 coro=hook(*args),
-                err_msg=f"Failed to invoke {self.name} hook {hook.__name__}"
+                err_msg=f"Failed to invoke {self.name} hook {hook.__name__}",
+                name=hook.__name__,
             ) for hook in self.get()
         ]
 

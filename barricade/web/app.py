@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     try:
         # Start the Discord bot
         await bot.login(DISCORD_BOT_TOKEN)
-        safe_create_task(bot.connect(reconnect=True))
+        safe_create_task(bot.connect(reconnect=True), name="DiscordBot")
         await bot.wait_until_ready()
         
         assert bot.user is not None

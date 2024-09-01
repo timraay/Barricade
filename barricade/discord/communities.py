@@ -2,6 +2,7 @@ import discord
 from barricade import schemas
 from barricade.constants import DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID, DISCORD_PC_ROLE_ID, DISCORD_CONSOLE_ROLE_ID
 from barricade.discord.bot import bot
+from barricade.discord.utils import CustomException
 from barricade.utils import safe_create_task
 
 def get_admin_roles() -> tuple[discord.Role, discord.Role, discord.Role, discord.Role]:
@@ -82,4 +83,23 @@ def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
     channel = get_forward_channel(community)
     if not channel:
         return
-    safe_create_task(channel.send(*args, **kwargs))
+    safe_create_task(
+        channel.send(*args, **kwargs),
+        err_msg="Failed to send message to %r" % community,
+        name="communitymessage_%s" % community.id
+    )
+
+
+async def assert_has_admin_role(member: discord.Member, community: schemas.CommunityRef):
+    # Make sure user has the Admin role
+    if not community.admin_role_id:
+        raise CustomException(
+            "You are not permitted to do that!",
+            f"Ask <@{community.owner_id}> to configure an Admin role."
+        )
+    if not discord.utils.get(member.roles, id=community.admin_role_id): # type: ignore
+        raise CustomException(
+            "You are not permitted to do that!",
+            "You do not have this community's configured Admin role."
+        )
+    

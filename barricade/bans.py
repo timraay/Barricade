@@ -38,6 +38,10 @@ async def forward_errors(
             ).add_field(
                 name="Integration",
                 value=f"{integration.integration_type.value} (#{integration.id})"
+            ).add_field(
+                name="Details",
+                value=f"`{str(e)}`",
+                inline=False
             )
 
             view = RetryErrorView(callable)
@@ -58,7 +62,7 @@ async def on_player_ban(response: schemas.Response):
         return
 
     banned_by = set(ban.integration_id for ban in bans)
-    report = response.player_report.report
+    # report = response.player_report.report
     # reasons = report.reasons_bitflag.to_list(report.reasons_custom)
     manager = IntegrationManager()
     
@@ -76,6 +80,9 @@ async def on_player_ban(response: schemas.Response):
         integration = manager.get_by_config(config)
         if not integration:
             logging.error("Integration with config %r should be registered by manager but was not" % config)
+            continue
+
+        if not integration.config.enabled:
             continue
 
         coro = forward_errors(

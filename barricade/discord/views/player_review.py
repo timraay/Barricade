@@ -10,7 +10,8 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_pending_responses, get_response_stats, set_report_response
 from barricade.db import models, session_factory
-from barricade.discord.utils import CustomException, View, handle_error_wrap
+from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.utils import CustomException, View, get_command_mention, get_danger_embed, handle_error_wrap
 from barricade.discord.reports import get_report_embed
 from barricade.enums import ReportRejectReason
 
@@ -83,18 +84,43 @@ class PlayerReportResponseButton(
             db_community = await get_community_by_id(db, self.community_id)
             if not db_community:
                 raise CustomException("Community not found")
+            
+            await assert_has_admin_role(
+                interaction.user, # type: ignore
+                schemas.CommunityRef.model_validate(db_community),
+            )
+            
+            # Make sure that there is at least one enabled integration
+            if banned:
+                is_owner = db_community.owner_id == interaction.user.id
+                err_msg = None
+                if not db_community.integrations:
+                    err_msg = "No integrations have been added yet!"
+                elif not any(integration.enabled for integration in db_community.integrations):
+                    err_msg = "No integrations are enabled!"
 
-            # Make sure user has the Admin role
-            if not db_community.admin_role_id:
-                raise CustomException(
-                    "You are not permitted to do that!",
-                    f"Ask <@{db_community.owner_id}> to configure an Admin role."
-                )
-            if not discord.utils.get(interaction.user.roles, id=db_community.admin_role_id): # type: ignore
-                raise CustomException(
-                    "You are not permitted to do that!",
-                    "You do not have this community's configured Admin role."
-                )
+                if err_msg:
+                    if is_owner:
+                        raise CustomException(
+                            err_msg,
+                            (
+                                "Integrations are necessary to connect to your game servers and, by extension, ban players."
+                                "\n\n"
+                                f"You can manage integrations using {await get_command_mention(interaction.client.tree, 'config', 'integrations')}." # type: ignore
+                                " For more information on how to setup an integration, please refer to [these instructions]"
+                                "(https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers)."
+                            )
+                        )
+                    else:
+                        raise CustomException(
+                            err_msg,
+                            (
+                                "Integrations are necessary to connect to your game servers and, by extension, ban players."
+                                "\n\n"
+                                "Only the owner of your community can manage integrations. Refer them to [these instructions]"
+                                "(https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers)."
+                            )
+                        )
 
             # This will immediately commit
             db_prr = await set_report_response(db, prr)

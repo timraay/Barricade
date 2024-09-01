@@ -12,7 +12,7 @@ from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType, PlayerIDType
 from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
-from barricade.integrations.integration import Integration, IntegrationMetaData
+from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.schemas import Response
 from barricade.utils import get_player_id_type, safe_create_task
 
@@ -67,6 +67,7 @@ class BattlemetricsIntegration(Integration):
         else:
             await self.validate_ban_list()
 
+    @is_enabled
     async def ban_player(self, response: schemas.Response):
         player_id = response.player_report.player_id
         report = response.player_report.report
@@ -84,6 +85,7 @@ class BattlemetricsIntegration(Integration):
             )
             await self.set_ban_id(db, player_id, ban_id)
 
+    @is_enabled
     async def unban_player(self, player_id: str):
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
@@ -102,6 +104,7 @@ class BattlemetricsIntegration(Integration):
 
             await db.delete(db_ban)
 
+    @is_enabled
     async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
         ban_ids = []
         failed = []
@@ -131,6 +134,7 @@ class BattlemetricsIntegration(Integration):
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to ban players")
 
+    @is_enabled
     async def bulk_unban_players(self, player_ids: Sequence[str]):
         failed = []
         async with session_factory.begin() as db:
@@ -149,6 +153,7 @@ class BattlemetricsIntegration(Integration):
         if failed:
             raise IntegrationBulkBanError(failed, "Failed to unban players")
     
+    @is_enabled
     async def synchronize(self):
         if not self.config.id:
             raise RuntimeError("Integration has not yet been saved")

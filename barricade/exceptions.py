@@ -38,6 +38,9 @@ class IntegrationFailureError(Exception):
     """Generic exception raised when an integration fails to
     perform a remote action."""
 
+class IntegrationDisabledError(IntegrationFailureError):
+    """Raised when an integration is disabled when it is expected to be enabled."""
+
 class IntegrationCommandError(IntegrationFailureError):
     """Exception when an integration utilizing the Integration protocol returns
     a response with the `failed` flag set to `true`."""

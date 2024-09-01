@@ -27,14 +27,16 @@ def async_ttl_cache(size: int, seconds: int):
         return wrapper
     return decorator
 
-def safe_create_task(coro: Coroutine, err_msg: str | None = None):
+def safe_create_task(coro: Coroutine, err_msg: str | None = None, name: str | None = None):
     def _task_inner(t: asyncio.Task):
-        if exc := t.exception():
+        if t.cancelled():
+            logging.warn(f"Task {task.get_name()} was cancelled")
+        elif exc := t.exception():
             logging.error(
-                err_msg or "Unexpected error during task",
+                err_msg or f"Unexpected error during task {task.get_name()}",
                 exc_info=exc
             )
-    task = asyncio.create_task(coro)
+    task = asyncio.create_task(coro, name=name)
     task.add_done_callback(_task_inner)
     return task
 

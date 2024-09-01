@@ -16,7 +16,7 @@ from barricade.exceptions import (
     AlreadyBannedError, IntegrationValidationError
 )
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
-from barricade.integrations.integration import Integration, IntegrationMetaData
+from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.integrations.websocket import (
     BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, UnbanPlayersRequestConfigPayload,
     UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
@@ -160,6 +160,7 @@ class CustomIntegration(Integration):
         if community.id != self.config.community_id:
             raise IntegrationValidationError("Communities do not match")
 
+    @is_enabled
     async def ban_player(self, response: schemas.Response):
         async with session_factory.begin() as db:
             player_id = response.player_report.player_id
@@ -177,6 +178,7 @@ class CustomIntegration(Integration):
 
             await self.set_ban_id(db, player_id, player_id)
 
+    @is_enabled
     async def unban_player(self, player_id: str):
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
@@ -191,6 +193,7 @@ class CustomIntegration(Integration):
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
     
+    @is_enabled
     async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
         ban_ids: list[tuple[str, str]] = []
         try:
@@ -207,6 +210,7 @@ class CustomIntegration(Integration):
                 async with session_factory.begin() as db:
                     await self.set_multiple_ban_ids(db, *ban_ids)
 
+    @is_enabled
     async def bulk_unban_players(self, player_ids: Sequence[str]):
         async with session_factory() as db:
             remote_ids: dict[str, str] = {}
@@ -224,6 +228,7 @@ class CustomIntegration(Integration):
                 async with session_factory.begin() as db:
                     await self.discard_multiple_ban_ids(db, successful_player_ids)
 
+    @is_enabled
     async def synchronize(self):
         pass
 
