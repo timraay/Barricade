@@ -53,6 +53,9 @@ class Integration(ABC):
         self.task: asyncio.Task | None = None
         self.lock = asyncio.Lock()
 
+        if self.config.id is not None and self.config.enabled:
+            safe_create_task(self.enable(force=True))
+
     def __repr__(self):
         return f"{type(self).__name__}[id={self.config.id}]"
     
@@ -75,22 +78,23 @@ class Integration(ABC):
         return db_config
 
     @is_saved
-    async def enable(self) -> models.Integration:
+    async def enable(self, force: bool = False) -> models.Integration:
         """Enable this integration.
 
         Updates and saves the config.
 
         Parameters
         ----------
-        db : AsyncSession
-            An asynchronous database session
+        force : bool
+            Whether to enable the integration if it already is.
+            Throws a RuntimeError otherwise. False by default.
 
         Returns
         -------
         models.Integration
             The integration config record
         """
-        if self.config.enabled is True:
+        if self.config.enabled is True and not force:
             raise RuntimeError("Integration is already enabled")
 
         try:
@@ -114,17 +118,23 @@ class Integration(ABC):
             raise
 
     @is_saved
-    async def disable(self) -> models.Integration:
+    async def disable(self, force: bool = False) -> models.Integration:
         """Disable this integration.
 
         Updates and saves the config.
+
+        Parameters
+        ----------
+        force : bool
+            Whether to disable the integration if it already is.
+            Throws a RuntimeError otherwise. False by default.
 
         Returns
         -------
         models.Integration
             The integration config record
         """
-        if self.config.enabled is False:
+        if self.config.enabled is False and not force:
             raise RuntimeError("Integration is already disabled")
         
         try:
