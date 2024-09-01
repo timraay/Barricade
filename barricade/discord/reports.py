@@ -45,7 +45,10 @@ async def get_report_embed(
         player_id_type = get_player_id_type(player.player_id)
         is_steam = player_id_type == PlayerIDType.STEAM_64_ID
 
-        value = f"{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
+        if report.token.platform == Platform.PC:
+            value = f"{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
+        else:
+            value = f"*`{player.player_id}`*"
 
         if stats and (stat := stats.get(player.id)):
             num_responses = stat.num_banned + stat.num_rejected
