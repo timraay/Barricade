@@ -27,6 +27,7 @@ def get_report_channel(platform: Platform):
 
 async def get_report_embed(
         report: schemas.ReportWithToken,
+        responses: list[schemas.PendingResponse] | None = None,
         stats: dict[int, schemas.ResponseStats] | None = None,
         with_footer: bool = True
 ) -> discord.Embed:
@@ -41,9 +42,21 @@ async def get_report_embed(
         )
     )
 
+    if responses and len(responses) != len(report.players):
+        raise ValueError("Expected %s responses but got %s" % (len(report.players), len(responses)))
+
     for i, player in enumerate(report.players, 1):
         player_id_type = get_player_id_type(player.player_id)
         is_steam = player_id_type == PlayerIDType.STEAM_64_ID
+
+        
+        name = f"**`{i}.`** {esc_md(player.player_name)}"
+        if responses:
+            response = responses[i - 1] # i starts at 1
+            if response.banned is True:
+                name = f"**`{i}.`**{Emojis.HIGHLIGHT_RED}{esc_md(player.player_name)}"
+            elif response.banned is False:
+                name = f"**`{i}.`**{Emojis.HIGHLIGHT_GREEN}{esc_md(player.player_name)}"
 
         if report.token.platform == Platform.PC:
             value = f"{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
@@ -73,7 +86,7 @@ async def get_report_embed(
             value += "\n" + format_url("View on Battlemetrics", bm_rcon_url)
 
         embed.add_field(
-            name=f"**`{i}.`** {esc_md(player.player_name)}",
+            name=name,
             value=value,
             inline=True
         )

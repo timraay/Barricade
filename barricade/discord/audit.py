@@ -279,6 +279,6 @@ async def audit_report_delete(
         value="See below"
     )
     payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
-    report_embed = await get_report_embed(report, stats, with_footer=False)
+    report_embed = await get_report_embed(report, stats=stats, with_footer=False)
 
     await _audit(embed, payload, report_embed)

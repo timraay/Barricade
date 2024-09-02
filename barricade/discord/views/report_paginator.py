@@ -22,8 +22,7 @@ class ReportPaginator(View):
         self.stats: dict[int, schemas.ResponseStats] = {}
 
     async def send(self, interaction: Interaction):
-        await self.load_page(0)
-        embed = await get_report_embed(self.reports[self.page], stats=self.stats)
+        embed = await self.load_page(0)
         await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
     
     async def edit(self, interaction: Interaction):
@@ -73,6 +72,7 @@ class ReportPaginator(View):
                 if missing_stats:
                     async with session_factory() as db:
                         await self.fetch_response_stats(db, *missing_stats)
+                embed = await get_report_embed(self.reports[self.page], stats=self.stats)
             else:
                 async with session_factory() as db:
                     # Load responses
@@ -83,6 +83,7 @@ class ReportPaginator(View):
                     ])
                     await self.fetch_response_stats(db, *missing_stats)
                 view = PlayerReviewView(responses)
+                embed = await get_report_embed(self.reports[self.page], responses=responses, stats=self.stats)
             
             # Add items from default view to paginator
             for item in view.children:
@@ -91,6 +92,8 @@ class ReportPaginator(View):
         except:
             self.page = old_page
             raise
+
+        return embed
 
     async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReportRef):
         for pr in player_reports:

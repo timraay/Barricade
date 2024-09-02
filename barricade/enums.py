@@ -105,3 +105,6 @@ class Emojis(StrEnum):
     CONTACT = "<:contact:1275098526556356638>"
     CRCON = "<:crcon:1275098538581430346>"
     BATTLEMETRICS = "<:battlemetrics:1275098517345669140>"
+    HIGHLIGHT_RED = "<:highlight_red:1280312505176031293>"
+    HIGHLIGHT_GREEN = "<:highlight_green:1280312497072504886>"
+    HIGHLIGHT_BLURPLE = "<:highlight_blurple:1280312487677268030>"

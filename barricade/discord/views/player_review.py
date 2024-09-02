@@ -274,7 +274,7 @@ class PlayerReviewView(View):
         responses: list[schemas.PendingResponse],
         stats: dict[int, schemas.ResponseStats] | None = None
     ):
-        embed = await get_report_embed(report, stats)
+        embed = await get_report_embed(report, responses=responses, stats=stats)
 
         if any(response.banned is None for response in responses):
             embed.color = discord.Colour.blurple()
