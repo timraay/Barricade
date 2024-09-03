@@ -20,9 +20,9 @@ def get_report_channel(platform: Platform):
     
     channel = bot.primary_guild.get_channel(channel_id)
     if not channel:
-        raise RuntimeError("%s report channel could not be found", platform.name)
+        raise RuntimeError("%s report channel could not be found" % platform.name)
     elif not isinstance(channel, discord.TextChannel):
-        raise RuntimeError("%s report channel is not a text channel", platform.name)
+        raise RuntimeError("%s report channel is not a text channel" % platform.name)
     return channel
 
 async def get_report_embed(
