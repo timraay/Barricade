@@ -5,10 +5,12 @@ import aiohttp
 from discord import Embed
 
 from barricade import schemas
+from barricade.constants import DISCORD_GUILD_ID
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
 from barricade.crud.communities import get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
+from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType, PlayerIDType
 from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
@@ -71,6 +73,7 @@ class BattlemetricsIntegration(Integration):
     async def ban_player(self, response: schemas.ResponseWithToken):
         player_id = response.player_report.player_id
         report = response.player_report.report
+        report_channel = get_report_channel(report.token.platform)
 
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
@@ -78,10 +81,15 @@ class BattlemetricsIntegration(Integration):
                 raise IntegrationBanError(player_id, "Player is already banned")
 
             reason = self.get_ban_reason(response)
+            note = (
+                f"Banned for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}.\n"
+                f"Reported by {report.token.community.name} ({report.token.community.contact_url})\n"
+                f"Link to Bunker message: {report_channel.jump_url}/{report.message_id}"
+            )
             ban_id = await self.add_ban(
                 identifier=player_id,
                 reason=reason,
-                note=f"Originally reported for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}"
+                note=note,
             )
             await self.set_ban_id(db, player_id, ban_id)
 
@@ -112,17 +120,23 @@ class BattlemetricsIntegration(Integration):
             for response in responses:
                 player_id = response.player_report.player_id
                 report = response.player_report.report
+                report_channel = get_report_channel(report.token.platform)
 
                 db_ban = await self.get_ban(db, player_id)
                 if db_ban is not None:
                     continue
 
                 reason = self.get_ban_reason(response)
+                note = (
+                    f"Banned for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}.\n"
+                    f"Reported by {report.token.community.name} ({report.token.community.contact_url})\n"
+                    f"Link to Bunker message: {report_channel.jump_url}/{report.message_id}"
+                )
                 try:
                     ban_id = await self.add_ban(
                         identifier=player_id,
                         reason=reason,
-                        note=f"Originally reported for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}"
+                        note=note,
                     )
                 except IntegrationBanError:
                     failed.append(player_id)

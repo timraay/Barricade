@@ -334,8 +334,11 @@ class Integration(ABC):
         return (
             f"Banned via shared HLL Barricade report for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}."
             "\n\n"
-            f"Reported by {reporting_community.name} ({reporting_community.contact_url})"
-            f"Banned by {response.community.name} ({response.community.contact_url})"
+            f"Reported by {reporting_community.name}\n"
+            f"Contact: {reporting_community.contact_url}"
+            "\n\n"
+            f"Banned by {response.community.name}\n"
+            f"Contact: {response.community.contact_url}"
             "\n\n"
             "More info: https://bit.ly/BarricadeBanned"
         )
