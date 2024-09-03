@@ -68,7 +68,7 @@ class BattlemetricsIntegration(Integration):
             await self.validate_ban_list()
 
     @is_enabled
-    async def ban_player(self, response: schemas.Response):
+    async def ban_player(self, response: schemas.ResponseWithToken):
         player_id = response.player_report.player_id
         report = response.player_report.report
 
@@ -77,7 +77,7 @@ class BattlemetricsIntegration(Integration):
             if db_ban is not None:
                 raise IntegrationBanError(player_id, "Player is already banned")
 
-            reason = self.get_ban_reason(response.community)
+            reason = self.get_ban_reason(response)
             ban_id = await self.add_ban(
                 identifier=player_id,
                 reason=reason,
@@ -105,7 +105,7 @@ class BattlemetricsIntegration(Integration):
             await db.delete(db_ban)
 
     @is_enabled
-    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
+    async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
         ban_ids = []
         failed = []
         async with session_factory.begin() as db:
@@ -117,7 +117,7 @@ class BattlemetricsIntegration(Integration):
                 if db_ban is not None:
                     continue
 
-                reason = self.get_ban_reason(response.community)
+                reason = self.get_ban_reason(response)
                 try:
                     ban_id = await self.add_ban(
                         identifier=player_id,
@@ -355,7 +355,7 @@ class BattlemetricsIntegration(Integration):
                     "name": f"HLL Barricade - {community.name} (ID: {community.id})",
                     "action": "kick",
                     "defaultIdentifiers": ["steamID"],
-                    "defaultReasons": [self.get_ban_reason(community)],
+                    "defaultReasons": [],
                     "defaultAutoAddEnabled": True
                 },
                 "relationships": {

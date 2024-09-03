@@ -27,7 +27,7 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
     stmt = select(models.PlayerReportResponse).where(
         models.PlayerReportResponse.pr_id == params.pr_id,
         models.PlayerReportResponse.community_id == params.community_id,
-    ).limit(1)
+    ).options(selectinload(models.Report.token)).limit(1)
     db_prr = await db.scalar(stmt)
 
     if not db_prr:
@@ -41,7 +41,7 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         db_prr.reject_reason = params.reject_reason
         await db.commit()
 
-    prr = schemas.Response.model_validate(db_prr)
+    prr = schemas.ResponseWithToken.model_validate(db_prr)
     if prr.banned:
         EventHooks.invoke_player_ban(prr)
     else:
@@ -71,7 +71,7 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
         models.PlayerReportResponse.pr_id.in_([
             pr.id for pr in report.players
         ])
-    )
+    ).options(selectinload(models.Report.token))
     result = await db.scalars(stmt)
     return result.all()
 

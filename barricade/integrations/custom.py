@@ -12,7 +12,7 @@ from barricade.discord.communities import get_forward_channel
 from barricade.discord.reports import get_alert_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, IntegrationFailureError, NotFoundError,
+    IntegrationBanError, IntegrationCommandError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
@@ -161,7 +161,7 @@ class CustomIntegration(Integration):
             raise IntegrationValidationError("Communities do not match")
 
     @is_enabled
-    async def ban_player(self, response: schemas.Response):
+    async def ban_player(self, response: schemas.ResponseWithToken):
         async with session_factory.begin() as db:
             player_id = response.player_report.player_id
             db_ban = await self.get_ban(db, player_id)
@@ -171,7 +171,7 @@ class CustomIntegration(Integration):
             try:
                 await self.add_ban(
                     player_id=player_id,
-                    reason=self.get_ban_reason(response.community)
+                    reason=self.get_ban_reason(response)
                 )
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
@@ -194,12 +194,12 @@ class CustomIntegration(Integration):
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
     
     @is_enabled
-    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
+    async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
         ban_ids: list[tuple[str, str]] = []
         try:
             async for ban in self.add_multiple_bans(
                 player_ids={
-                    response.player_report.player_id: self.get_ban_reason(response.community)
+                    response.player_report.player_id: self.get_ban_reason(response)
                     for response in responses
                 }
             ):

@@ -238,6 +238,11 @@ class ReportMessage(ReportMessageRef):
 class PlayerReport(PlayerReportRef):
     report: ReportRef
 
+class ReportRefWithToken(ReportRef):
+    token: ReportTokenRef
+class PlayerReportWithToken(PlayerReport):
+    report: ReportRefWithToken # type: ignore
+
 class Report(ReportRef):
     players: list[PlayerReportRef]
 
@@ -253,6 +258,9 @@ class Response(_ResponseBase, _ModelFromAttributes):
     id: int
     player_report: PlayerReport
     community: CommunityRef
+
+class ResponseWithToken(Response):
+    player_report: PlayerReportWithToken # type: ignore
 
 class SafeCommunityWithRelations(SafeCommunity):
     tokens: list[ReportTokenRef]

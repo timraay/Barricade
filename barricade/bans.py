@@ -1,7 +1,7 @@
 import asyncio
 from functools import partial
 import logging
-from typing import Callable, Coroutine, Sequence
+from typing import Callable, Coroutine
 
 from discord import Embed
 
@@ -50,7 +50,7 @@ async def forward_errors(
 
 
 @add_hook(EventHooks.player_ban)
-async def on_player_ban(response: schemas.Response):
+async def on_player_ban(response: schemas.ResponseWithToken):
     async with session_factory() as db:
         community = await get_community_by_id(db, response.community_id)
         assert community is not None

@@ -43,7 +43,7 @@ class EventHooks(str, Enum):
         return EventHooks.report_delete._invoke(report)
 
     @staticmethod
-    def invoke_player_ban(response: schemas.Response):
+    def invoke_player_ban(response: schemas.ResponseWithToken):
         return EventHooks.player_ban._invoke(response)
 
     @staticmethod

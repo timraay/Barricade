@@ -275,7 +275,7 @@ class Integration(ABC):
         ----------
         db : AsyncSession
             An asynchronous database session
-        playerids_banids : tuple[schemas.Response, str]
+        playerids_banids : tuple[str, str]
             A sequence of player IDs with their associated
             ban IDs.
         """
@@ -328,10 +328,16 @@ class Integration(ABC):
             models.PlayerBan.integration_id==self.config.id,
         )
     
-    def get_ban_reason(self, community: schemas.CommunityRef) -> str:
+    def get_ban_reason(self, response: schemas.ResponseWithToken) -> str:
+        report = response.player_report.report
+        reporting_community = report.token.community
         return (
-            "Banned via shared HLL Barricade report. Appeal"
-            f" at {community.contact_url}"
+            f"Banned via shared HLL Barricade report for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}."
+            "\n\n"
+            f"Reported by {reporting_community.name} ({reporting_community.contact_url})"
+            f"Banned by {response.community.name} ({response.community.contact_url})"
+            "\n\n"
+            "More info: https://bit.ly/BarricadeBanned"
         )
 
     # --- Commands to implement
@@ -375,12 +381,12 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def ban_player(self, response: schemas.Response):
+    async def ban_player(self, response: schemas.ResponseWithToken):
         """Instruct the remote integration to ban a player.
 
         Parameters
         ----------
-        response : schemas.Response
+        response : schemas.ResponseWithToken
             The community's response to a reported player
 
         Raises
@@ -397,8 +403,8 @@ class Integration(ABC):
 
         Parameters
         ----------
-        response : schemas.Response
-            The community's response to a reported player
+        player_id : str
+            The ID of the player to unban
 
         Raises
         ------
@@ -410,7 +416,7 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def bulk_ban_players(self, responses: Sequence[schemas.Response]):
+    async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
         """Instruct the remote integration to ban multiple players.
         Depending on the implementation this may take a while.
 
@@ -419,7 +425,7 @@ class Integration(ABC):
 
         Parameters
         ----------
-        response : Sequence[schemas.Response]
+        response : Sequence[schemas.ResponseWithToken]
             The community's responses to all reported players
 
         Raises
@@ -439,8 +445,8 @@ class Integration(ABC):
 
         Parameters
         ----------
-        response : Sequence[schemas.Response]
-            The community's responses to all rapported players
+        response : Sequence[str]
+            The IDs of the players to unban
 
         Raises
         ------

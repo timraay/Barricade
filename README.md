@@ -43,10 +43,6 @@ Before setting up your community to receive reports, make sure you have the foll
 
 ## Frequently Asked Questions (FAQ)
 
-### Who reviews reports?
-
-When a report is made, each community individually decides whether to ban the player or not. Players are never banned on your server without manual approval from your own admins. Do note that when a report is revoked, all subsequent bans will automatically be revoked - without requiring approval.
-
 ### I have been banned! What now?
 
 If you have been banned as a result of a Barricade report (which the message should clearly state), it means a community has put forward evidence against you. The admins of the server you just tried to join has reviewed this evidence and decided to ban you. This means you are likely to be banned on multiple servers, and not just this one you tried to join.
@@ -54,6 +50,10 @@ If you have been banned as a result of a Barricade report (which the message sho
 When appealing your ban, you should first reach out to the community that created the original report. If they accept your appeal, they can revoke the report and get all subsequent bans from the other servers removed.
 
 That being said, you can still reach out to each individual community. While they cannot remove your ban from other servers, if enough communities unban you, the report can also be revoked that way.
+
+### Who reviews reports?
+
+When a report is made, each community individually decides whether to ban the player or not. Players are never banned on your server without manual approval from your own admins. Do note that when a report is revoked, all subsequent bans will automatically be revoked - without requiring approval.
 
 ### As an admin, can I transfer ownership to myself?
 

@@ -21,7 +21,7 @@ class ReportToken(ModelBase):
     value: Mapped[str] = mapped_column(String, unique=True, index=True, default=lambda: ReportToken.generate_value())
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     admin_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
-    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA))
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA)) # type: ignore
     platform: Mapped[Platform] = mapped_column(Enum(Platform), default=Platform.PC, server_default=Platform.PC.name)
 
     community: Mapped['Community'] = relationship(back_populates="tokens", lazy="selectin")
