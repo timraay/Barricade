@@ -76,8 +76,8 @@ class CRCONIntegration(CustomIntegration):
     # --- Abstract method implementations
 
     async def get_instance_name(self) -> str:
-        resp = await self._make_request(method="GET", endpoint="/public_info")
-        return resp["result"]["short_name"]
+        resp = await self._make_request(method="GET", endpoint="/get_public_info")
+        return resp["result"]["name"]["short_name"]
     
     def get_instance_url(self) -> str:
         return self.config.api_url.removesuffix("/api")
