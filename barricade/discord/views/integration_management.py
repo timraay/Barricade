@@ -247,6 +247,7 @@ class IntegrationManagementView(View):
                 self.community.integrations.append(
                     schemas.IntegrationConfig.model_validate(integration.config)
                 )
+                self.update_integrations()
 
             self.comments.pop(integration.config.id, None)
 
