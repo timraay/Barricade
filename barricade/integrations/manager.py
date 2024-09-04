@@ -23,6 +23,9 @@ class IntegrationManager(Singleton):
             integration.config = integration.meta.config_cls.model_validate(config)
         return integration
     
+    def get_all(self):
+        yield from self.__integrations.values()
+    
     def add(self, integration: 'Integration'):
         if not integration.config.id:
             raise TypeError("Integration must be saved first")

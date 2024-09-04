@@ -18,7 +18,7 @@ from barricade.exceptions import (
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.integrations.websocket import (
-    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, UnbanPlayersRequestConfigPayload,
+    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload, NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload,
     UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
 )
 
@@ -147,6 +147,27 @@ class CustomIntegration(Integration):
         self.ws.address = self.config.api_url
         self.ws.token = self.config.api_key
         self.ws.update_connection()
+
+    @is_enabled
+    async def on_report_create(self, report: schemas.ReportWithToken):
+        print("exec")
+        await self.ws.execute(
+            ClientRequestType.NEW_REPORT,
+            NewReportRequestPayload(
+                created_at=report.created_at,
+                body=report.body,
+                reasons=report.reasons_bitflag.to_list(report.reasons_custom),
+                attachment_urls=[],
+                players=[
+                    NewReportRequestPayloadPlayer(
+                        player_id=player.player_id,
+                        player_name=player.player_name,
+                        bm_rcon_url=player.player.bm_rcon_url,
+                    )
+                    for player in report.players
+                ]
+            ).model_dump()
+        )
 
     # --- Abstract method implementations
 

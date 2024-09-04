@@ -68,13 +68,13 @@ class Integration(ABC):
         async with session_factory.begin() as db:
             self.config.enabled = False
             db_config = await create_integration_config(db, self.config) # type: ignore
-            self.config = db_config
+            self.config = schemas.IntegrationConfig.model_validate(db_config)
             manager.add(self)
     
     @is_saved
     async def update(self, db: AsyncSession):
         db_config = await update_integration_config(db, self.config) # type: ignore
-        self.config = db_config
+        self.config = schemas.IntegrationConfig.model_validate(db_config)
         return db_config
 
     @is_saved
@@ -205,6 +205,9 @@ class Integration(ABC):
         pass
 
     def update_connection(self):
+        pass
+
+    async def on_report_create(self, report: schemas.ReportWithToken):
         pass
 
     # --- Everything related to storing and retrieving bans

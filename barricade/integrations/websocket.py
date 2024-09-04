@@ -61,7 +61,7 @@ class UnbanPlayersRequestPayload(pydantic.BaseModel):
     config: UnbanPlayersRequestConfigPayload
 
 class NewReportRequestPayloadPlayer(pydantic.BaseModel):
-    player_id: int
+    player_id: str
     player_name: str
     bm_rcon_url: str | None
 class NewReportRequestPayload(pydantic.BaseModel):
@@ -249,7 +249,7 @@ class Websocket:
             response = request.response_error("No such command")
         else:
             try:
-                ret = await handler(request)
+                ret = await handler(request.payload)
                 response = request.response_ok(ret)
             except NotImplementedError:
                 logging.warning('Missing implementation for command %s', request.request)

@@ -1,3 +1,4 @@
+import asyncio
 import discord
 import logging
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.hooks import EventHooks, add_hook
+from barricade.integrations.manager import IntegrationManager
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
@@ -102,6 +104,22 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
             pass
         except:
             logging.exception("Unexpected error occurred while attempting to delete %r", message_data)
+
+@add_hook(EventHooks.report_create)
+async def process_integration_report_create_hooks(report: schemas.ReportWithToken):
+    await invoke_integration_report_create_hook(report)
+
+@add_hook(EventHooks.report_edit)
+async def process_integration_report_edit_hooks(report: schemas.ReportWithRelations, _):
+    await invoke_integration_report_create_hook(report)
+
+async def invoke_integration_report_create_hook(report: schemas.ReportWithToken):
+    manager = IntegrationManager()
+    await asyncio.gather(*[
+        integration.on_report_create(report)
+        for integration in manager.get_all()
+        if integration.config.enabled
+    ])
 
 
 async def send_or_edit_report_review_message(
