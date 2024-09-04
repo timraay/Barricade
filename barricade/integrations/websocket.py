@@ -154,7 +154,10 @@ class Websocket:
         parsed_url = urlparse(self.address)
 
         # Overwrite scheme to be "ws"
-        parsed_url = parsed_url._replace(scheme="ws")
+        if parsed_url.scheme == "https":
+            parsed_url = parsed_url._replace(scheme="wss")
+        else:
+            parsed_url = parsed_url._replace(scheme="ws")
 
         # Rebuild URL
         return urlunparse(list(parsed_url))
