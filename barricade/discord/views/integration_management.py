@@ -244,6 +244,9 @@ class IntegrationManagementView(View):
             else:
                 await integration.create()
                 assert integration.config.id is not None
+                self.community.integrations.append(
+                    schemas.IntegrationConfig.model_validate(integration.config)
+                )
 
             self.comments.pop(integration.config.id, None)
 

@@ -34,7 +34,7 @@ class Community(ModelBase):
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     messages: Mapped[list['ReportMessage']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
-    integrations: Mapped[list['Integration']] = relationship(back_populates="community")
+    integrations: Mapped[list['Integration']] = relationship(back_populates="community", order_by="Integration.id")
     api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")
 
     def __repr__(self) -> str:
