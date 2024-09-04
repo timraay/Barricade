@@ -19,11 +19,11 @@ from barricade.integrations.integration import IntegrationMetaData, is_enabled
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
 
 REQUIRED_PERMISSIONS = {
-    "api.can_view_blacklists",
-    "api.can_create_blacklists",
-    "api.can_add_blacklist_records",
-    "api.can_change_blacklist_records",
-    "api.can_delete_blacklist_records",
+    "can_view_blacklists",
+    "can_create_blacklists",
+    "can_add_blacklist_records",
+    "can_change_blacklist_records",
+    "can_delete_blacklist_records",
 }
 
 class Blacklist(TypedDict):
