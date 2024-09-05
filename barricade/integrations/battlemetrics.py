@@ -1,11 +1,8 @@
 from datetime import datetime, timezone
-import logging
 from typing import Sequence, NamedTuple
 import aiohttp
-from discord import Embed
 
 from barricade import schemas
-from barricade.constants import DISCORD_GUILD_ID
 from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
 from barricade.crud.communities import get_community_by_id
 from barricade.db import session_factory
@@ -15,7 +12,6 @@ from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType, PlayerIDType
 from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
-from barricade.schemas import Response
 from barricade.utils import get_player_id_type, safe_create_task
 
 REQUIRED_SCOPES = [
@@ -104,7 +100,7 @@ class BattlemetricsIntegration(Integration):
                 await self.remove_ban(db_ban.remote_id)
             except aiohttp.ClientResponseError as e:
                 if e.status == 404:
-                    logging.error("Battlemetrics Ban with ID %s for player %s not found", db_ban.remote_id, player_id)
+                    self.logger.error("Battlemetrics Ban with ID %s for player %s not found", db_ban.remote_id, player_id)
                 else:
                     raise IntegrationBanError(player_id, "Failed to unban player")
             except:
@@ -201,7 +197,7 @@ class BattlemetricsIntegration(Integration):
                         "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
                     )
                 )
-                logging.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
+                self.logger.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
                 await self.expire_ban(remote_ban.ban_id)
                 safe_send_to_community(community, embed=embed)
 
@@ -348,7 +344,7 @@ class BattlemetricsIntegration(Integration):
                 
                 # If no valid identifier is found, remove remote ban and skip
                 if not player_id:
-                    logging.warn("Could not find (valid) identifier for ban #%s %s", ban_id, identifiers)
+                    self.logger.warn("Could not find (valid) identifier for ban #%s %s", ban_id, identifiers)
                     responses[ban_id] = BattlemetricsBan(ban_id, None, expired)
                     safe_create_task(
                         self.remove_ban(ban_id),

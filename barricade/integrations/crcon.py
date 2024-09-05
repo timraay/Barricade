@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 import re
 from typing import TypedDict
-import logging
 
 from aiohttp import ClientResponseError
 
@@ -131,7 +130,7 @@ class CRCONIntegration(CustomIntegration):
                         "-# The ban has been expired. If you wish to restore it, move it to a different blacklist first. If this is a Barricade ban, feel free to ignore this."
                     )
                 )
-                logging.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
+                self.logger.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
                 await self.expire_ban(remote_ban["id"])
                 safe_send_to_community(community, embed=embed)
 

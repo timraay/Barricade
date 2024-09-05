@@ -1,6 +1,5 @@
 import asyncio
 from functools import partial
-import logging
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -18,6 +17,7 @@ from barricade.exceptions import IntegrationValidationError
 from barricade.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
+from barricade.logger import get_logger
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 
@@ -67,6 +67,7 @@ class IntegrationManagementView(View):
         self.community = schemas.Community.model_validate(community)
         self.comments: dict[int, str] = {}
         self.update_integrations()
+        self.logger = get_logger(self.community.id)
 
     def update_integrations(self):
         """Take the current community and repopulate the list
@@ -77,7 +78,7 @@ class IntegrationManagementView(View):
         for config in self.community.integrations:
             integration = manager.get_by_config(config)
             if not integration:
-                logging.error("Integration with config %r should be registered by manager but was not" % config)
+                self.logger.error("Integration with config %r should be registered by manager but was not" % config)
                 continue
 
             assert integration.config.id is not None
@@ -184,7 +185,7 @@ class IntegrationManagementView(View):
                         await integration.disable()
                         self.comments[integration.config.id] = str(validation)
                     else:
-                        logging.error("Failed to validate integration with ID %s" % integration.config.id, exc_info=validation)
+                        self.logger.error("Failed to validate integration with ID %s" % integration.config.id, exc_info=validation)
                         self.comments[integration.config.id] = "Unexpected validation error"
             
             await self.edit()
@@ -277,7 +278,7 @@ class IntegrationManagementView(View):
             case IntegrationType.CUSTOM:
                 await configure_custom_integration(interaction, self, config) # type: ignore
             case _:
-                logging.error("Tried configuring integration with unknown type %s", integration_cls.meta.type)
+                self.logger.error("Tried configuring integration with unknown type %s", integration_cls.meta.type)
                 raise CustomException("Unknown integration type \"%s\"" % integration_cls.meta.type)
 
     async def enable_integration(self, integration_id: int, interaction: Interaction):

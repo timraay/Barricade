@@ -1,6 +1,5 @@
 import asyncio
 from functools import partial
-import logging
 from typing import Callable, Coroutine
 
 from discord import Embed
@@ -15,6 +14,7 @@ from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
+from barricade.logger import get_logger
 
 async def forward_errors(
         callable: Callable[..., Coroutine],
@@ -79,7 +79,8 @@ async def on_player_ban(response: schemas.ResponseWithToken):
         config = schemas.IntegrationConfig.model_validate(db_integration)
         integration = manager.get_by_config(config)
         if not integration:
-            logging.error("Integration with config %r should be registered by manager but was not" % config)
+            logger = get_logger(community.id)
+            logger.error("Integration with config %r should be registered by manager but was not" % config)
             continue
 
         if not integration.config.enabled:
@@ -118,7 +119,8 @@ async def on_player_unban(response: schemas.Response):
         config = schemas.IntegrationConfig.model_validate(db_integration)
         integration = manager.get_by_config(config)
         if not integration:
-            logging.error("Integration with config %r should be registered by manager but was not" % config)
+            logger = get_logger(config.community_id)
+            logger.error("Integration with config %r should be registered by manager but was not" % config)
             continue
 
         player_id = response.player_report.player_id
@@ -151,19 +153,20 @@ async def unban_players_detached_from_report(report: schemas.ReportWithRelations
         )
 
         coros = []
-        for ban in db_bans:
-            config = schemas.IntegrationConfig.model_validate(ban.integration)
+        for db_ban in db_bans:
+            config = schemas.IntegrationConfig.model_validate(db_ban.integration)
             integration = manager.get_by_config(config)
             if not integration:
-                logging.error("Integration with config %r should be registered by manager but was not" % config)
+                logger = get_logger(config.community_id)
+                logger.error("Integration with config %r should be registered by manager but was not" % config)
                 continue
 
-            db_community = await ban.integration.awaitable_attrs.community
+            db_community = await db_ban.integration.awaitable_attrs.community
             community = schemas.CommunityRef.model_validate(db_community)
 
             coro = forward_errors(
-                partial(integration.unban_player, ban.player_id),
-                player_id=ban.player_id,
+                partial(integration.unban_player, db_ban.player_id),
+                player_id=db_ban.player_id,
                 integration=config,
                 community=community,
                 embed=embed,
@@ -176,7 +179,7 @@ async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
     player_ids = [player.player_id for player in report.players]
 
     async with session_factory() as db:
-        bans = await get_player_bans_without_responses(db, player_ids)
+        db_bans = await get_player_bans_without_responses(db, player_ids)
     
         manager = IntegrationManager()
         embed = get_error_embed(
@@ -185,19 +188,20 @@ async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
         )
 
         coros = []
-        for ban in bans:
-            config = schemas.IntegrationConfig.model_validate(ban.integration)
+        for db_ban in db_bans:
+            config = schemas.IntegrationConfig.model_validate(db_ban.integration)
             integration = manager.get_by_config(config)
             if not integration:
-                logging.error("Integration with config %r should be registered by manager but was not" % config)
+                logger = get_logger(config.community_id)
+                logger.error("Integration with config %r should be registered by manager but was not" % config)
                 continue
 
-            db_community = await ban.integration.awaitable_attrs.community
+            db_community = await db_ban.integration.awaitable_attrs.community
             community = schemas.CommunityRef.model_validate(db_community)
 
             coro = forward_errors(
-                partial(integration.unban_player, ban.player_id),
-                player_id=ban.player_id,
+                partial(integration.unban_player, db_ban.player_id),
+                player_id=db_ban.player_id,
                 integration=config,
                 community=community,
                 embed=embed,

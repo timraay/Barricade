@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 import asyncio
 from functools import wraps
-import logging
 from pydantic import BaseModel
 import random
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +17,7 @@ from barricade.enums import IntegrationType
 from barricade.exceptions import IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
+from barricade.logger import get_logger
 from barricade.utils import safe_create_task
 
 manager = IntegrationManager()
@@ -52,6 +52,7 @@ class Integration(ABC):
         self.config = config
         self.task: asyncio.Task | None = None
         self.lock = asyncio.Lock()
+        self.logger = get_logger(self.config.community_id)
 
         if self.config.id is not None and self.config.enabled:
             safe_create_task(self.enable(force=True))
@@ -164,7 +165,7 @@ class Integration(ABC):
             await asyncio.sleep(60 * 60 * random.randrange(12, 24))
 
             if not self.config.enabled:
-                logging.error("Wanted to synchronize %r but was unexpectedly disabled")
+                self.logger.error("Wanted to synchronize %r but was unexpectedly disabled")
                 return
             
             async with session_factory() as db:
@@ -194,7 +195,7 @@ class Integration(ABC):
             try:
                 await self.synchronize()
             except:
-                logging.exception("Failed to synchronize ban lists for %r", self)
+                self.logger.exception("Failed to synchronize ban lists for %r", self)
 
     # --- Connection hooks
 

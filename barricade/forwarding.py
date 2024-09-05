@@ -1,6 +1,5 @@
 import asyncio
 import discord
-import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +14,7 @@ from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
+from barricade.logger import get_logger
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
@@ -48,7 +48,8 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
                 await send_or_edit_report_review_message(report, responses, community)
 
             except:
-                logging.exception("Failed to forward %r to %r", report, db_community)
+                logger = get_logger(db_community.id)
+                logger.exception("Failed to forward %r to %r", report, db_community)
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_token_owner(report: schemas.ReportWithToken):
@@ -83,7 +84,8 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
                     responses = await get_pending_responses(db, community, report.players)
                     await send_or_edit_report_review_message(report, responses, community)
             except:
-                logging.exception("Unexpected error occurred while attempting to edit %r", message_data)
+                logger = get_logger(message_data.community_id)
+                logger.exception("Unexpected error occurred while attempting to edit %r", message_data)
 
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):
@@ -103,7 +105,8 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
         except discord.HTTPException:
             pass
         except:
-            logging.exception("Unexpected error occurred while attempting to delete %r", message_data)
+            logger = get_logger(message_data.community_id)
+            logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
 @add_hook(EventHooks.report_create)
 async def process_integration_report_create_hooks(report: schemas.ReportWithToken):
@@ -203,7 +206,8 @@ async def send_or_edit_message(
             user = await bot.get_or_fetch_member(admin.discord_id)
             message = await user.send(content=content, embed=embed, view=view)
         except discord.HTTPException:
-            logging.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
+            logger = get_logger(community.id)
+            logger.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
 
     if message:
         # Add message to database

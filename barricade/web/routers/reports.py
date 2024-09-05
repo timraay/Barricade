@@ -92,11 +92,11 @@ async def validate_submission_token(
         detail="Invalid token"
     )
     if not token:
-        logging.warn("Token not found")
+        logging.warn("Token %s not found" % submission.data.token)
         raise invalid_token_error
     
     if token.is_expired():
-        logging.warn("Token has expired")
+        logging.warn("Token %s has expired" % submission.data.token)
         raise invalid_token_error
     
     return token

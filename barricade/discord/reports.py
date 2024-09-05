@@ -1,4 +1,3 @@
-import logging
 import discord
 from discord.utils import escape_markdown as esc_md
 

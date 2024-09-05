@@ -1,10 +1,10 @@
-import logging
 from sqlalchemy import select
 from barricade.db import models, session_factory
 
 from barricade.enums import IntegrationType
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
+from barricade.logger import get_logger
 from .integration import Integration
 
 from .battlemetrics import BattlemetricsIntegration
@@ -34,4 +34,5 @@ async def load_all():
                 integration = integration_cls(config)
                 manager.add(integration)
             except:
-                logging.exception("Failed to load integration %r", db_config)
+                logger = get_logger(db_config.community_id)
+                logger.exception("Failed to load integration %r", db_config)

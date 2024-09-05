@@ -76,7 +76,10 @@ BACKOFF_MAX = 60.0
 BACKOFF_FACTOR = 1.618
 BACKOFF_INITIAL = 5
 
-async def reconnect(ws_factory: websockets.legacy.client.Connect) -> AsyncIterator[websockets.WebSocketClientProtocol]:
+async def reconnect(
+        ws_factory: websockets.legacy.client.Connect,
+        logger: logging.Logger,
+) -> AsyncIterator[websockets.WebSocketClientProtocol]:
     # Modified version of Connect.__aiter__ which reconnects
     # with exponential backoff, unless a 401 or 403 is returned
     backoff_delay = BACKOFF_MIN
@@ -94,14 +97,14 @@ async def reconnect(ws_factory: websockets.legacy.client.Connect) -> AsyncIterat
             # See 7.2.3. Recovering from Abnormal Closure in RFC 6544.
             if backoff_delay == BACKOFF_MIN:
                 initial_delay = random.random() * BACKOFF_INITIAL
-                logging.info(
+                logger.info(
                     "! connect failed; reconnecting in %.1f seconds",
                     initial_delay,
                     exc_info=True,
                 )
                 await asyncio.sleep(initial_delay)
             else:
-                logging.info(
+                logger.info(
                     "! connect failed again; retrying in %d seconds",
                     int(backoff_delay),
                     exc_info=True,
@@ -131,9 +134,11 @@ class Websocket:
         address: str,
         token: str | None = None,
         request_handler_factory: Callable[['Websocket'], WebsocketRequestHandler] = WebsocketRequestHandler,
+        logger: logging.Logger = logging # type: ignore
     ):
         self.address = address
         self.token = token
+        self.logger = logger
 
         self._ws_task: asyncio.Task | None = None
         # This future can have one of four states:
@@ -202,7 +207,7 @@ class Websocket:
 
             try:
                 # Automatically reconnect with exponential backoff
-                async for ws in reconnect(ws_factory):
+                async for ws in reconnect(ws_factory, self.logger):
                     # Once connected change the future to done
                     self._ws.set_result(ws)
 
@@ -212,7 +217,7 @@ class Websocket:
                             try:
                                 await self.handle_message(message)
                             except:
-                                logging.exception("Failed to handle incoming message: %s", message)
+                                self.logger.exception("Failed to handle incoming message: %s", message)
                     except websockets.ConnectionClosed:
                         # If the websocket was closed, try reconnecting
                         continue
@@ -233,7 +238,7 @@ class Websocket:
         try:
             request = content["request"]
         except KeyError:
-            logging.error("Received malformed websocket request: %s", content)
+            self.logger.error("Received malformed websocket request: %s", content)
             return
 
         try:
@@ -242,7 +247,7 @@ class Websocket:
             else:
                 await self.handle_response(ResponseBody.model_validate(content))
         except pydantic.ValidationError:
-            logging.error("Received malformed Barricade request: %s", content)
+            self.logger.error("Received malformed Barricade request: %s", content)
             return
 
     async def handle_request(self, request: RequestBody):
@@ -255,12 +260,12 @@ class Websocket:
                 ret = await handler(request.payload)
                 response = request.response_ok(ret)
             except NotImplementedError:
-                logging.warning('Missing implementation for command %s', request.request)
+                self.logger.warning('Missing implementation for command %s', request.request)
                 response = request.response_error("No such command")
             except WebsocketRequestException as e:
                 response = request.response_error(str(e))
             except Exception as e:
-                logging.exception("Unexpected error while handling %r", request)
+                self.logger.exception("Unexpected error while handling %r", request)
                 response = request.response_error(str(e))
 
         # Respond to request
@@ -272,12 +277,12 @@ class Websocket:
 
         # Make sure response is being awaited
         if not waiter:
-            logging.warning("Discarding response since it is not being awaited: %r", response)
+            self.logger.warning("Discarding response since it is not being awaited: %r", response)
             return
         
         # Make sure waiter is still available
         if waiter.done():
-            logging.warning("Discarding response since waiter is already marked done: %r", response)
+            self.logger.warning("Discarding response since waiter is already marked done: %r", response)
             return
         
         # Set response
@@ -314,7 +319,7 @@ class Websocket:
                 # Wait for and return response
                 return await asyncio.wait_for(fut, timeout=10)
             except asyncio.TimeoutError:
-                logging.warning((
+                self.logger.warning((
                     "Websocket did not respond in time to request, retransmitting and"
                     " waiting another 5 seconds: %r"
                 ), request)
@@ -325,10 +330,10 @@ class Websocket:
                 try:
                     return await asyncio.wait_for(fut, timeout=5)
                 except asyncio.TimeoutError:
-                    logging.error("Websocket did not respond in time to request: %r", request)
+                    self.logger.error("Websocket did not respond in time to request: %r", request)
                     raise
         except IntegrationCommandError as e:
-            logging.error("Websocket returned error \"%s\" for request: %r", e, request)
+            self.logger.error("Websocket returned error \"%s\" for request: %r", e, request)
             raise
         finally:
             # Remove waiter

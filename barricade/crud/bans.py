@@ -1,4 +1,3 @@
-import logging
 from typing import Sequence
 import discord
 from sqlalchemy import exists, select, delete, not_, update
@@ -14,6 +13,7 @@ from barricade.db import models
 from barricade.discord import bot
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.exceptions import AlreadyExistsError
+from barricade.logger import get_logger
 
 async def get_ban_by_id(db: AsyncSession, ban_id: int, load_relations: bool = False):
     """Look up a ban by its ID.
@@ -177,7 +177,8 @@ async def expire_bans_of_player(db: AsyncSession, player_id: str, community_id: 
                 message = bot.get_partial_message(db_message.channel_id, db_message.message_id)
                 await message.edit(embed=embed, view=view)
             except discord.NotFound:
-                logging.warn("Could not find message %s/%s", db_message.channel_id, db_message.message_id)
+                logger = get_logger(community_id)
+                logger.warn("Could not find message %s/%s", db_message.channel_id, db_message.message_id)
 
     await db.flush()
     return affected_pr_ids
