@@ -98,14 +98,14 @@ async def reconnect(
             if backoff_delay == BACKOFF_MIN:
                 initial_delay = random.random() * BACKOFF_INITIAL
                 logger.info(
-                    "! connect failed; reconnecting in %.1f seconds",
+                    "WS connection failed; reconnecting in %.1f seconds",
                     initial_delay,
                     exc_info=True,
                 )
                 await asyncio.sleep(initial_delay)
             else:
                 logger.info(
-                    "! connect failed again; retrying in %d seconds",
+                    "WS connection failed again; retrying in %d seconds",
                     int(backoff_delay),
                     exc_info=True,
                 )

@@ -129,7 +129,8 @@ class CustomIntegration(Integration):
         self.ws = Websocket(
             address=self.get_ws_url(),
             token=config.api_key,
-            request_handler_factory=lambda ws: IntegrationRequestHandler(ws, self)
+            request_handler_factory=lambda ws: IntegrationRequestHandler(ws, self),
+            logger=self.logger,
         )
 
     def get_ws_url(self):
