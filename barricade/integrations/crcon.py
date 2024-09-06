@@ -198,7 +198,7 @@ class CRCONIntegration(CustomIntegration):
         page_size = 100
         while True:
             resp = await self._make_request(
-                "GET", "/get_blacklist_bans",
+                "GET", "/get_blacklist_records",
                 data=dict(
                     blacklist_id=self.config.banlist_id,
                     exclude_expired=1,
