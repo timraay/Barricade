@@ -168,6 +168,7 @@ class CRCONIntegration(CustomIntegration):
             raise IntegrationValidationError("Token owner has insufficient permissions")
     
     async def create_blacklist(self, community: schemas.Community):
+        self.logger.info("%r: Creating new blacklist", self)
         resp = await self._make_request(
             method="POST",
             endpoint="/create_blacklist",
@@ -218,6 +219,7 @@ class CRCONIntegration(CustomIntegration):
         return records
     
     async def expire_ban(self, record_id: int):
+        self.logger.info("%r: Expiring record %s", self, record_id)
         await self._make_request(
             "PUT", "/edit_blacklist_record",
             data=dict(

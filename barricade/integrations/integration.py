@@ -14,7 +14,7 @@ from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
+from barricade.exceptions import AlreadyExistsError, IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -107,7 +107,8 @@ class Integration(ABC):
                 if not self.task or self.task.done():
                     self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
                 
-                return db_config
+            self.logger.info("Disabled integration %r", self)    
+            return db_config
         except:
             # Reset state
             self.config.enabled = False
@@ -147,8 +148,9 @@ class Integration(ABC):
                 if self.task and not self.task.done():
                     self.task.cancel()
                 self.task = None
-                
-                return db_config
+
+            self.logger.info("Disabled integration %r", self)    
+            return db_config
         except:
             # Reset state
             self.config.enabled = True
@@ -160,6 +162,7 @@ class Integration(ABC):
             raise
 
     async def _loop(self):
+        self.logger.info("Starting loop for integration %r", self)    
         while True:
             # Sleep 12-24 hours
             await asyncio.sleep(60 * 60 * random.randrange(12, 24))
@@ -257,6 +260,7 @@ class Integration(ABC):
         AlreadyBannedError
             The player is already banned
         """
+        self.logger.info("%r: Setting ban ID %s for player %s", self, ban_id, player_id)
         ban = schemas.PlayerBanCreateParams(
             player_id=player_id,
             integration_id=self.config.id, # type: ignore
@@ -264,7 +268,7 @@ class Integration(ABC):
         )
         try:
             db_ban = await create_ban(db, ban)
-        except Exception as e:
+        except AlreadyExistsError as e:
             raise AlreadyBannedError(player_id, str(e))
         return db_ban
     
@@ -283,6 +287,7 @@ class Integration(ABC):
             A sequence of player IDs with their associated
             ban IDs.
         """
+        self.logger.info("%r: Setting ban IDs in bulk: %s", self, playerids_banids)
         bans = [
             schemas.PlayerBanCreateParams(
                 player_id=player_id,
@@ -309,6 +314,7 @@ class Integration(ABC):
         NotFoundError
             No ban record could be found
         """
+        self.logger.info("%r: Discarding ban for player %s", self, player_id)
         db_ban = await self.get_ban(db, player_id)
         if not db_ban:
             raise NotFoundError("Ban does not exist")
@@ -327,6 +333,7 @@ class Integration(ABC):
         player_ids : Sequence[str]
             A sequence of player IDs
         """
+        self.logger.info("%r: Discarding bans in bulk: %s", self, ", ".join(player_ids))
         await bulk_delete_bans(db,
             models.PlayerBan.player_id.in_(player_ids),
             models.PlayerBan.integration_id==self.config.id,

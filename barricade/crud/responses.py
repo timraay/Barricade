@@ -6,6 +6,7 @@ from barricade import schemas
 from barricade.db import models
 from barricade.enums import ReportRejectReason
 from barricade.hooks import EventHooks
+from barricade.logger import get_logger
 
 async def set_report_response(db: AsyncSession, params: schemas.ResponseCreateParams):
     """Set or change a community's response to a reported player.
@@ -46,6 +47,12 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         EventHooks.invoke_player_ban(prr)
     else:
         EventHooks.invoke_player_unban(prr)
+    
+    logger = get_logger(prr.community_id)
+    logger.info(
+        "Set report response for player %s of report %s. Banned? %s. Reject reason? %s",
+        prr.player_report.player_id, prr.player_report.report_id, prr.banned, prr.reject_reason,
+    )
 
     return db_prr
 

@@ -186,6 +186,7 @@ class CustomIntegration(Integration):
     async def ban_player(self, response: schemas.ResponseWithToken):
         async with session_factory.begin() as db:
             player_id = response.player_report.player_id
+            self.logger.info("%r: Banning player %s", self, player_id)
             db_ban = await self.get_ban(db, player_id)
             if db_ban is not None:
                 raise AlreadyBannedError(player_id, "Player is already banned")
@@ -202,6 +203,7 @@ class CustomIntegration(Integration):
 
     @is_enabled
     async def unban_player(self, player_id: str):
+        self.logger.info("%r: Unbanning player %s", self, player_id)
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
@@ -217,6 +219,10 @@ class CustomIntegration(Integration):
     
     @is_enabled
     async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
+        self.logger.info(
+            "%r: Bulk banning players %s",
+            self, [response.player_report.player_id for response in responses]
+        )
         ban_ids: list[tuple[str, str]] = []
         try:
             async for ban in self.add_multiple_bans(
@@ -234,6 +240,7 @@ class CustomIntegration(Integration):
 
     @is_enabled
     async def bulk_unban_players(self, player_ids: Sequence[str]):
+        self.logger.info("%r: Bulk unbanning players %s", self, player_ids)
         async with session_factory() as db:
             remote_ids: dict[str, str] = {}
             for player_id in player_ids:

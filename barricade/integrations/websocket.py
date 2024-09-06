@@ -251,9 +251,14 @@ class Websocket:
             return
 
     async def handle_request(self, request: RequestBody):
+        self.logger.info(
+            "Handling websocket request #%s %s %s",
+            request.id, request.request.name, request.payload
+        )
         handler: Callable[[dict | None], Awaitable[dict | None]] | None
         handler = getattr(self.request_handler, request.request.value, None)
         if not inspect.iscoroutinefunction(handler):
+            self.logger.warn("No handler for websocket request %s", request.request.name)
             response = request.response_error("No such command")
         else:
             try:
@@ -273,6 +278,7 @@ class Websocket:
         await ws.send(response.model_dump_json())
 
     async def handle_response(self, response: ResponseBody):
+        self.logger.info("Handling websocket response #%s %s", response.id, response.response)
         waiter = self._waiters.get(response.id)
 
         # Make sure response is being awaited
@@ -313,6 +319,11 @@ class Websocket:
         # Allocate response waiter
         fut = asyncio.Future()
         self._waiters[request.id] = fut
+
+        self.logger.info(
+            "Sent websocket request #%s %s %s",
+            request.id, request.request.name, request.payload
+        )
 
         try:
             try:
