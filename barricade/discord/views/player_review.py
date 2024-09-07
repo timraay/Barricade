@@ -199,7 +199,11 @@ class PlayerReviewView(View):
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
                         label=f"# {row + 1}.",
-                        style=ButtonStyle.red if response.banned is True else ButtonStyle.gray,
+                        style=(
+                            ButtonStyle.red if response.banned is True else
+                            ButtonStyle.green if response.banned is False else
+                            ButtonStyle.gray
+                        ),
                         row=row
                     ),
                     command="refresh",
