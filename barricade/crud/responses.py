@@ -82,7 +82,11 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
         models.PlayerReportResponse.pr_id.in_([
             pr.id for pr in report.players
         ])
-    ).options(selectinload(models.PlayerReportResponse.player_report, models.PlayerReport.report, models.Report.token))
+    ).options(
+        selectinload(models.PlayerReportResponse.player_report)
+            .selectinload(models.PlayerReport.report)
+            .selectinload(models.Report.token)
+    )
     result = await db.scalars(stmt)
     return result.all()
 
