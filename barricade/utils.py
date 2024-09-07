@@ -41,7 +41,7 @@ def safe_create_task(coro: Coroutine, err_msg: str | None = None, name: str | No
     return task
 
 RE_PLAYER_STEAM_64_ID = re.compile(r"^\d{17}$")
-RE_PLAYER_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+RE_PLAYER_UUID = re.compile(r"^[0-9a-f]{32}$")
 
 def get_player_id_type(player_id: str) -> PlayerIDType:
     if RE_PLAYER_STEAM_64_ID.match(player_id):
