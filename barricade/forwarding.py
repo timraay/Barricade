@@ -12,6 +12,7 @@ from barricade.discord.communities import get_forward_channel
 from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
+from barricade.enums import Platform
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -22,9 +23,13 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         stmt = select(models.Community).where(
             models.Community.forward_guild_id.is_not(None),
             models.Community.forward_channel_id.is_not(None),
-        ).where(
-            models.Community.id != report.token.community_id
+            models.Community.id != report.token.community_id,
         )
+        if report.token.platform == Platform.PC:
+            stmt = stmt.where(models.Community.is_pc.is_(True))
+        elif report.token.platform == Platform.CONSOLE:
+            stmt = stmt.where(models.Community.is_console.is_(True))
+
         result = await db.scalars(stmt)
         db_communities = result.all()
 
