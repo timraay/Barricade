@@ -151,7 +151,6 @@ class CustomIntegration(Integration):
 
     @is_enabled
     async def on_report_create(self, report: schemas.ReportWithToken):
-        print("exec")
         await self.ws.execute(
             ClientRequestType.NEW_REPORT,
             NewReportRequestPayload(
