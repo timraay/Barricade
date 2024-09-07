@@ -337,6 +337,8 @@ class PlayerBanCreateParams(_PlayerBanBase):
 
 class ReportSubmissionPlayerData(PlayerReportCreateParams):
     model_config = ConfigDict(populate_by_name=True)
+    player_id: str = Field(alias="playerId")
+    player_name: str = Field(alias="playerName")
     bm_rcon_url: Optional[str] = Field(alias="bmRconUrl")
 
 class ReportSubmissionData(BaseModel):
