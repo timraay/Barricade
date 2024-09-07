@@ -96,7 +96,7 @@ async def validate_submission_token(
         raise invalid_token_error
     
     if token.is_expired():
-        logging.warn("Token %s has expired. Response ID: %s" % submission.data.token, submission.id)
+        logging.warn("Token %s has expired. Response ID: %s", submission.data.token, submission.id)
         raise invalid_token_error
     
     return token
