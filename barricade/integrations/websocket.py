@@ -72,7 +72,7 @@ class NewReportRequestPayload(pydantic.BaseModel):
     players: list[NewReportRequestPayloadPlayer]
 
 BACKOFF_MIN = 1.92
-BACKOFF_MAX = 60.0
+BACKOFF_MAX = 300.0
 BACKOFF_FACTOR = 1.618
 BACKOFF_INITIAL = 5
 
