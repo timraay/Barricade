@@ -348,7 +348,7 @@ class ReportSubmissionData(BaseModel):
     attachment_urls: list[str] = Field(alias="attachmentUrls")
 
 class ReportSubmission(BaseModel):
-    id: int
+    id: str
     timestamp: datetime
     data: ReportSubmissionData
 

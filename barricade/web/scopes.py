@@ -29,13 +29,13 @@ class Scopes(IntFlag):
 
     def to_list(self) -> list[str]:
         return list(
-            _convert_name(v.name)
+            _convert_name(v.name) # type: ignore
             for v in self
         )
     
     def to_dict(self) -> dict[str, str | None]:
         return {
-            _convert_name(v.name): SCOPE_DESCRIPTIONS.get(v)
+            _convert_name(v.name): SCOPE_DESCRIPTIONS.get(v)  # type: ignore
             for v in self
         }
 
