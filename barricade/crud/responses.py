@@ -29,7 +29,9 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         models.PlayerReportResponse.pr_id == params.pr_id,
         models.PlayerReportResponse.community_id == params.community_id,
     ).options(
-        selectinload(models.PlayerReportResponse.player_report, models.PlayerReport.report, models.Report.token)
+        selectinload(models.PlayerReportResponse.player_report)
+            .selectinload(models.PlayerReport.report)
+            .selectinload(models.Report.token)
     ).limit(1)
     db_prr = await db.scalar(stmt)
 
