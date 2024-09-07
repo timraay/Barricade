@@ -319,7 +319,7 @@ class CustomIntegration(Integration):
             if e.response.get("error") != "Could not ban all players":
                 raise
 
-            successful_ids = e.response["player_ids"]
+            successful_ids = e.response["ban_ids"]
             for player_id, ban_id in successful_ids.items():
                 yield (player_id, ban_id)
             
@@ -332,7 +332,7 @@ class CustomIntegration(Integration):
                 yield player_id, ban_id
         else:
             assert response is not None
-            for player_id, ban_id in response["player_ids"]:
+            for player_id, ban_id in response["ban_ids"].items():
                 yield player_id, ban_id
 
     async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True):
