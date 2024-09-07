@@ -40,6 +40,7 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         db.add(db_prr)
         await db.commit()
         await db.refresh(db_prr)
+        await db_prr.player_report.report.awaitable_attrs.token
 
     else:
         db_prr.banned = params.banned
