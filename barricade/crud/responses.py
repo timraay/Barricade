@@ -28,7 +28,9 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
     stmt = select(models.PlayerReportResponse).where(
         models.PlayerReportResponse.pr_id == params.pr_id,
         models.PlayerReportResponse.community_id == params.community_id,
-    ).options(selectinload(models.PlayerReportResponse.player_report, models.PlayerReport.report, models.Report.token)).limit(1)
+    ).options(
+        selectinload(models.PlayerReportResponse.player_report, models.PlayerReport.report, models.Report.token)
+    ).limit(1)
     db_prr = await db.scalar(stmt)
 
     if not db_prr:

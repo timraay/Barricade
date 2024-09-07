@@ -123,6 +123,7 @@ class PlayerReportResponseButton(
                         )
 
             # This will immediately commit
+            db.expire_all()
             db_prr = await set_report_response(db, prr)
 
             db_players: list[models.PlayerReport] = await db_prr.player_report.report.awaitable_attrs.players
