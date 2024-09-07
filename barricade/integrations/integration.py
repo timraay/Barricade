@@ -107,7 +107,7 @@ class Integration(ABC):
                 if not self.task or self.task.done():
                     self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
                 
-            self.logger.info("Disabled integration %r", self)    
+            self.logger.info("Enabled integration %r", self)    
             return db_config
         except:
             # Reset state
