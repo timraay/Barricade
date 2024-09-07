@@ -65,7 +65,7 @@ class CommunitiesCog(commands.Cog):
                     "Report feeds should be private and only accessible by admins."
                 )
             
-            required_perms = discord.Permissions(send_messages=True, read_messages=True, read_message_history=True)
+            required_perms = discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, embed_links=True)
             if not channel.permissions_for(channel.guild.me).is_superset(required_perms):
                 raise CustomException(
                     "Cannot read from and/or send messages to this channel!",
@@ -75,6 +75,7 @@ class CommunitiesCog(commands.Cog):
                         "\n- View Channel"
                         "\n- Read Message History"
                         "\n- Send Messages"
+                        "\n- Embed Links"
                     )
                 )
             
