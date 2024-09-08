@@ -50,12 +50,13 @@ class ReportManagementButton(
             match self.command:
                 case "del":
                     async def confirm_delete(_interaction: Interaction):
-                        await delete_report(db, self.report_id, by=interaction.user) # type: ignore
-                        await interaction.message.delete() # type: ignore
-                        await _interaction.response.edit_message(
-                            embed=get_success_embed(f"Report #{self.report_id} deleted!"),
-                            view=None
-                        )
+                        async with session_factory.begin() as db:
+                            await delete_report(db, self.report_id, by=interaction.user) # type: ignore
+                            await interaction.message.delete() # type: ignore
+                            await _interaction.response.edit_message(
+                                embed=get_success_embed(f"Report #{self.report_id} deleted!"),
+                                view=None
+                            )
 
                     view = View()
                     view.add_item(
@@ -65,7 +66,9 @@ class ReportManagementButton(
                         embed=get_danger_embed(
                             "Are you sure you want to delete this report?",
                             "This action is irreversible."
-                        )
+                        ),
+                        view=view,
+                        ephemeral=True,
                     )
 
                 case "edit":
