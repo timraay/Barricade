@@ -57,7 +57,7 @@ class ScanPlayersRequestPayload(pydantic.BaseModel):
 class UnbanPlayersRequestPayload(pydantic.BaseModel):
     # Even though in theory these can all be converted to ints, we should safely
     # filter out all invalid record IDs later.
-    record_ids: list[str] = pydantic.Field(alias="ban_ids")
+    ban_ids: list[str]
     config: UnbanPlayersRequestConfigPayload
 
 class NewReportRequestPayloadPlayer(pydantic.BaseModel):
