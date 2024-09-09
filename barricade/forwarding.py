@@ -1,6 +1,6 @@
 import asyncio
 import discord
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
@@ -24,6 +24,10 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             models.Community.forward_guild_id.is_not(None),
             models.Community.forward_channel_id.is_not(None),
             models.Community.id != report.token.community_id,
+            or_(
+                models.Community.reasons_filter.is_(None),
+                models.Community.reasons_filter.bitwise_and(report.reasons_bitflag) != 0,
+            )
         )
         if report.token.platform == Platform.PC:
             stmt = stmt.where(models.Community.is_pc.is_(True))
