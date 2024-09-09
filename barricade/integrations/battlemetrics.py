@@ -203,7 +203,7 @@ class BattlemetricsIntegration(Integration):
 
     # --- Battlemetrics API wrappers
 
-    async def _make_request(self, method: str, url: str, data: dict | None = None) -> dict | None:
+    async def _make_request(self, method: str, url: str, data: dict | None = None) -> dict | str | None:
         """Make an API request.
 
         Parameters
@@ -233,18 +233,23 @@ class BattlemetricsIntegration(Integration):
                 kwargs = {"params": data}
 
             async with session.request(method=method, url=url, **kwargs) as r: # type: ignore
-                r.raise_for_status()
                 content_type = r.headers.get('content-type', '')
-
-                response: dict | None
-                if 'json' in content_type:
+                response: dict | str | None
+                if "json" in content_type:
                     response = await r.json()
-                # elif "text/html" in content_type:
-                #     response = (await r.content.read()).decode()
+                elif "text/html" in content_type:
+                    response = (await r.content.read()).decode()
                 elif not content_type:
                     response = None
                 else:
                     raise Exception(f"Unsupported content type: {content_type}")
+                
+                if not r.ok:
+                    self.logger.error(
+                        "Failed request %s %s. Data = %s, Response = %s",
+                        method, url, kwargs, response
+                    )
+                    r.raise_for_status()
 
         return response
 
