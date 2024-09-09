@@ -89,6 +89,7 @@ class _CommunityBase(BaseModel):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
     admin_role_id: Optional[int]
+    reasons_filter: Optional[ReportReasonFlag]
 
     @field_serializer(
             'forward_guild_id', 'forward_channel_id',

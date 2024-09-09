@@ -61,6 +61,13 @@ class ReportReasonFlag(IntFlag):
     CUSTOM = 1 << 15
 
     @classmethod
+    def all(cls):
+        self = cls(0)
+        for reason in cls:
+            self |= reason
+        return self
+
+    @classmethod
     def from_list(cls, reasons: list[str]):
         self = cls(0)
         custom_msg = None
