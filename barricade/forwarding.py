@@ -183,6 +183,8 @@ async def send_or_edit_message(
     content: str | None = None,
     admin: schemas.AdminRef | None = None
 ):
+    logger = get_logger(community.id)
+
     db_message = await db.get(models.ReportMessage, (report.id, community.id))
     # If this was already sent before, try editing first
     if db_message:
@@ -202,8 +204,16 @@ async def send_or_edit_message(
         try:
             # Send message
             message = await channel.send(content=content, embed=embed, view=view)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            logger.error(
+                "Failed to send message to %s/%s. %s: %s",
+                community.forward_guild_id, community.forward_channel_id, type(e).__name__, e
+            )
+    else:
+        logger.warn(
+            "Forward channel %s/%s could not be found",
+            community.forward_guild_id, community.forward_channel_id
+        )
 
     if admin and not message:
         # Could not send message to channel, try sending directly to admin instead
@@ -211,7 +221,6 @@ async def send_or_edit_message(
             user = await bot.get_or_fetch_member(admin.discord_id)
             message = await user.send(content=content, embed=embed, view=view)
         except discord.HTTPException:
-            logger = get_logger(community.id)
             logger.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
 
     if message:
