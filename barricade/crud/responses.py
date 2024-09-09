@@ -140,7 +140,8 @@ async def get_pending_responses(
     stmt = select(
         models.PlayerReportResponse.pr_id,
         models.PlayerReportResponse.reject_reason,
-        models.PlayerReportResponse.banned
+        models.PlayerReportResponse.banned,
+        models.PlayerReportResponse.responded_by,
     ).join(
         models.PlayerReport
     ).where(
@@ -153,6 +154,7 @@ async def get_pending_responses(
     for row in result:
         responses[row.pr_id].banned = row.banned
         responses[row.pr_id].reject_reason = row.reject_reason
+        responses[row.pr_id].responded_by = row.responded_by
     
     return list(responses.values())
 

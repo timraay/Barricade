@@ -113,4 +113,5 @@ class ReportPaginator(View):
         for response in responses:
             pending[response.pr_id].banned = response.banned
             pending[response.pr_id].reject_reason = response.reject_reason
+            pending[response.pr_id].responded_by = response.responded_by
         return list(pending.values())

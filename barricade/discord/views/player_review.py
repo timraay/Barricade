@@ -78,6 +78,7 @@ class PlayerReportResponseButton(
             community_id=self.community_id,
             banned=banned,
             reject_reason=self.reject_reason,
+            responded_by=interaction.user.display_name,
         )
         
         async with session_factory() as db:
@@ -139,13 +140,15 @@ class PlayerReportResponseButton(
             }
             responses[prr.pr_id].banned = prr.banned
             responses[prr.pr_id].reject_reason = prr.reject_reason
+            responses[prr.pr_id].responded_by = prr.responded_by
 
             if len(db_players) > 1 or db_players[0].id != prr.pr_id:
                 # Load state of other reported players if needed
                 stmt = select(
                     models.PlayerReportResponse.pr_id,
                     models.PlayerReportResponse.reject_reason,
-                    models.PlayerReportResponse.banned
+                    models.PlayerReportResponse.banned,
+                    models.PlayerReportResponse.responded_by,
                 ).join(
                     models.PlayerReport
                 ).where(
@@ -158,6 +161,7 @@ class PlayerReportResponseButton(
                 for row in result:
                     responses[row.pr_id].banned = row.banned
                     responses[row.pr_id].reject_reason = row.reject_reason
+                    responses[row.pr_id].responded_by = row.responded_by
 
             db_report = db_prr.player_report.report
             await db_report.awaitable_attrs.token
