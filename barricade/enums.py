@@ -115,3 +115,5 @@ class Emojis(StrEnum):
     HIGHLIGHT_RED = "<:highlight_red:1280312505176031293>"
     HIGHLIGHT_GREEN = "<:highlight_green:1280312497072504886>"
     HIGHLIGHT_BLURPLE = "<:highlight_blurple:1280312487677268030>"
+    BANNED = "<:banned:1283018335566561343>"
+    UNBANNED = "<:unbanned:1283018344051511316>"
