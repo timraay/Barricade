@@ -7,6 +7,7 @@ from discord import ButtonStyle, Interaction
 from barricade import schemas
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.crud.reports import delete_report, get_report_by_id
+from barricade.crud.responses import get_response_stats
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
@@ -48,6 +49,15 @@ class ReportManagementButton(
                 await assert_has_admin_role(interaction.user, report.token.community) # type: ignore
 
             match self.command:
+                case "refresh":
+                    stats: dict[int, schemas.ResponseStats] = {}
+                    for player in report.players:
+                        stats[player.id] = await get_response_stats(db, player)
+
+                    view = ReportManagementView(report)
+                    embed = await view.get_embed(report, stats=stats)
+                    await interaction.response.edit_message(embed=embed, view=view)
+
                 case "del":
                     async def confirm_delete(_interaction: Interaction):
                         async with session_factory.begin() as db:
@@ -106,6 +116,14 @@ class ReportManagementView(View):
                 label="Delete report",
             ),
             command="del",
+            report_id=report.id
+        ))
+        self.add_item(ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.grey,
+                label="Refresh",
+            ),
+            command="refresh",
             report_id=report.id
         ))
 
