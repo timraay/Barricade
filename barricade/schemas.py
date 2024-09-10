@@ -128,6 +128,7 @@ class _ResponseBase(BaseModel):
     community_id: int
     banned: bool
     reject_reason: Optional[ReportRejectReason]
+    responded_by: Optional[str]
 
 class _PlayerBanBase(BaseModel):
     player_id: str
@@ -328,6 +329,7 @@ class PendingResponse(_ResponseBase):
     community: CommunityRef
     banned: Optional[bool] = None # type: ignore
     reject_reason: Optional[ReportRejectReason] = None
+    responded_by: Optional[str] = None
 
 class PlayerBanCreateParams(_PlayerBanBase):
     pass
