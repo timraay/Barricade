@@ -1,5 +1,7 @@
+import copy
+from functools import partial
 import discord
-from discord import Interaction
+from discord import Embed, Interaction
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
@@ -18,50 +20,35 @@ class ReportPaginator(View):
         super().__init__(timeout=60*60)
         self.community = community
         self.reports = reports
+        self.requires_pagination = len(self.reports) > 1
         self.page = 0
         self.stats: dict[int, schemas.ResponseStats] = {}
 
     async def send(self, interaction: Interaction):
-        embed = await self.load_page(0)
-        await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+        embed, view = await self.load_page(0)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
-    async def edit(self, interaction: Interaction):
-        embed = await get_report_embed(self.reports[self.page], stats=self.stats)
-        await interaction.response.edit_message(embed=embed, view=self)
+    async def edit(self, interaction: Interaction, page: int | None = None):
+        if page is None:
+            page = self.page
+        embed, view = await self.load_page(page)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def go_to_page(self, page: int, interaction: Interaction):
+        await self.edit(interaction, page)
 
     async def go_first_page(self, interaction: Interaction):
-        await self.load_page(0)
-        await self.edit(interaction)
+        await self.edit(interaction, 0)
 
     async def go_last_page(self, interaction: Interaction):
-        await self.load_page(len(self.reports) - 1)
-        await self.edit(interaction)
+        await self.edit(interaction, len(self.reports) - 1)
 
-    async def go_page_backward(self, interaction: Interaction):
-        await self.load_page(self.page - 1)
-        await self.edit(interaction)
-
-    async def go_page_forward(self, interaction: Interaction):
-        await self.load_page(self.page + 1)
-        await self.edit(interaction)
-
-    async def load_page(self, page: int):
+    async def load_page(self, page: int) -> tuple[Embed, View]:
         if not (0 <= page < len(self.reports)):
             raise IndexError("Page %s out of range" % page)
 
         old_page = self.page
         try:
-            # Remove existing items
-            self.clear_items()
-
-            # Add paginator menu
-            if len(self.reports) > 1:
-                self.add_item(CallableButton(self.go_first_page, style=discord.ButtonStyle.gray, label="<<", row=0))
-                self.add_item(CallableButton(self.go_page_backward, style=discord.ButtonStyle.gray, label="<", row=0))
-                self.add_item(discord.ui.Button(style=discord.ButtonStyle.gray, label=f"{self.page + 1}/{len(self.reports)}", row=0, disabled=True))
-                self.add_item(CallableButton(self.go_page_forward, style=discord.ButtonStyle.gray, label=">", row=0))
-                self.add_item(CallableButton(self.go_last_page, style=discord.ButtonStyle.gray, label=">>", row=0))
-
             self.page = page
             report = self.reports[page]
             missing_stats = [pr for pr in report.players if pr.id not in self.stats]
@@ -72,7 +59,7 @@ class ReportPaginator(View):
                 if missing_stats:
                     async with session_factory() as db:
                         await self.fetch_response_stats(db, *missing_stats)
-                embed = await get_report_embed(self.reports[self.page], stats=self.stats)
+                embed = await view.get_embed(self.reports[self.page], stats=self.stats)
             else:
                 async with session_factory() as db:
                     # Load responses
@@ -83,17 +70,65 @@ class ReportPaginator(View):
                     ])
                     await self.fetch_response_stats(db, *missing_stats)
                 view = PlayerReviewView(responses)
-                embed = await get_report_embed(self.reports[self.page], responses=responses, stats=self.stats)
-            
-            # Add items from default view to paginator
+                embed = await view.get_embed(self.reports[self.page], responses=responses, stats=self.stats)
+
+            # If we have only one report, we do not need to add pagination.
+            if not self.requires_pagination:
+                return embed, view
+
+            # Remove existing items
+            self.clear_items()
+
+            # Add paginator menu
+            if self.requires_pagination:
+                self.add_item(CallableButton(
+                    self.go_first_page,
+                    style=discord.ButtonStyle.blurple,
+                    label="<<",
+                    row=0,
+                    disabled=page <= 0
+                ))
+                self.add_item(CallableButton(
+                    partial(self.go_to_page, page - 1),
+                    style=discord.ButtonStyle.blurple,
+                    label="<",
+                    row=0,
+                    disabled=page <= 0
+                ))
+                self.add_item(discord.ui.Button(
+                    style=discord.ButtonStyle.gray,
+                    label=f"Report {self.page + 1} of {len(self.reports)}",
+                    row=0,
+                    disabled=True
+                ))
+                self.add_item(CallableButton(
+                    partial(self.go_to_page, page + 1),
+                    style=discord.ButtonStyle.blurple,
+                    label=">",
+                    row=0,
+                    disabled=page + 1 >= len(self.reports)
+                ))
+                self.add_item(CallableButton(
+                    self.go_last_page,
+                    style=discord.ButtonStyle.blurple,
+                    label=">>",
+                    row=0,
+                    disabled=page + 1 >= len(self.reports)
+                ))
+
+            # Place original view below paginator menu
             for item in view.children:
+                if item.row is not None:
+                    item = copy.copy(item)
+                    assert item.row is not None
+                    item.row += 1
                 self.add_item(item)
+
+            return embed, self
 
         except:
             self.page = old_page
             raise
-
-        return embed
 
     async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReportRef):
         for pr in player_reports:
