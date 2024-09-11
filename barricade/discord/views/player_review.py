@@ -11,9 +11,10 @@ from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_pending_responses, get_response_stats, set_report_response
 from barricade.db import models, session_factory
 from barricade.discord.communities import assert_has_admin_role
-from barricade.discord.utils import CustomException, View, get_command_mention, get_danger_embed, handle_error_wrap
+from barricade.discord.utils import CustomException, View, get_command_mention, handle_error_wrap
 from barricade.discord.reports import get_report_embed
-from barricade.enums import ReportRejectReason
+from barricade.enums import Emojis, ReportRejectReason
+from barricade.logger import get_logger
 
 class PlayerReportResponseButton(
     discord.ui.DynamicItem[discord.ui.Button],
@@ -70,7 +71,6 @@ class PlayerReportResponseButton(
 
             case _:
                 await self.set_response(interaction, banned=False)
-
 
     async def set_response(self, interaction: Interaction, banned: bool):
         prr = schemas.ResponseCreateParams(
@@ -171,8 +171,9 @@ class PlayerReportResponseButton(
             for player in report.players:
                 stats[player.id] = await get_response_stats(db, player)
 
+        selected = list(responses.keys()).index(prr.pr_id)
         responses = list(responses.values())
-        view = PlayerReviewView(responses=responses)
+        view = PlayerReviewView(responses=responses, selected=selected)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
     
@@ -180,7 +181,7 @@ class PlayerReportResponseButton(
         async with session_factory() as db:
             db_report = await get_report_by_id(db, self.report_id, load_token=True)
             if not db_report:
-                raise CustomException("Report with ID %s no longer exists!" % self.pr_id)
+                raise CustomException("Report with ID %s no longer exists!" % self.report_id)
             report = schemas.ReportWithToken.model_validate(db_report)
 
             db_community = await get_community_by_id(db, self.community_id)
@@ -195,87 +196,154 @@ class PlayerReportResponseButton(
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
+class PlayerReportSelect(
+    discord.ui.DynamicItem[discord.ui.Select],
+    template=r"prs:(?P<community_id>\d+):(?P<report_id>\d+)"
+):
+    def __init__(
+        self,
+        select: discord.ui.Select,
+        community_id: int,
+        report_id: int,
+    ):
+        self.community_id = community_id
+        self.report_id = report_id
+
+        select.custom_id = f"prs:{self.community_id}:{self.report_id}"
+        
+        super().__init__(select)
+        self.select = select
+    
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Select, match: re.Match[str], /): # type: ignore
+        return cls(
+            select=item,
+            community_id=int(match["community_id"]),
+            report_id=int(match["report_id"]),
+        )
+    
+    @handle_error_wrap
+    async def callback(self, interaction: Interaction):
+        async with session_factory() as db:
+            db_community = await get_community_by_id(db, self.community_id)
+            if not db_community:
+                raise CustomException("Community not found")
+            community = schemas.CommunityRef.model_validate(db_community)
+
+            await assert_has_admin_role(interaction.user, community) # type: ignore
+
+            db_report = await get_report_by_id(db, self.report_id, load_token=True)
+            if not db_report:
+                raise CustomException("Report with ID %s no longer exists!" % self.report_id)
+            report = schemas.ReportWithToken.model_validate(db_report)
+
+            stats: dict[int, schemas.ResponseStats] = {}
+            for player in report.players:
+                stats[player.id] = await get_response_stats(db, player)
+
+            responses = await get_pending_responses(db, community, report.players)
+        selected = int(self.select.values[0])
+        if selected >= len(responses):
+            get_logger(self.community_id).warning(
+                "Selected index %s but there are only %s responses. Defaulting to 0.",
+                selected, len(responses),
+            )
+        view = PlayerReviewView(responses, selected)
+        embed = await view.get_embed(report, responses, stats=stats)
+        await interaction.response.edit_message(embed=embed, view=view)
+
 class PlayerReviewView(View):
-    def __init__(self, responses: list[schemas.PendingResponse]):
+    def __init__(self, responses: list[schemas.PendingResponse], selected: int = 0):
+        if not responses:
+            raise ValueError("Must have at least one response")
+        
         super().__init__(timeout=None)
 
-        for row, response in enumerate(responses):
+        community_id = responses[0].community_id
+        report_id = responses[0].player_report.report_id
+
+        if len(responses) > 1:
+            self.add_item(
+                PlayerReportSelect(
+                    select=discord.ui.Select(
+                        options=[
+                            discord.SelectOption(
+                                label=f"{response.player_report.player_name}",
+                                value=str(i),
+                                description=f"Reviewed by {response.responded_by}" if response.responded_by else None,
+                                emoji=Emojis.BANNED if response.banned else Emojis.UNBANNED if response.banned is False else Emojis.SILHOUETTE,
+                                default=(i == selected),
+                            )
+                            for i, response in enumerate(responses)
+                        ],
+                        row=0,
+                    ),
+                    community_id=community_id,
+                    report_id=report_id
+                )
+            )
+
+        response = responses[selected]
+
+        if response.banned is True:
             self.add_item(
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
-                        label=f"# {row + 1}.",
-                        style=(
-                            ButtonStyle.red if response.banned is True else
-                            ButtonStyle.green if response.banned is False else
-                            ButtonStyle.gray
-                        ),
-                        row=row
+                        label="Unban player...",
+                        style=ButtonStyle.blurple,
+                        disabled=False,
+                        row=1
                     ),
-                    command="refresh",
+                    command="unban",
                     community_id=response.community_id,
                     report_id=response.player_report.report_id,
                     pr_id=response.pr_id,
 
                 )
             )
-
-            if response.banned is True:
-                self.add_item(
-                    PlayerReportResponseButton(
-                        button=discord.ui.Button(
-                            label="Unban player",
-                            style=ButtonStyle.blurple,
-                            disabled=False,
-                            row=row
-                        ),
-                        command="unban",
-                        community_id=response.community_id,
-                        report_id=response.player_report.report_id,
-                        pr_id=response.pr_id,
-
-                    )
+        else:
+            self.add_item(
+                PlayerReportResponseButton(
+                    button=discord.ui.Button(
+                        label="Ban player...",
+                        style=ButtonStyle.red if response.banned is None else ButtonStyle.gray,
+                        disabled=False,
+                        row=1
+                    ),
+                    command="ban",
+                    community_id=response.community_id,
+                    report_id=response.player_report.report_id,
+                    pr_id=response.pr_id,
                 )
+            )
+
+
+        for reason, label in (
+            (ReportRejectReason.INCONCLUSIVE, "Lacks evidence"),
+            (ReportRejectReason.INSUFFICIENT, "Not severe enough"),
+        ):
+            if response.banned is None:
+                button_style = ButtonStyle.blurple
+            elif response.reject_reason == reason:
+                button_style = ButtonStyle.green
             else:
-                self.add_item(
-                    PlayerReportResponseButton(
-                        button=discord.ui.Button(
-                            label="Ban player...",
-                            style=ButtonStyle.red,
-                            disabled=False,
-                            row=row
-                        ),
-                        command="ban",
-                        community_id=response.community_id,
-                        report_id=response.player_report.report_id,
-                        pr_id=response.pr_id,
+                button_style = ButtonStyle.gray
 
-                    )
+            self.add_item(
+                PlayerReportResponseButton(
+                    button=discord.ui.Button(
+                        label=label,
+                        style=button_style,
+                        disabled=response.banned is False,
+                        row=1
+                    ),
+                    command="reject",
+                    community_id=response.community_id,
+                    report_id=response.player_report.report_id,
+                    pr_id=response.pr_id,
+                    reject_reason=reason
                 )
-
-
-            for reason in ReportRejectReason:
-                if response.banned is None:
-                    button_style = ButtonStyle.blurple
-                if response.reject_reason == reason:
-                    button_style = ButtonStyle.green
-                else:
-                    button_style = ButtonStyle.gray
-
-                self.add_item(
-                    PlayerReportResponseButton(
-                        button=discord.ui.Button(
-                            label=reason.value,
-                            style=button_style,
-                            disabled=response.banned is False,
-                            row=row
-                        ),
-                        command="reject",
-                        community_id=response.community_id,
-                        report_id=response.player_report.report_id,
-                        pr_id=response.pr_id,
-                        reject_reason=reason
-                    )
-                )
+            )
 
     @staticmethod
     async def get_embed(
