@@ -65,7 +65,7 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                 for player_id in reported_player_ids:
                     # For each player, get all reports that this community has not yet responded to
                     db_reports = await get_reports_for_player_with_no_community_response(
-                        db, player_id, community_id
+                        db, player_id, community_id, community.reasons_filter
                     )
 
                     messages: list[discord.Message] = []
