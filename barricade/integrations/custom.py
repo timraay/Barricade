@@ -1,7 +1,7 @@
-from typing import AsyncGenerator, Sequence
 import aiohttp
 from cachetools import TTLCache
 import discord
+from typing import AsyncGenerator, Sequence
 
 from barricade import schemas
 from barricade.crud.communities import get_community_by_id
@@ -309,7 +309,7 @@ class CustomIntegration(Integration):
 
         return response
 
-    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str]]:
+    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str], None]:
         try:
             response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
                 player_ids=player_ids,
@@ -338,7 +338,7 @@ class CustomIntegration(Integration):
             for player_id, ban_id in response["ban_ids"].items():
                 yield player_id, ban_id
 
-    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str]:
+    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str, None]:
         try:
             response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
                 ban_ids=list(ban_ids),

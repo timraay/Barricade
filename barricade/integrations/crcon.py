@@ -207,7 +207,7 @@ class CRCONIntegration(CustomIntegration):
             result = resp["result"]
 
             for record in result["records"]:
-                records[record["id"]] = record
+                records[str(record["id"])] = record
 
             if page * page_size >= result["total"]:
                 break
