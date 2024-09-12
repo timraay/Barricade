@@ -23,17 +23,7 @@ async def main():
                 logger.exception("Failed to load integration %r", db_config)
                 continue
 
-            # records = await integration.get_blacklist_bans()
-            records = {
-                "76560000000000001": {
-                    "id": 3,
-                    "player_id": "76560000000000001"
-                },
-                "76560000000000002": {
-                    "id": 3,
-                    "player_id": "76560000000000002"
-                }
-            }
+            records = await integration.get_blacklist_bans()
 
             for record in records.values():
                 player_id = record["player_id"]
