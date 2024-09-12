@@ -51,4 +51,5 @@ async def main():
                 db_ban.remote_id = remote_id
                 logger.info("Changed remote id %s to %s", player_id, remote_id)
 
-asyncio.run(main())
+if __name__ == '__main__':
+    asyncio.run(main())
