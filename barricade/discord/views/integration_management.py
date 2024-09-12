@@ -20,6 +20,7 @@ from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
+RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))\/(?:#|api|admin)")
 
 async def configure_battlemetrics_integration(
     interaction: Interaction,
@@ -436,9 +437,8 @@ class ConfigureCRCONIntegrationModal(Modal):
 
         # Define input fields
         self.api_url = discord.ui.TextInput(
-            label="API URL",
+            label="CRCON URL",
             style=discord.TextStyle.short,
-            placeholder="https://........../api"
         )
         self.api_key = discord.ui.TextInput(
             label="API key",
@@ -457,6 +457,14 @@ class ConfigureCRCONIntegrationModal(Modal):
         self.add_item(self.api_key)
 
     async def on_submit(self, interaction: Interaction):
+        # Validate and sanitize API URL
+        match = RE_CRCON_URL.match(self.api_url.value)
+        if not match:
+            raise CustomException(
+                "Invalid Community RCON URL!",
+                "Go to any login-protected page of your CRCON and copy the URL."
+            )
+
         config = schemas.CRCONIntegrationConfig(
             id=self.integration_id,
             community_id=self.view.community.id,
