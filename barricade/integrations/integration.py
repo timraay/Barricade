@@ -49,13 +49,18 @@ class Integration(ABC):
     meta: IntegrationMetaData
 
     def __init__(self, config: schemas.IntegrationConfigParams):
+        if config.id is not None:
+            existing = IntegrationManager().get_by_id(config.id)
+            if existing:
+                config = self.meta.config_cls.model_validate({
+                    **existing.config.model_dump(),
+                    **config.model_dump(exclude_unset=True)
+                })
         self.config = config
+
         self.task: asyncio.Task | None = None
         self.lock = asyncio.Lock()
         self.logger = get_logger(self.config.community_id)
-
-        if self.config.id is not None and self.config.enabled:
-            safe_create_task(self.enable(force=True))
 
     def __repr__(self):
         return f"{type(self).__name__}[id={self.config.id}]"
@@ -67,7 +72,6 @@ class Integration(ABC):
             raise RuntimeError("Integration was already created")
         
         async with session_factory.begin() as db:
-            self.config.enabled = False
             db_config = await create_integration_config(db, self.config) # type: ignore
             self.config = schemas.IntegrationConfig.model_validate(db_config)
             manager.add(self)
@@ -75,7 +79,11 @@ class Integration(ABC):
     @is_saved
     async def update(self, db: AsyncSession):
         db_config = await update_integration_config(db, self.config) # type: ignore
-        self.config = schemas.IntegrationConfig.model_validate(db_config)
+        self.config = self.meta.config_cls.model_validate(db_config)
+
+        # Also update integration known to manager (if any)
+        manager.get_by_config(self.config)
+        
         return db_config
 
     @is_saved

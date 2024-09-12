@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
-from barricade.enums import ReportRejectReason
+from barricade.enums import ReportReasonFlag, ReportRejectReason
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
 
@@ -140,7 +140,8 @@ async def get_pending_responses(
     stmt = select(
         models.PlayerReportResponse.pr_id,
         models.PlayerReportResponse.reject_reason,
-        models.PlayerReportResponse.banned
+        models.PlayerReportResponse.banned,
+        models.PlayerReportResponse.responded_by,
     ).join(
         models.PlayerReport
     ).where(
@@ -153,10 +154,16 @@ async def get_pending_responses(
     for row in result:
         responses[row.pr_id].banned = row.banned
         responses[row.pr_id].reject_reason = row.reject_reason
+        responses[row.pr_id].responded_by = row.responded_by
     
     return list(responses.values())
 
-async def get_reports_for_player_with_no_community_response(db: AsyncSession, player_id: str, community_id: int):
+async def get_reports_for_player_with_no_community_response(
+        db: AsyncSession,
+        player_id: str,
+        community_id: int,
+        reasons_filter: ReportReasonFlag | None = None
+):
     """Get all reports of a specific player which the given community has not yet responded to.
 
     Parameters
@@ -167,6 +174,9 @@ async def get_reports_for_player_with_no_community_response(db: AsyncSession, pl
         The ID of the player
     community_id : int
         The ID of the community
+    reasons_filter : ReportReasonFlag | None
+        Filter out reports whose reasons do not overlap with the filter. If None, no filter
+        will be applied. By default None.
 
     Returns
     -------
@@ -189,5 +199,11 @@ async def get_reports_for_player_with_no_community_response(db: AsyncSession, pl
             )
         ) \
         .options(*options)
+    
+    if reasons_filter is not None:
+        stmt = stmt.where(
+            models.Report.reasons_bitflag.bitwise_and(reasons_filter) != 0
+        )
+
     result = await db.scalars(stmt)
     return result.all()

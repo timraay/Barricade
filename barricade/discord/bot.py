@@ -48,7 +48,7 @@ class Bot(commands.Bot):
 
         from barricade.discord.views.enroll import EnrollView, EnrollAcceptView
         from barricade.discord.views.submit_report import GetSubmissionURLView
-        from barricade.discord.views.player_review import PlayerReportResponseButton
+        from barricade.discord.views.player_review import PlayerReportResponseButton, PlayerReportSelect
         from barricade.discord.views.report_management import ReportManagementButton
         
         self.add_view(EnrollView())
@@ -57,6 +57,7 @@ class Bot(commands.Bot):
         self.add_view(GetSubmissionURLView(Platform.CONSOLE))
         self.add_dynamic_items(
             PlayerReportResponseButton,
+            PlayerReportSelect,
             ReportManagementButton,
         )
 

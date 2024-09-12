@@ -68,24 +68,21 @@ class CRCONIntegration(CustomIntegration):
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.CRCONIntegrationConfigParams # type: ignore
-    
+
+    def get_api_url(self):
+        return self.config.api_url + "/api"
+
     def get_ws_url(self):
-        return self.config.api_url.removesuffix("/api") + "/ws/barricade"
+        return self.config.api_url + "/ws/barricade"  
 
     # --- Abstract method implementations
 
     async def get_instance_name(self) -> str:
         resp = await self._make_request(method="GET", endpoint="/get_public_info")
         return resp["result"]["name"]["short_name"]
-    
-    def get_instance_url(self) -> str:
-        return self.config.api_url.removesuffix("/api")
 
     async def validate(self, community: schemas.Community):
         await super().validate(community)
-
-        if not self.config.api_url.endswith("/api"):
-            raise IntegrationValidationError("API URL does not end with \"/api\"")
         
         await self.validate_api_access()
         

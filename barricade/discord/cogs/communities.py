@@ -15,6 +15,7 @@ from barricade.discord.utils import CustomException, get_command_mention
 from barricade.discord.views.admin_role_confirmation import AdminRoleConfirmationView
 from barricade.discord.views.community_overview import CommunityOverviewView
 from barricade.discord.views.integration_management import IntegrationManagementView
+from barricade.discord.views.reasons_filter import ReasonsFilterView
 from barricade.discord.views.report_channel_confirmation import ReportChannelConfirmationView
 
 if TYPE_CHECKING:
@@ -103,6 +104,21 @@ class CommunitiesCog(commands.Cog):
             view = AdminRoleConfirmationView(role)
             await view.send(interaction)
 
+    @config_group.command(name="reports-filter", description="Select which categories of reports to receive")
+    async def set_reports_filter(self, interaction: Interaction):
+        async with session_factory() as db:
+            # Make sure the user is part of a community
+            db_admin = await get_admin_by_id(db, interaction.user.id)
+            if not db_admin or not db_admin.community:
+                raise CustomException(
+                    "You need to be a community admin to do this!"
+                )
+            
+            community = schemas.CommunityRef.model_validate(db_admin.community)
+            
+        view = ReasonsFilterView(community)
+        await view.send(interaction)
+
     @config_group.command(name="view", description="See all your configured settings")
     async def view_community_config(self, interaction: Interaction):
         async with session_factory() as db:
@@ -115,6 +131,13 @@ class CommunitiesCog(commands.Cog):
             
             community = schemas.CommunityRef.model_validate(db_admin.community)
             channel = get_forward_channel(community)
+
+            if community.reasons_filter is None:
+                reports_filter = "All"
+            elif community.reasons_filter == 0:
+                reports_filter = "None"
+            else:
+                reports_filter = "\n- ".join(community.reasons_filter.to_list(custom_msg="Custom", with_emoji=True))
 
             embed = discord.Embed()
             embed.add_field(
@@ -132,6 +155,15 @@ class CommunitiesCog(commands.Cog):
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'admin-role')}*"
                     f"\n> -# The role that can review reports."
                     f"\n- {'<@&'+str(db_admin.community.admin_role_id)+'>' if db_admin.community.admin_role_id else 'None'}"
+                ),
+                inline=True
+            )
+            embed.add_field(
+                name="Reports Filter",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-filter')}*"
+                    f"\n> -# Which categories of reports to receive."
+                    f"\n- {reports_filter}"
                 ),
                 inline=True
             )

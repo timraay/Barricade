@@ -1,5 +1,5 @@
 from barricade import schemas
-from barricade.utils import Singleton
+from barricade.utils import Singleton, safe_create_task
 
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
@@ -34,11 +34,18 @@ class IntegrationManager(Singleton):
             raise ValueError("An integration with ID %s already exists" % integration.config.id)
         
         self.__integrations[integration.config.id] = integration
+        if integration.config.enabled:
+            safe_create_task(integration.enable(force=True))
+
         integration.logger.info("Added %r to manager", integration)
     
     def remove(self, integration_id: int):
         integration = self.__integrations.pop(integration_id, None)
         if not integration:
             raise ValueError("No integration found with ID %s" % integration_id)
+
+        if integration.config.enabled:
+            safe_create_task(integration.disable())
+        
         integration.logger.info("Removed %r from manager", integration)
     

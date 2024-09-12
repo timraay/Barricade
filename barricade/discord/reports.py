@@ -44,14 +44,16 @@ async def get_report_embed(
     if responses and len(responses) != len(report.players):
         raise ValueError("Expected %s responses but got %s" % (len(report.players), len(responses)))
 
+    response = None
     for i, player in enumerate(report.players, 1):
         player_id_type = get_player_id_type(player.player_id)
         is_steam = player_id_type == PlayerIDType.STEAM_64_ID
 
-        
-        name = f"**`{i}.`** {esc_md(player.player_name)}"
         if responses:
             response = responses[i - 1] # i starts at 1
+        
+        name = f"**`{i}.`** {esc_md(player.player_name)}"
+        if response:
             if response.banned is True:
                 name = f"**`{i}.`**{Emojis.HIGHLIGHT_RED}{esc_md(player.player_name)}"
             elif response.banned is False:
@@ -70,19 +72,22 @@ async def get_report_embed(
                     emoji = Emojis.TICK_YES
                 elif rate >= 0.7:
                     emoji = Emojis.TICK_MAYBE
-                elif rate >= 0.5 or num_responses <= 3:
+                elif rate >= 0.5 or num_responses <= 5:
                     emoji = Emojis.TICK_NO
                 else:
                     emoji = "💀"
 
-                value += f"\n{emoji} Banned by **{rate:.0%}** ({num_responses})"
+                value += f"\n{emoji} Banned by **{rate:.0%}** ({stat.num_banned}/{num_responses})"
+        
+        if response and response.responded_by:
+            value += f"\n-# Responded by **{esc_md(response.responded_by)}** {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
 
         if player_id_type == PlayerIDType.STEAM_64_ID:
-            value += "\n" + format_url("View on Steam", f"https://steamcommunity.com/profiles/{player.player_id}")
+            value += "\n-# " + format_url("View on Steam", f"https://steamcommunity.com/profiles/{player.player_id}")
 
         bm_rcon_url = player.player.bm_rcon_url
         if bm_rcon_url:
-            value += "\n" + format_url("View on Battlemetrics", bm_rcon_url)
+            value += "\n-# " + format_url("View on Battlemetrics", bm_rcon_url)
 
         embed.add_field(
             name=name,

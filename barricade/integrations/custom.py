@@ -65,7 +65,7 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                 for player_id in reported_player_ids:
                     # For each player, get all reports that this community has not yet responded to
                     db_reports = await get_reports_for_player_with_no_community_response(
-                        db, player_id, community_id
+                        db, player_id, community_id, community.reasons_filter
                     )
 
                     messages: list[discord.Message] = []
@@ -132,6 +132,9 @@ class CustomIntegration(Integration):
             request_handler_factory=lambda ws: IntegrationRequestHandler(ws, self),
             logger=self.logger,
         )
+
+    def get_api_url(self):
+        return self.config.api_url
 
     def get_ws_url(self):
         return self.config.api_url
@@ -285,7 +288,7 @@ class CustomIntegration(Integration):
         Exception
             Doom and gloom
         """
-        url = self.config.api_url + endpoint
+        url = self.get_api_url() + endpoint
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
         async with aiohttp.ClientSession(headers=headers) as session:
             if method in {"POST", "PATCH"}:

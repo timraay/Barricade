@@ -18,6 +18,7 @@ class PlayerReportResponse(ModelBase):
     community_id: Mapped[int] = mapped_column(ForeignKey("communities.id"))
     banned: Mapped[bool]
     reject_reason: Mapped[Optional[ReportRejectReason]] = mapped_column(Enum(ReportRejectReason), nullable=True)
+    responded_by: Mapped[Optional[str]]
 
     player_report: Mapped['PlayerReport'] = relationship(back_populates="responses", lazy="selectin")
     community: Mapped['Community'] = relationship(back_populates="responses", lazy="selectin")

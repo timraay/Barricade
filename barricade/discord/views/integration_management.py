@@ -20,6 +20,7 @@ from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
+RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$")
 
 async def configure_battlemetrics_integration(
     interaction: Interaction,
@@ -238,7 +239,6 @@ class IntegrationManagementView(View):
             except IntegrationValidationError as e:
                 raise CustomException("Failed to configure integration!", str(e))
             
-            
             # Update config in DB
             if integration.config.id:
                 await integration.update(db)
@@ -436,9 +436,8 @@ class ConfigureCRCONIntegrationModal(Modal):
 
         # Define input fields
         self.api_url = discord.ui.TextInput(
-            label="API URL",
+            label="CRCON URL",
             style=discord.TextStyle.short,
-            placeholder="https://........../api"
         )
         self.api_key = discord.ui.TextInput(
             label="API key",
@@ -457,10 +456,18 @@ class ConfigureCRCONIntegrationModal(Modal):
         self.add_item(self.api_key)
 
     async def on_submit(self, interaction: Interaction):
-        config = schemas.CRCONIntegrationConfig(
+        # Validate and sanitize API URL
+        match = RE_CRCON_URL.match(self.api_url.value)
+        if not match:
+            raise CustomException(
+                "Invalid Community RCON URL!",
+                "Go to any login-protected page of your CRCON and copy the URL."
+            )
+
+        config = schemas.CRCONIntegrationConfigParams(
             id=self.integration_id,
             community_id=self.view.community.id,
-            api_url=self.api_url.value,
+            api_url=match.group(1),
             api_key=self.api_key.value,
         )
         integration = CRCONIntegration(config)
@@ -505,7 +512,7 @@ class ConfigureCustomIntegrationModal(Modal):
         self.add_item(self.banlist_id)
 
     async def on_submit(self, interaction: Interaction):
-        config = schemas.CustomIntegrationConfig(
+        config = schemas.CustomIntegrationConfigParams(
             id=self.integration_id,
             community_id=self.view.community.id,
             api_url=self.api_url.value,

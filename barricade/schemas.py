@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
+from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator
 from typing import Literal, Optional
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
@@ -16,7 +16,7 @@ class SafeIntegrationConfigParams(_ModelFromAttributes):
 
     community_id: int
     integration_type: IntegrationType
-    enabled: bool = True
+    enabled: bool = False
 
     api_url: str
     
@@ -89,6 +89,7 @@ class _CommunityBase(BaseModel):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
     admin_role_id: Optional[int]
+    reasons_filter: Optional[ReportReasonFlag]
 
     @field_serializer(
             'forward_guild_id', 'forward_channel_id',
@@ -127,6 +128,7 @@ class _ResponseBase(BaseModel):
     community_id: int
     banned: bool
     reject_reason: Optional[ReportRejectReason]
+    responded_by: Optional[str]
 
 class _PlayerBanBase(BaseModel):
     player_id: str
@@ -158,7 +160,7 @@ class CommunityRef(_CommunityBase, _ModelFromAttributes):
     owner_id: int
     
     @field_serializer(
-            'owner_id',
+            'forward_guild_id', 'forward_channel_id', 'owner_id',
             when_used='json-unless-none'
     )
     def convert_large_int_to_str(value: int): # type: ignore
@@ -286,6 +288,11 @@ class CommunityEditParams(_CommunityBase, _ModelFromAttributes):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
 
+    @field_validator('contact_url')
+    @classmethod
+    def strip_scheme_from_contact_url(cls, value: str):
+        return value.removeprefix("https://").removesuffix("/")
+
 class CommunityCreateParams(CommunityEditParams):
     owner_id: int
     owner_name: str
@@ -327,6 +334,7 @@ class PendingResponse(_ResponseBase):
     community: CommunityRef
     banned: Optional[bool] = None # type: ignore
     reject_reason: Optional[ReportRejectReason] = None
+    responded_by: Optional[str] = None
 
 class PlayerBanCreateParams(_PlayerBanBase):
     pass
