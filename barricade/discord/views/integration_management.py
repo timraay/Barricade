@@ -20,7 +20,7 @@ from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
-RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))\/(?:#|api|admin)")
+RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$")
 
 async def configure_battlemetrics_integration(
     interaction: Interaction,
@@ -468,7 +468,7 @@ class ConfigureCRCONIntegrationModal(Modal):
         config = schemas.CRCONIntegrationConfig(
             id=self.integration_id,
             community_id=self.view.community.id,
-            api_url=self.api_url.value,
+            api_url=match.group(1),
             api_key=self.api_key.value,
         )
         integration = CRCONIntegration(config)
