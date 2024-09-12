@@ -133,6 +133,9 @@ class CustomIntegration(Integration):
             logger=self.logger,
         )
 
+    def get_api_url(self):
+        return self.config.api_url
+
     def get_ws_url(self):
         return self.config.api_url
 
@@ -285,7 +288,7 @@ class CustomIntegration(Integration):
         Exception
             Doom and gloom
         """
-        url = self.config.api_url + endpoint
+        url = self.get_api_url() + endpoint
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
         async with aiohttp.ClientSession(headers=headers) as session:
             if method in {"POST", "PATCH"}:
