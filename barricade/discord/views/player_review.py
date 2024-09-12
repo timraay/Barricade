@@ -192,6 +192,12 @@ class PlayerReportResponseButton(
                 stats[player.id] = await get_response_stats(db, player)
 
             responses = await get_pending_responses(db, community, report.players)
+        
+        # try:
+        #     selected = [response.pr_id for response in responses].index(self.pr_id)
+        # except ValueError:
+        #     selected = 0
+
         view = PlayerReviewView(responses=responses)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
@@ -262,7 +268,8 @@ class PlayerReviewView(View):
         community_id = responses[0].community_id
         report_id = responses[0].player_report.report_id
 
-        if len(responses) > 1:
+        is_multi = len(responses) > 1
+        if is_multi:
             self.add_item(
                 PlayerReportSelect(
                     select=discord.ui.Select(
@@ -342,6 +349,21 @@ class PlayerReviewView(View):
                     report_id=response.player_report.report_id,
                     pr_id=response.pr_id,
                     reject_reason=reason
+                )
+            )
+
+        if not is_multi:
+            self.add_item(
+                PlayerReportResponseButton(
+                    button=discord.ui.Button(
+                        emoji=Emojis.REFRESH,
+                        style=ButtonStyle.gray,
+                        row=1
+                    ),
+                    command="refresh",
+                    community_id=response.community_id,
+                    report_id=response.player_report.report_id,
+                    pr_id=response.pr_id,
                 )
             )
 

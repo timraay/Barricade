@@ -12,6 +12,7 @@ from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
+from barricade.enums import Emojis
 from barricade.exceptions import NotFoundError
 from barricade.urls import get_report_edit_url
 
@@ -121,7 +122,7 @@ class ReportManagementView(View):
         self.add_item(ReportManagementButton(
             button=discord.ui.Button(
                 style=discord.ButtonStyle.grey,
-                label="Refresh",
+                emoji=Emojis.REFRESH,
             ),
             command="refresh",
             report_id=report.id

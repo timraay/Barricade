@@ -118,3 +118,4 @@ class Emojis(StrEnum):
     BANNED = "<:banned:1283018335566561343>"
     UNBANNED = "<:unbanned:1283018344051511316>"
     SILHOUETTE = "<:silhouette:1283389193724366960>"
+    REFRESH = "<:refresh:1283775099165737111>"
