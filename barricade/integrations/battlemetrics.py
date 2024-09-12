@@ -306,7 +306,7 @@ class BattlemetricsIntegration(Integration):
             "data": {
                 "type": "ban",
                 "attributes": {
-                    "expires": datetime.now(tz=timezone.utc)
+                    "expires": datetime.now(tz=timezone.utc).isoformat()
                 }
             }
         })

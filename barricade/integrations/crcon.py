@@ -221,6 +221,6 @@ class CRCONIntegration(CustomIntegration):
             "PUT", "/edit_blacklist_record",
             data=dict(
                 record_id=record_id,
-                expires_at=datetime.now(tz=timezone.utc),
+                expires_at=datetime.now(tz=timezone.utc).isoformat(),
             )
         )
