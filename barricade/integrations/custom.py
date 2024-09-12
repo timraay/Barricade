@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import AsyncGenerator, Sequence
 import aiohttp
 from cachetools import TTLCache
 import discord
@@ -194,14 +194,14 @@ class CustomIntegration(Integration):
                 raise AlreadyBannedError(player_id, "Player is already banned")
 
             try:
-                await self.add_ban(
+                remote_id = await self.add_ban(
                     player_id=player_id,
                     reason=self.get_ban_reason(response)
                 )
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
 
-            await self.set_ban_id(db, player_id, player_id)
+            await self.set_ban_id(db, player_id, remote_id)
 
     @is_enabled
     async def unban_player(self, player_id: str):
@@ -309,7 +309,7 @@ class CustomIntegration(Integration):
 
         return response
 
-    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True):
+    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str]]:
         try:
             response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
                 player_ids=player_ids,
@@ -338,7 +338,7 @@ class CustomIntegration(Integration):
             for player_id, ban_id in response["ban_ids"].items():
                 yield player_id, ban_id
 
-    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True):
+    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str]:
         try:
             response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
                 ban_ids=list(ban_ids),
@@ -367,7 +367,8 @@ class CustomIntegration(Integration):
                 yield ban_id
 
     async def add_ban(self, player_id: str, reason: str | None = None):
-        return await anext(self.add_multiple_bans({player_id: reason}))
+        _, ban_id = await anext(self.add_multiple_bans({player_id: reason}))
+        return ban_id
 
     async def remove_ban(self, ban_id: str):
         return await anext(self.remove_multiple_bans([ban_id]))
