@@ -27,7 +27,7 @@ async def update_integration_config(
         config: schemas.IntegrationConfig,
 ):
     stmt = update(models.Integration).values(
-        **config.model_dump(exclude={"integration_type"}),
+        **config.model_dump(exclude={"integration_type"}, exclude_unset=True),
         integration_type=config.integration_type # may be ClassVar
     ).where(
         models.Integration.id == config.id

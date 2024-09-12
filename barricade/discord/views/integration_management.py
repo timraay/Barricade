@@ -239,7 +239,6 @@ class IntegrationManagementView(View):
             except IntegrationValidationError as e:
                 raise CustomException("Failed to configure integration!", str(e))
             
-            
             # Update config in DB
             if integration.config.id:
                 await integration.update(db)
@@ -465,7 +464,7 @@ class ConfigureCRCONIntegrationModal(Modal):
                 "Go to any login-protected page of your CRCON and copy the URL."
             )
 
-        config = schemas.CRCONIntegrationConfig(
+        config = schemas.CRCONIntegrationConfigParams(
             id=self.integration_id,
             community_id=self.view.community.id,
             api_url=match.group(1),
@@ -513,7 +512,7 @@ class ConfigureCustomIntegrationModal(Modal):
         self.add_item(self.banlist_id)
 
     async def on_submit(self, interaction: Interaction):
-        config = schemas.CustomIntegrationConfig(
+        config = schemas.CustomIntegrationConfigParams(
             id=self.integration_id,
             community_id=self.view.community.id,
             api_url=self.api_url.value,

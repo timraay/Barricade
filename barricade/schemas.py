@@ -16,7 +16,7 @@ class SafeIntegrationConfigParams(_ModelFromAttributes):
 
     community_id: int
     integration_type: IntegrationType
-    enabled: bool = True
+    enabled: bool = False
 
     api_url: str
     
