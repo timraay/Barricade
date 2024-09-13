@@ -324,7 +324,7 @@ class CustomIntegration(Integration):
 
             successful_ids = e.response["ban_ids"]
             for player_id, ban_id in successful_ids.items():
-                yield (player_id, ban_id)
+                yield str(player_id), str(ban_id)
             
             if not partial_retry:
                 raise
@@ -336,7 +336,7 @@ class CustomIntegration(Integration):
         else:
             assert response is not None
             for player_id, ban_id in response["ban_ids"].items():
-                yield player_id, ban_id
+                yield str(player_id), str(ban_id)
 
     async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str, None]:
         try:
@@ -352,7 +352,7 @@ class CustomIntegration(Integration):
 
             successful_ids = e.response["ban_ids"]
             for ban_id in successful_ids:
-                yield ban_id
+                yield str(ban_id)
             
             if not partial_retry:
                 raise
@@ -364,7 +364,7 @@ class CustomIntegration(Integration):
         else:
             assert response is not None
             for ban_id in response["ban_ids"]:
-                yield ban_id
+                yield str(ban_id)
 
     async def add_ban(self, player_id: str, reason: str | None = None):
         _, ban_id = await anext(self.add_multiple_bans({player_id: reason}))
