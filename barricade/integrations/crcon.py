@@ -218,7 +218,7 @@ class CRCONIntegration(CustomIntegration):
     async def expire_ban(self, record_id: int):
         self.logger.info("%r: Expiring record %s", self, record_id)
         await self._make_request(
-            "PUT", "/edit_blacklist_record",
+            "POST", "/edit_blacklist_record",
             data=dict(
                 record_id=record_id,
                 expires_at=datetime.now(tz=timezone.utc).isoformat(),
