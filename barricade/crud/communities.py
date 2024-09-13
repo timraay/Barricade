@@ -320,6 +320,12 @@ async def edit_community(
             by=by,
         )
     )
+    
+    # Update roles
+    community = schemas.CommunityRef.model_validate(db_community)
+    await db_community.awaitable_attrs.admins
+    for admin in db_community.admins:
+        await update_user_roles(admin.discord_id, community, strict=False)
 
     return db_community
 
