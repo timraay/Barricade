@@ -92,11 +92,11 @@ async def validate_submission_token(
         detail="Invalid token"
     )
     if not token:
-        logging.warn("Token %s not found. Response ID: %s", submission.data.token, submission.id)
+        logging.warning("Token %s not found. Response ID: %s", submission.data.token, submission.id)
         raise invalid_token_error
     
     if token.is_expired():
-        logging.warn("Token %s has expired. Response ID: %s", submission.data.token, submission.id)
+        logging.warning("Token %s has expired. Response ID: %s", submission.data.token, submission.id)
         raise invalid_token_error
     
     return token
@@ -108,6 +108,7 @@ async def submit_report(
         db: DatabaseDep,
 ):
     if token.report:
+        logging.warning("Token %s has already been used. Response ID: %s", submission.data.token, submission.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
@@ -134,6 +135,7 @@ async def submit_report_edit(
         db: DatabaseDep,
 ):
     if not token.report:
+        logging.warning("Token %s has not been used yet. Response ID: %s", submission.data.token, submission.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
