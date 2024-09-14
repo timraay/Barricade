@@ -163,7 +163,7 @@ async def send_or_edit_report_management_message(
     admin = report.token.admin
 
     user = await bot.get_or_fetch_member(admin.discord_id)
-    content=f"{user.mention} your report was submitted! (ID: #{report.id})"
+    content = f"{user.mention} your report was submitted! (ID: #{report.id})"
     
     async with session_factory.begin() as db:                    
         view = ReportManagementView(report)
@@ -176,6 +176,7 @@ async def send_or_edit_report_management_message(
             view=view,
             admin=admin,
             content=content,
+            allowed_mentions=discord.AllowedMentions(users=[user])
         )
 
 async def send_or_edit_message(
@@ -185,7 +186,8 @@ async def send_or_edit_message(
     embed: discord.Embed,
     view: discord.ui.View,
     content: str | None = None,
-    admin: schemas.AdminRef | None = None
+    admin: schemas.AdminRef | None = None,
+    allowed_mentions: discord.AllowedMentions = discord.AllowedMentions.none()
 ):
     logger = get_logger(community.id)
 
@@ -196,7 +198,7 @@ async def send_or_edit_message(
         message = bot.get_partial_message(db_message.channel_id, db_message.message_id)
         try:
             # Edit the message
-            message = await message.edit(content=content, embed=embed, view=view)
+            message = await message.edit(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
             return message
         except discord.NotFound:
             # The message no longer exists. Remove record and send a new one.
@@ -207,7 +209,7 @@ async def send_or_edit_message(
     if channel:
         try:
             # Send message
-            message = await channel.send(content=content, embed=embed, view=view)
+            message = await channel.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
         except discord.HTTPException as e:
             logger.error(
                 "Failed to send message to %s/%s. %s: %s",
@@ -223,7 +225,7 @@ async def send_or_edit_message(
         # Could not send message to channel, try sending directly to admin instead
         try:
             user = await bot.get_or_fetch_member(admin.discord_id)
-            message = await user.send(content=content, embed=embed, view=view)
+            message = await user.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
         except discord.HTTPException:
             logger.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
 
