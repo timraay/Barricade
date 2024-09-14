@@ -1,9 +1,13 @@
+from cachetools import TTLCache
 from enum import IntEnum
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import ClassVar, NamedTuple
 from urllib.parse import urlencode
 
 from barricade import schemas
 from barricade.constants import REPORT_FORM_URL
-from barricade.enums import ReportReasonFlag
+from barricade.crud.reports import create_token
+from barricade.enums import Platform, ReportReasonFlag
 
 class FormEntryID(IntEnum):
     token_value = 1804901355
@@ -61,13 +65,6 @@ class FormEntryID(IntEnum):
     def encode_bool(self, params: dict, value: str = "I want to include another player in the report"):
         params[self._key()] = value
 
-
-def get_report_create_url(access_token: str):
-    params = {}
-    FormEntryID.token_value.encode_str(params, access_token)
-    return REPORT_FORM_URL + urlencode(params)
-
-
 def get_report_edit_url(report: schemas.ReportWithToken):
     params = {}
     FormEntryID.token_value.encode_str(params, report.token.value)
@@ -119,3 +116,35 @@ def get_report_edit_url(report: schemas.ReportWithToken):
     FormEntryID.is_edit.encode_bool(params, value="1")
     
     return REPORT_FORM_URL + urlencode(params, doseq=True)
+
+class URLFactory:
+    class Key(NamedTuple):
+        admin_id: int
+        community_id: int
+        platform: Platform
+
+        @classmethod
+        def from_token(cls, token: schemas._ReportTokenBase):
+            return cls(token.admin_id, token.community_id, token.platform)
+
+    _cache: ClassVar[TTLCache[Key, str]] = TTLCache(maxsize=999, ttl=60*60)
+
+    @staticmethod
+    async def get(db: AsyncSession, params: schemas.ReportTokenCreateParams, by: str | None = None):
+        key = URLFactory.Key.from_token(params)
+        if url := URLFactory._cache.get(key):
+            return url
+        
+        db_token = await create_token(db, params, by=by)
+
+        url_params = {}
+        FormEntryID.token_value.encode_str(url_params, db_token.value)
+        url = REPORT_FORM_URL + urlencode(url_params)
+        URLFactory._cache[key] = url
+
+        return url
+
+    @staticmethod
+    def remove(token: schemas._ReportTokenBase) -> bool:
+        key = URLFactory.Key.from_token(token)
+        return URLFactory._cache.pop(key, None) is not None

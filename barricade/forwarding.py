@@ -16,6 +16,7 @@ from barricade.enums import Platform
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
+from barricade.urls import URLFactory
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
@@ -117,6 +118,9 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
             logger = get_logger(message_data.community_id)
             logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
+
+# Integration NEW_REPORT hook
+
 @add_hook(EventHooks.report_create)
 async def process_integration_report_create_hooks(report: schemas.ReportWithToken):
     await invoke_integration_report_create_hook(report)
@@ -132,6 +136,13 @@ async def invoke_integration_report_create_hook(report: schemas.ReportWithToken)
         for integration in manager.get_all()
         if integration.config.enabled
     ])
+
+
+# Report URL Cache
+
+@add_hook(EventHooks.report_create)
+async def remove_token_url_from_cache(report: schemas.ReportWithToken):
+    URLFactory.remove(report.token)
 
 
 async def send_or_edit_report_review_message(
