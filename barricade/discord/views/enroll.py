@@ -38,18 +38,23 @@ class EnrollView(View):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
             if admin:
-                if admin.owned_community:
-                    raise CustomException(
-                        f"You are already registered as owner of {admin.community.name}!",
-                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}." # type: ignore
-                    )
-                elif admin.community:
+                if not admin.owned_community:
                     raise CustomException(
                         f"You are already an admin for {admin.community.name}!",
                         (
                             f"Either resign using {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)} or" # type: ignore
                             f" ask the existing owner to transfer ownership."
                         )
+                    )
+                elif (is_pc and not admin.community.is_pc) or (not is_pc and not admin.community.is_console):
+                    raise CustomException(
+                        f"You are already registered as owner of {admin.community.name}!",
+                        f"If you want to change what platform(s) your community hosts servers for, please reach out to Bunker staff."
+                    )
+                else:
+                    raise CustomException(
+                        f"You are already registered as owner of {admin.community.name}!",
+                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}." # type: ignore
                     )
         
         if is_pc:
