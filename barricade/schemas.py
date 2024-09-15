@@ -299,6 +299,7 @@ class CommunityCreateParams(CommunityEditParams):
     forward_guild_id: Optional[int] = None
     forward_channel_id: Optional[int] = None
     admin_role_id: Optional[int] = None
+    reasons_filter: Optional[ReportReasonFlag] = None
 
 class PlayerCreateParams(_PlayerBase):
     pass
