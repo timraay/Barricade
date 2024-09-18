@@ -27,6 +27,7 @@ async def forward_errors(
     try:
         await callable()
     except Exception as e:
+        get_logger(community.id).exception("Failed to forward request: %s", type(e).__name__)
         if not excs or isinstance(e, excs):
             channel = get_forward_channel(community)
             if not channel:
@@ -46,7 +47,6 @@ async def forward_errors(
 
             view = RetryErrorView(callable)
             await channel.send(view=view, embed=embed)
-        raise
 
 
 @add_hook(EventHooks.player_ban)
