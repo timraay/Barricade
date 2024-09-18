@@ -12,7 +12,7 @@ from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
 from barricade.exceptions import IntegrationValidationError
-from barricade.integrations.custom import CustomIntegration
+from barricade.integrations.custom import CustomIntegration, is_websocket_enabled
 from barricade.integrations.integration import IntegrationMetaData, is_enabled
 
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
@@ -95,6 +95,7 @@ class CRCONIntegration(CustomIntegration):
             await self.validate_blacklist()
 
     @is_enabled
+    @is_websocket_enabled
     async def synchronize(self):
         if not self.config.id:
             raise RuntimeError("Integration has not yet been saved")

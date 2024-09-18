@@ -1,6 +1,7 @@
 import aiohttp
 from cachetools import TTLCache
 import discord
+from functools import wraps
 from typing import AsyncGenerator, Sequence
 
 from barricade import schemas
@@ -12,7 +13,7 @@ from barricade.discord.communities import get_forward_channel
 from barricade.discord.reports import get_alert_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, NotFoundError,
+    IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
@@ -21,6 +22,15 @@ from barricade.integrations.websocket import (
     BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload, NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload,
     UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
 )
+
+def is_websocket_enabled(func):
+    @wraps(func)
+    async def decorator(integration: 'CustomIntegration', *args, **kwargs):
+        if not integration.ws.is_started():
+            await integration.disable()
+            raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
+        return await func(integration, *args, **kwargs)
+    return decorator
 
 class IntegrationRequestHandler(WebsocketRequestHandler):
     __is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
@@ -153,6 +163,7 @@ class CustomIntegration(Integration):
         self.ws.update_connection()
 
     @is_enabled
+    @is_websocket_enabled
     async def on_report_create(self, report: schemas.ReportWithToken):
         await self.ws.execute(
             ClientRequestType.NEW_REPORT,
@@ -198,6 +209,8 @@ class CustomIntegration(Integration):
                     player_id=player_id,
                     reason=self.get_ban_reason(response)
                 )
+            except IntegrationFailureError:
+                raise
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
 
@@ -216,6 +229,8 @@ class CustomIntegration(Integration):
 
             try:
                 await self.remove_ban(db_ban.remote_id)
+            except IntegrationFailureError:
+                raise
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
     
@@ -309,6 +324,7 @@ class CustomIntegration(Integration):
 
         return response
 
+    @is_websocket_enabled
     async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str], None]:
         try:
             response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
@@ -338,6 +354,7 @@ class CustomIntegration(Integration):
             for player_id, ban_id in response["ban_ids"].items():
                 yield str(player_id), str(ban_id)
 
+    @is_websocket_enabled
     async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str, None]:
         try:
             response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
