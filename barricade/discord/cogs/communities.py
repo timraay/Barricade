@@ -284,40 +284,16 @@ class CommunitiesCog(commands.Cog):
             else:
                 reports_filter = "\n- ".join(community.reasons_filter.to_list(custom_msg="Custom", with_emoji=True))
 
-            embed = discord.Embed()
+            embeds = []
+
+            embed = discord.Embed(title="Reports")
+            embeds.append(embed)
             embed.add_field(
                 name="Reports feed",
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-channel')}*"
                     f"\n> -# The text channel where you receive new reports."
                     f"\n- {reports_channel_mention}"
-                ),
-                inline=True
-            )
-            embed.add_field(
-                name="Confirmations feed",
-                value=(
-                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'confirmations-channel')}*"
-                    f"\n> -# The text channel where you receive report confirmations."
-                    f"\n- {confirmations_channel_mention}"
-                ),
-                inline=True
-            )
-            embed.add_field(
-                name="Alerts feed",
-                value=(
-                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'alerts-channel')}*"
-                    f"\n> -# The text channel where you receive player alerts."
-                    f"\n- {alerts_channel_mention}"
-                ),
-                inline=True
-            )
-            embed.add_field(
-                name="Reports filter",
-                value=(
-                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-filter')}*"
-                    f"\n> -# Which categories of reports to receive."
-                    f"\n- {reports_filter}"
                 ),
                 inline=True
             )
@@ -331,11 +307,44 @@ class CommunitiesCog(commands.Cog):
                 inline=True
             )
             embed.add_field(
+                name="Reports filter",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'reports-filter')}*"
+                    f"\n> -# Which categories of reports to receive."
+                    f"\n- {reports_filter}"
+                ),
+                inline=False
+            )
+            
+            embed = discord.Embed(title="Alerts")
+            embeds.append(embed)
+            embed.add_field(
+                name="Alerts feed",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'alerts-channel')}*"
+                    f"\n> -# The text channel where you receive player alerts."
+                    f"\n- {alerts_channel_mention}"
+                ),
+                inline=True
+            )
+            embed.add_field(
                 name="Alerts role",
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'alerts-role')}*"
                     f"\n> -# The role that gets notified for alerts."
                     f"\n- {alerts_role_mention}"
+                ),
+                inline=True
+            )
+
+            embed = discord.Embed(title="Other")
+            embeds.append(embed)
+            embed.add_field(
+                name="Confirmations feed",
+                value=(
+                    f"-# *{await get_command_mention(self.bot.tree, 'config', 'confirmations-channel')}*"
+                    f"\n> -# The text channel where you receive report confirmations."
+                    f"\n- {confirmations_channel_mention}"
                 ),
                 inline=True
             )
@@ -348,7 +357,7 @@ class CommunitiesCog(commands.Cog):
                 inline=True
             )
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embeds=embeds, ephemeral=True)
 
     @app_commands.command(name="community", description="Get information about a community")
     @app_commands.guilds(DISCORD_GUILD_ID)
