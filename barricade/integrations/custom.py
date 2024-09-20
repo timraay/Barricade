@@ -9,7 +9,7 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import is_player_reported
 from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response
 from barricade.db import session_factory
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention
 from barricade.discord.reports import get_alert_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
@@ -67,7 +67,7 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                 db_community = await get_community_by_id(db, community_id)
                 community = schemas.CommunityRef.model_validate(db_community)
 
-                channel = get_forward_channel(community)
+                channel = get_alerts_channel(community)
                 if not channel:
                     # We have nowhere to send the alert, so we just ignore
                     return
@@ -108,8 +108,8 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if pr.player_id == player_id
                     )
 
-                    if community.admin_role_id:
-                        content = f"<@&{community.admin_role_id}> a potentially dangerous player has joined your server!"
+                    if mention := get_alerts_role_mention(community):
+                        content = f"{mention} a potentially dangerous player has joined your server!"
                     else:
                         content = "A potentially dangerous player has joined your server!"
 
