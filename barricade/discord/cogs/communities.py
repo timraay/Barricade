@@ -246,8 +246,8 @@ class CommunitiesCog(commands.Cog):
                 reports_channel_mention = "None"
 
             confirmations_channel = get_confirmations_channel(community)
-            if community.confirmations_channel_id == 0:
-                confirmations_channel_mention = "Same as reports"
+            if community.confirmations_channel_id is None:
+                confirmations_channel_mention = "Same as **Reports feed**"
             elif confirmations_channel:
                 confirmations_channel_mention = confirmations_channel.mention
             elif community.confirmations_channel_id:
@@ -256,8 +256,8 @@ class CommunitiesCog(commands.Cog):
                 confirmations_channel_mention = "None"
 
             alerts_channel = get_alerts_channel(community)
-            if community.alerts_channel_id == 0:
-                alerts_channel_mention = "Same as reports"
+            if community.alerts_channel_id is None:
+                alerts_channel_mention = "Same as **Reports feed**"
             elif alerts_channel:
                 alerts_channel_mention = alerts_channel.mention
             elif community.alerts_channel_id:
@@ -265,9 +265,21 @@ class CommunitiesCog(commands.Cog):
             else:
                 alerts_channel_mention = "None"
 
+            if community.admin_role_id:
+                admin_role_mention = f"<@&{community.admin_role_id}>"
+            else:
+                admin_role_mention = "None"
+
+            if community.alerts_role_id is None:
+                alerts_role_mention = "Same as **Admin role**"
+            elif community.alerts_role_id:
+                alerts_role_mention = f"<@&{community.alerts_role_id}>"
+            else:
+                alerts_role_mention = "None"
+
             if community.reasons_filter is None:
                 reports_filter = "All"
-            elif community.reasons_filter == 0:
+            elif community.reasons_filter is None:
                 reports_filter = "None"
             else:
                 reports_filter = "\n- ".join(community.reasons_filter.to_list(custom_msg="Custom", with_emoji=True))
@@ -314,7 +326,7 @@ class CommunitiesCog(commands.Cog):
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'admin-role')}*"
                     f"\n> -# The role that can review reports."
-                    f"\n- {'<@&'+str(db_admin.community.admin_role_id)+'>' if db_admin.community.admin_role_id else 'None'}"
+                    f"\n- {admin_role_mention}"
                 ),
                 inline=True
             )
@@ -323,7 +335,7 @@ class CommunitiesCog(commands.Cog):
                 value=(
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'alerts-role')}*"
                     f"\n> -# The role that gets notified for alerts."
-                    f"\n- {'<@&'+str(db_admin.community.alerts_role_id)+'>' if db_admin.community.alerts_role_id else 'None'}"
+                    f"\n- {alerts_role_mention}"
                 ),
                 inline=True
             )

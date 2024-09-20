@@ -37,7 +37,7 @@ class AdminRoleConfirmationView(View):
 
             community_id = db_admin.community.id
 
-            db.expire_all()
+            db.expunge(db_admin.community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
@@ -73,7 +73,7 @@ class AlertsRoleConfirmationView(View):
                 title=f'Do you want to remove your current alerts role?',
                 description='No role will be mentioned when an alert is received.',
             )
-        await interaction.response.send_message(embed, view=self, ephemeral=True)
+        await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
 
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
@@ -98,7 +98,7 @@ class AlertsRoleConfirmationView(View):
 
             community_id = db_admin.community.id
 
-            db.expire_all()
+            db.expunge(db_admin.community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 

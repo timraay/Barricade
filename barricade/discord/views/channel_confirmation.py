@@ -81,7 +81,7 @@ class UpdateGuildConfirmationView(View):
 
             community_id = db_admin.community.id
 
-            db.expire_all()
+            db.expunge(db_community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
@@ -133,7 +133,7 @@ class ReportChannelConfirmationView(View):
 
             community_id = db_admin.community.id
 
-            db.expire_all()
+            db.expunge(db_community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
@@ -196,7 +196,7 @@ class ConfirmationsChannelConfirmationView(View):
 
             community_id = db_community.id
 
-            db.expire_all()
+            db.expunge(db_community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
@@ -259,7 +259,7 @@ class AlertsChannelConfirmationView(View):
             
             community_id = db_community.id
 
-            db.expire_all()
+            db.expunge(db_community)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
 
