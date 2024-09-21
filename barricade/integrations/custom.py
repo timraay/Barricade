@@ -1,6 +1,8 @@
+import inspect
 import aiohttp
 from cachetools import TTLCache
 import discord
+from functools import wraps
 from typing import AsyncGenerator, Sequence
 
 from barricade import schemas
@@ -8,11 +10,11 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import is_player_reported
 from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response
 from barricade.db import session_factory
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention
 from barricade.discord.reports import get_alert_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, NotFoundError,
+    IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
 from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
@@ -21,6 +23,30 @@ from barricade.integrations.websocket import (
     BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload, NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload,
     UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
 )
+
+def is_websocket_enabled(func):
+    @wraps(func)
+    def decorated(integration: 'CustomIntegration', *args, **kwargs):
+        # Define the condition
+        async def check():
+            if not integration.ws.is_started():
+                await integration.disable()
+                raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
+
+        # Return an asyncgenerator if that's what we're decorating
+        if inspect.isasyncgenfunction(func):
+            async def inner_gen():
+                await check()
+                async for v in func(integration, *args, **kwargs):
+                    yield v
+            return inner_gen()
+        else:
+            async def inner_coro():
+                await check()
+                return await func(integration, *args, **kwargs)
+            return inner_coro()
+
+    return decorated
 
 class IntegrationRequestHandler(WebsocketRequestHandler):
     __is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
@@ -57,7 +83,7 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                 db_community = await get_community_by_id(db, community_id)
                 community = schemas.CommunityRef.model_validate(db_community)
 
-                channel = get_forward_channel(community)
+                channel = get_alerts_channel(community)
                 if not channel:
                     # We have nowhere to send the alert, so we just ignore
                     return
@@ -98,8 +124,8 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if pr.player_id == player_id
                     )
 
-                    if community.admin_role_id:
-                        content = f"<@&{community.admin_role_id}> a potentially dangerous player has joined your server!"
+                    if mention := get_alerts_role_mention(community):
+                        content = f"{mention} a potentially dangerous player has joined your server!"
                     else:
                         content = "A potentially dangerous player has joined your server!"
 
@@ -153,6 +179,7 @@ class CustomIntegration(Integration):
         self.ws.update_connection()
 
     @is_enabled
+    @is_websocket_enabled
     async def on_report_create(self, report: schemas.ReportWithToken):
         await self.ws.execute(
             ClientRequestType.NEW_REPORT,
@@ -198,6 +225,8 @@ class CustomIntegration(Integration):
                     player_id=player_id,
                     reason=self.get_ban_reason(response)
                 )
+            except IntegrationFailureError:
+                raise
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
 
@@ -216,6 +245,8 @@ class CustomIntegration(Integration):
 
             try:
                 await self.remove_ban(db_ban.remote_id)
+            except IntegrationFailureError:
+                raise
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
     
@@ -309,6 +340,7 @@ class CustomIntegration(Integration):
 
         return response
 
+    @is_websocket_enabled
     async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str], None]:
         try:
             response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
@@ -338,6 +370,7 @@ class CustomIntegration(Integration):
             for player_id, ban_id in response["ban_ids"].items():
                 yield str(player_id), str(ban_id)
 
+    @is_websocket_enabled
     async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str, None]:
         try:
             response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(

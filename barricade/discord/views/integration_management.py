@@ -143,7 +143,7 @@ class IntegrationManagementView(View):
             self.add_item(CallableButton(
                 partial(self.configure_integration, type(integration), integration.config.id),
                 style=ButtonStyle.gray if enabled else ButtonStyle.blurple,
-                label="Reconfigure",
+                label="Reconfigure...",
                 row=row
             ))
 

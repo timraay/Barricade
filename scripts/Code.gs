@@ -2,22 +2,22 @@ const API_URL = "http://localhost:8080/reports/submit";
 
 function extractPlayerData(arr, start) {
   return {
-    name: arr[start],
-    id: arr[start + 1],
-    bmRconUrl: arr[start + 2],
+    playerName: arr[start],
+    playerId: arr[start + 1],
+    bmRconUrl: arr[start + 2] || null,
   };
 }
 
 function sendResponse(e) {
-  const itemResponses = e.response.getItemResponses();
+  const itemResponses = e.response.getItemResponses().map(r => r.getResponse());
   const token = itemResponses[0];
   const players = [extractPlayerData(itemResponses, 1)];
-  const reasons = itemResponses[4].split(";");
+  const reasons = itemResponses[4];
   const description = itemResponses[5];
-  // const attachmentUrls = itemResponses[6].split(";");
-  // for (const i = 7; i < 7 + 4 * 4; i += 4) {
+  // const attachmentUrls = itemResponses[6];
+  // for (let i = 7; i < 7 + 4 * 4; i += 4) {
   const attachmentUrls = [];
-  for (const i = 6; i < 6 + 4 * 4; i += 4) {
+  for (let i = 6; i < 6 + 4 * 4; i += 4) {
     if (!itemResponses[i]) break;
     players.push(extractPlayerData(itemResponses, i + 1));
   }
@@ -32,7 +32,7 @@ function sendResponse(e) {
       players: players,
       reasons: reasons,
       body: description,
-      attachmentUrls: attachmentUrls
+      attachmentUrls: attachmentUrls,
     }
   };
 

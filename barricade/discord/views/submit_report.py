@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import ButtonStyle, Interaction
 
@@ -7,7 +8,7 @@ from barricade.crud.reports import create_token
 from barricade.db import session_factory
 from barricade.discord.utils import View, CallableButton, CustomException
 from barricade.enums import Platform
-from barricade.urls import get_report_create_url
+from barricade.urls import URLFactory
 
 class GetSubmissionURLView(View):
     def __init__(self, platform: Platform):
@@ -35,22 +36,25 @@ class GetSubmissionURLView(View):
                 raise CustomException("Only verified server admins can create reports!")
             
             # Update stored name
-            user: discord.Member = interaction.user # type: ignore
-            name = user.nick or user.display_name
+            name = interaction.user.display_name
             if admin.name != name:
                 admin.name = name
 
-            token = schemas.ReportTokenCreateParams(
+            params = schemas.ReportTokenCreateParams(
                 admin_id=admin.discord_id,
                 community_id=admin.community_id,
                 platform=self.platform,
             )
-            db_token = await create_token(db, token)
+            url = await URLFactory.get(db, params, by=interaction.user) # type: ignore
         
-        url = get_report_create_url(db_token.value)
         view = OpenFormView(url)
         await view.send(interaction)
-
+        await asyncio.sleep(60)
+        try:
+            await interaction.delete_original_response()
+        except:
+            # Don't really care about this
+            pass
 
 class OpenFormView(View):
     def __init__(self, url: str):

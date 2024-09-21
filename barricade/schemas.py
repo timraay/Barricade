@@ -90,6 +90,9 @@ class _CommunityBase(BaseModel):
     forward_channel_id: Optional[int]
     admin_role_id: Optional[int]
     reasons_filter: Optional[ReportReasonFlag]
+    confirmations_channel_id: Optional[int]
+    alerts_channel_id: Optional[int]
+    alerts_role_id: Optional[int]
 
     @field_serializer(
             'forward_guild_id', 'forward_channel_id',
@@ -300,6 +303,9 @@ class CommunityCreateParams(CommunityEditParams):
     forward_channel_id: Optional[int] = None
     admin_role_id: Optional[int] = None
     reasons_filter: Optional[ReportReasonFlag] = None
+    confirmations_channel_id: Optional[int] = None
+    alerts_channel_id: Optional[int] = None
+    alerts_role_id: Optional[int] = None
 
 class PlayerCreateParams(_PlayerBase):
     pass

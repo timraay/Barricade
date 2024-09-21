@@ -8,7 +8,7 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.responses import get_pending_responses
 from barricade.db import models, session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_confirmations_channel, get_forward_channel
 from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
@@ -16,6 +16,7 @@ from barricade.enums import Platform
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
+from barricade.urls import URLFactory
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
@@ -117,6 +118,9 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
             logger = get_logger(message_data.community_id)
             logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
+
+# Integration NEW_REPORT hook
+
 @add_hook(EventHooks.report_create)
 async def process_integration_report_create_hooks(report: schemas.ReportWithToken):
     await invoke_integration_report_create_hook(report)
@@ -132,6 +136,13 @@ async def invoke_integration_report_create_hook(report: schemas.ReportWithToken)
         for integration in manager.get_all()
         if integration.config.enabled
     ])
+
+
+# Report URL Cache
+
+@add_hook(EventHooks.report_create)
+async def remove_token_url_from_cache(report: schemas.ReportWithToken):
+    URLFactory.remove(report.token)
 
 
 async def send_or_edit_report_review_message(
@@ -152,6 +163,7 @@ async def send_or_edit_report_review_message(
             db,
             report=report,
             community=community,
+            channel=get_forward_channel(community),
             embed=embed,
             view=view,
         )
@@ -163,7 +175,7 @@ async def send_or_edit_report_management_message(
     admin = report.token.admin
 
     user = await bot.get_or_fetch_member(admin.discord_id)
-    content=f"{user.mention} your report was submitted! (ID: #{report.id})"
+    content = f"{user.mention} your report was submitted! (ID: #{report.id})"
     
     async with session_factory.begin() as db:                    
         view = ReportManagementView(report)
@@ -172,20 +184,24 @@ async def send_or_edit_report_management_message(
             db,
             report=report,
             community=community,
+            channel=get_confirmations_channel(community),
             embed=embed,
             view=view,
             admin=admin,
             content=content,
+            allowed_mentions=discord.AllowedMentions(users=[user])
         )
 
 async def send_or_edit_message(
     db: AsyncSession,
     report: schemas.ReportRef,
     community: schemas.CommunityRef,
+    channel: discord.TextChannel | None,
     embed: discord.Embed,
     view: discord.ui.View,
     content: str | None = None,
-    admin: schemas.AdminRef | None = None
+    admin: schemas.AdminRef | None = None,
+    allowed_mentions: discord.AllowedMentions = discord.AllowedMentions.none()
 ):
     logger = get_logger(community.id)
 
@@ -196,18 +212,17 @@ async def send_or_edit_message(
         message = bot.get_partial_message(db_message.channel_id, db_message.message_id)
         try:
             # Edit the message
-            message = await message.edit(content=content, embed=embed, view=view)
+            message = await message.edit(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
             return message
         except discord.NotFound:
             # The message no longer exists. Remove record and send a new one.
             await db.delete(db_message)
 
     message = None
-    channel = get_forward_channel(community)
     if channel:
         try:
             # Send message
-            message = await channel.send(content=content, embed=embed, view=view)
+            message = await channel.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
         except discord.HTTPException as e:
             logger.error(
                 "Failed to send message to %s/%s. %s: %s",
@@ -223,7 +238,7 @@ async def send_or_edit_message(
         # Could not send message to channel, try sending directly to admin instead
         try:
             user = await bot.get_or_fetch_member(admin.discord_id)
-            message = await user.send(content=content, embed=embed, view=view)
+            message = await user.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
         except discord.HTTPException:
             logger.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
 

@@ -296,7 +296,7 @@ class PlayerReviewView(View):
             self.add_item(
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
-                        label="Unban player...",
+                        label="Unban player",
                         style=ButtonStyle.blurple,
                         disabled=False,
                         row=1
@@ -312,7 +312,7 @@ class PlayerReviewView(View):
             self.add_item(
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
-                        label="Ban player...",
+                        label="Ban player",
                         style=ButtonStyle.red if response.banned is None else ButtonStyle.gray,
                         disabled=False,
                         row=1

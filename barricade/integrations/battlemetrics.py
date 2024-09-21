@@ -10,7 +10,7 @@ from barricade.discord.communities import safe_send_to_community
 from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType, PlayerIDType
-from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, NotFoundError, IntegrationValidationError
+from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, IntegrationFailureError, NotFoundError, IntegrationValidationError
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.utils import get_player_id_type, safe_create_task
 
@@ -82,11 +82,18 @@ class BattlemetricsIntegration(Integration):
                 f"Reported by {report.token.community.name} ({report.token.community.contact_url})\n"
                 f"Link to Bunker message: {report_channel.jump_url}/{report.message_id}"
             )
-            ban_id = await self.add_ban(
-                identifier=player_id,
-                reason=reason,
-                note=note,
-            )
+            
+            try:
+                ban_id = await self.add_ban(
+                    identifier=player_id,
+                    reason=reason,
+                    note=note,
+                )
+            except IntegrationFailureError:
+                raise
+            except Exception as e:
+                raise IntegrationBanError(player_id, "Failed to ban player") from e
+            
             await self.set_ban_id(db, player_id, ban_id)
 
     @is_enabled
@@ -103,8 +110,10 @@ class BattlemetricsIntegration(Integration):
                     self.logger.error("Battlemetrics Ban with ID %s for player %s not found", db_ban.remote_id, player_id)
                 else:
                     raise IntegrationBanError(player_id, "Failed to unban player")
-            except:
-                raise IntegrationBanError(player_id, "Failed to unban player")
+            except IntegrationFailureError:
+                raise
+            except Exception as e:
+                raise IntegrationBanError(player_id, "Failed to unban player") from e
 
             await db.delete(db_ban)
 
@@ -134,7 +143,7 @@ class BattlemetricsIntegration(Integration):
                         reason=reason,
                         note=note,
                     )
-                except IntegrationBanError:
+                except IntegrationFailureError:
                     failed.append(player_id)
                 else:
                     ban_ids.append((player_id, ban_id))
@@ -155,7 +164,7 @@ class BattlemetricsIntegration(Integration):
 
                 try:
                     await self.remove_ban(db_ban.remote_id)
-                except IntegrationBanError:
+                except IntegrationFailureError:
                     failed.append(player_id)
                 else:
                     await db.delete(db_ban)

@@ -171,7 +171,7 @@ class Websocket:
         return self._ws_task is not None
     
     def is_connected(self):
-        return self._ws.done() and not self._ws.cancelled()
+        return self._ws.done() and not self._ws.cancelled() and not self._ws.exception()
     
     async def wait_until_connected(self, timeout: float | None = None):
         try:
@@ -251,7 +251,7 @@ class Websocket:
             return
 
     async def handle_request(self, request: RequestBody):
-        self.logger.info(
+        self.logger.debug(
             "Handling websocket request #%s %s %s",
             request.id, request.request.name, request.payload
         )
