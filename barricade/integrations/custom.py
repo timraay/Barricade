@@ -1,3 +1,4 @@
+import inspect
 import aiohttp
 from cachetools import TTLCache
 import discord
@@ -25,12 +26,27 @@ from barricade.integrations.websocket import (
 
 def is_websocket_enabled(func):
     @wraps(func)
-    async def decorator(integration: 'CustomIntegration', *args, **kwargs):
-        if not integration.ws.is_started():
-            await integration.disable()
-            raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
-        return await func(integration, *args, **kwargs)
-    return decorator
+    def decorated(integration: 'CustomIntegration', *args, **kwargs):
+        # Define the condition
+        async def check():
+            if not integration.ws.is_started():
+                await integration.disable()
+                raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
+
+        # Return an asyncgenerator if that's what we're decorating
+        if inspect.isasyncgenfunction(func):
+            async def inner_gen():
+                await check()
+                async for v in func(integration, *args, **kwargs):
+                    yield v
+            return inner_gen()
+        else:
+            async def inner_coro():
+                await check()
+                return await func(integration, *args, **kwargs)
+            return inner_coro()
+
+    return decorated
 
 class IntegrationRequestHandler(WebsocketRequestHandler):
     __is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
