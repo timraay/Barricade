@@ -251,7 +251,7 @@ class Websocket:
             return
 
     async def handle_request(self, request: RequestBody):
-        self.logger.info(
+        self.logger.debug(
             "Handling websocket request #%s %s %s",
             request.id, request.request.name, request.payload
         )
