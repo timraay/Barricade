@@ -8,7 +8,7 @@ from barricade.crud.communities import get_community_by_id
 from barricade.crud.responses import get_pending_responses
 from barricade.db import models, session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_confirmations_channel, get_forward_channel
 from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
@@ -163,6 +163,7 @@ async def send_or_edit_report_review_message(
             db,
             report=report,
             community=community,
+            channel=get_forward_channel(community),
             embed=embed,
             view=view,
         )
@@ -183,6 +184,7 @@ async def send_or_edit_report_management_message(
             db,
             report=report,
             community=community,
+            channel=get_confirmations_channel(community),
             embed=embed,
             view=view,
             admin=admin,
@@ -194,6 +196,7 @@ async def send_or_edit_message(
     db: AsyncSession,
     report: schemas.ReportRef,
     community: schemas.CommunityRef,
+    channel: discord.TextChannel | None,
     embed: discord.Embed,
     view: discord.ui.View,
     content: str | None = None,
@@ -216,7 +219,6 @@ async def send_or_edit_message(
             await db.delete(db_message)
 
     message = None
-    channel = get_forward_channel(community)
     if channel:
         try:
             # Send message

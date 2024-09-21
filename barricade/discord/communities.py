@@ -79,6 +79,50 @@ def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel 
         raise RuntimeError("Forward channel %r is not a TextChannel" % channel)
     return channel
 
+def get_confirmations_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    if community.confirmations_channel_id is None:
+        return get_forward_channel(community)
+    
+    if not community.forward_guild_id or not community.confirmations_channel_id:
+        return
+    
+    guild = bot.get_guild(community.forward_guild_id)
+    if not guild:
+        return
+    
+    channel = guild.get_channel(community.confirmations_channel_id)
+    if channel and not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Confirmations channel %r is not a TextChannel" % channel)
+    return channel
+
+def get_alerts_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    if community.alerts_channel_id is None:
+        return get_forward_channel(community)
+    
+    if not community.forward_guild_id or not community.alerts_channel_id:
+        return
+    
+    guild = bot.get_guild(community.forward_guild_id)
+    if not guild:
+        return
+    
+    channel = guild.get_channel(community.alerts_channel_id)
+    if channel and not isinstance(channel, discord.TextChannel):
+        raise RuntimeError("Alerts channel %r is not a TextChannel" % channel)
+    return channel
+
+async def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
+    role_id = (
+        community.admin_role_id
+        if community.alerts_role_id is None
+        else community.alerts_role_id
+    )
+
+    if role_id:
+        return f"<@&{role_id}>"
+    else:
+        return None
+
 def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
     channel = get_forward_channel(community)
     if not channel:
