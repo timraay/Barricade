@@ -28,7 +28,7 @@ ReportDep = Annotated[models.Report, Depends(get_report_dependency(False))]
 ReportWithTokenDep = Annotated[models.Report, Depends(get_report_dependency(True))]
 
 
-@router.get("/reports", response_model=PaginatedResponse[schemas.Report])
+@router.get("/reports", response_model=PaginatedResponse[schemas.ReportWithToken])
 async def get_reports(
         db: DatabaseDep,
         paginator: PaginatorDep,
@@ -38,6 +38,7 @@ async def get_reports(
         ],
 ):
     result = await reports.get_all_reports(db,
+        load_token=True,
         limit=paginator.limit,
         offset=paginator.offset
     )
