@@ -124,7 +124,8 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if pr.player_id == player_id
                     )
 
-                    if mention := get_alerts_role_mention(community):
+                    mention = await get_alerts_role_mention(community)
+                    if mention:
                         content = f"{mention} a potentially dangerous player has joined your server!"
                     else:
                         content = "A potentially dangerous player has joined your server!"
