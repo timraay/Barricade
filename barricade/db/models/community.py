@@ -20,7 +20,7 @@ class Community(ModelBase):
     name: Mapped[str] = mapped_column(String, unique=True)
     tag: Mapped[str]
     contact_url: Mapped[str]
-    owner_id: Mapped[int] = mapped_column(ForeignKey("admins.discord_id"))
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admins.discord_id"))
 
     is_pc: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     is_console: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
@@ -34,7 +34,7 @@ class Community(ModelBase):
     alerts_role_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
     admins: Mapped[list['Admin']] = relationship(back_populates="community", foreign_keys="Admin.community_id")
-    owner: Mapped['Admin'] = relationship(back_populates="owned_community", foreign_keys=[owner_id])
+    owner: Mapped[Optional['Admin']] = relationship(back_populates="owned_community", foreign_keys=[owner_id])
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     messages: Mapped[list['ReportMessage']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")

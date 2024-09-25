@@ -12,6 +12,7 @@ from barricade.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
     TooManyAdminsError, NotFoundError
 )
+from barricade.logger import get_logger
 from barricade.utils import safe_create_task
 
 async def get_all_admins(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
@@ -375,6 +376,11 @@ async def create_new_admin(
     await db.refresh(db_admin)
 
     if db_community:
+        if not db_community.owner_id:
+            # If the community was abandoned, make them the owner
+            db_community.owner_id = db_admin.discord_id
+            await db.flush()
+
         community = schemas.CommunityRef.model_validate(db_community)
         admin = schemas.AdminRef.model_validate(db_admin)
         await update_user_roles(params.discord_id, community=community)
@@ -474,6 +480,9 @@ async def admin_join_community(
         raise TooManyAdminsError
         
     db_admin.community_id = db_community.id
+    if not db_community.owner_id:
+        # If the community was abandoned, make them the owner
+        db_community.owner_id = db_admin.discord_id
     await db.flush()
 
     community = schemas.CommunityRef.model_validate(db_community)
@@ -535,7 +544,7 @@ async def transfer_ownership(
         raise AdminNotAssociatedError(admin, community)
     
     db_old_owner: models.Admin = await db_community.awaitable_attrs.owner
-    old_owner = schemas.AdminRef.model_validate(db_old_owner)
+    old_owner = schemas.Admin.model_validate(db_old_owner)
 
     db_community.owner_id = db_admin.discord_id
     await db.flush()
@@ -551,3 +560,52 @@ async def transfer_ownership(
     )
 
     return True
+
+async def abandon_community(
+        db: AsyncSession,
+        community_id: int,
+        by: str | None = None,
+):
+    db_community = await get_community_by_id(db, community_id)
+    if not db_community:
+        raise NotFoundError("Community with ID %s does not exist" % community_id)
+
+    db_owner = db_community.owner
+    if not db_owner:
+        raise AlreadyExistsError("Community with ID %s is already abandoned" % community_id)
+    owner = schemas.Admin.model_validate(db_owner)
+
+    if len(db_community.admins) > 1:
+        raise TooManyAdminsError(
+            "All admins but the owner have to be removed first before"
+            " the owner can abandon the community"
+        )
+    
+    db_community.owner_id = None
+    await db.flush()
+    db_owner.community_id = None
+    await db.flush()
+    await db.refresh(db_community)
+
+    from barricade.integrations.manager import IntegrationManager
+    manager = IntegrationManager()
+    for db_config in db_community.integrations:
+        if not db_config.enabled:
+            continue
+
+        config = schemas.IntegrationConfig.model_validate(db_config)
+        integration = manager.get_by_config(config)
+        if not integration:
+            get_logger(db_community.id).error("Integration with config %r should be registered by manager but was not" % config)
+            db_config.enabled = False
+            continue
+
+        await integration.disable()
+
+    await revoke_user_roles(owner.discord_id)
+
+    safe_create_task(
+        audit_community_change_owner(owner, None, by=by)
+    )
+
+    return db_community

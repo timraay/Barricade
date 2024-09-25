@@ -4,7 +4,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 from barricade import schemas
 from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
-from barricade.db import session_factory, engine, create_tables
+from barricade.db import session_factory, create_tables
 from barricade.discord import bot
 from barricade.enums import Platform, ReportReasonFlag
 
@@ -75,14 +75,14 @@ async def main():
 
         t1 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c1.id,
-            admin_id=c1.owner_id,
+            admin_id=c1.owner_id, # type: ignore
             platform=Platform.PC,
         ))
         print("--", "Created token 1")
 
         t2 = await reports.create_token(db, schemas.ReportTokenCreateParams(
             community_id=c2.id,
-            admin_id=c2.owner_id,
+            admin_id=c2.owner_id, # type: ignore
             platform=Platform.PC,
         ))
         print("--", "Created token 2")

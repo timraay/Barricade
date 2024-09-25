@@ -130,17 +130,42 @@ async def get_community(
 ):
     return community
 
-@router.put("/{community_id}", response_model=schemas.SafeCommunityWithRelations)
+@router.put("/{community_id}", response_model=schemas.SafeCommunity)
 async def edit_community(
         db: DatabaseDep,
-        community: CommunityWithRelationsDep,
+        community: CommunityDep,
         params: schemas.CommunityEditParams,
         token: Annotated[
             web_schemas.TokenWithHash,
             Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
         ],
 ):
-    await communities.edit_community(db, community, params, by=(token.user.username if token.user else "Web Token"))
+    community = await communities.edit_community(
+        db, community, params,
+        by=(token.user.username if token.user else "Web Token")
+    )
+    await db.commit()
+    return community
+
+@router.delete("/{community_id}", response_model=schemas.SafeCommunity)
+async def abandon_community(
+        db: DatabaseDep,
+        community: CommunityDep,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token, scopes=Scopes.COMMUNITY_MANAGE.to_list())
+        ],
+):
+    if not community.owner:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Community is already abandoned"
+        )
+
+    community = await communities.abandon_community(
+        db, community.id,
+        by=(token.user.username if token.user else "Web Token")
+    )
     await db.commit()
     return community
 

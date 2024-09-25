@@ -10,22 +10,18 @@ from barricade.constants import DISCORD_AUDIT_CHANNEL_ID
 from barricade.discord.reports import get_report_channel, get_report_embed
 from .bot import bot
 
-async def set_footer(embed: discord.Embed, user_id: int, by: str | discord.User | None = None):
+async def set_footer(embed: discord.Embed, user_id: int | None, by: str | discord.User | None = None):
     if by:
         if isinstance(by, (discord.User, discord.Member)):
             return embed.set_footer(text=by.display_name, icon_url=by.display_avatar.url)
         else:
             return embed.set_footer(text=by)
     
-    user = await bot.get_or_fetch_user(user_id)
-    if user:
+    if user_id:
+        user = await bot.get_or_fetch_user(user_id)
         embed.set_footer(
             icon_url=user.display_avatar,
             text=user.display_name,
-        )
-    else:
-        embed.set_footer(
-            text=str(user_id)
         )
 
 
@@ -47,6 +43,25 @@ async def add_admin_field(embed: discord.Embed, admin: schemas.AdminRef, header:
         value=f"{esc_md(user.display_name)}\n{user.mention}"
     )
 
+async def add_owner_field(embed: discord.Embed, owner: schemas.AdminRef | None):
+    if not owner:
+        return embed.add_field(
+            name="Owner",
+            value="*None*"
+        )
+    
+    user = await bot.get_or_fetch_user(owner.discord_id)
+    if not user:
+        return embed.add_field(
+            name="Owner",
+            value=f"*User not found*\n`{owner.discord_id}`"
+        )
+    
+    return embed.add_field(
+        name="Owner",
+        value=f"{esc_md(user.display_name)}\n{user.mention}"
+    )
+
 def add_payload_field(embed: discord.Embed, schema: BaseModel):
     return embed.add_field(
         name="Payload",
@@ -59,7 +74,9 @@ def get_payload_embed(schema: BaseModel):
         description=f"**Payload**\n```json\n{schema.model_dump_json(indent=2)[:4000]}\n```",
     )
 
-def get_avatar_url(user_id: int):
+def get_avatar_url(user_id: int | None):
+    if not user_id:
+        return None
     user = bot.get_user(user_id)
     if not user:
         return None
@@ -92,12 +109,12 @@ async def audit_community_create(
         color=discord.Colour.green(),
         timestamp=datetime.now(tz=timezone.utc)
     ).set_author(
-        icon_url=get_avatar_url(community.owner_id),
+        icon_url=get_avatar_url(owner.discord_id),
         name="Community created",
     )
-    await set_footer(embed, community.owner_id, by)
+    await set_footer(embed, owner.discord_id, by)
     add_community_field(embed, community)
-    await add_admin_field(embed, owner, "Owner")
+    await add_owner_field(embed, owner)
     add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
 
     await _audit(embed)
@@ -110,33 +127,36 @@ async def audit_community_edit(
         color=discord.Colour.yellow(),
         timestamp=datetime.now(tz=timezone.utc)
     ).set_author(
-        icon_url=get_avatar_url(community.owner_id),
+        icon_url=get_avatar_url(community.owner_id if community.owner else None),
         name="Community edited",
     )
     await set_footer(embed, community.owner_id, by)
     add_community_field(embed, community)
-    await add_admin_field(embed, community.owner, "Owner")
+    await add_owner_field(embed, community.owner)
     add_payload_field(embed, schemas.CommunityRef(**community.model_dump()))
 
     await _audit(embed)
 
 async def audit_community_change_owner(
-    old_owner: schemas.AdminRef,
-    new_owner: schemas.Admin,
+    old_owner: schemas.Admin,
+    new_owner: schemas.AdminRef | None,
     by: str | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.yellow(),
         timestamp=datetime.now(tz=timezone.utc)
     ).set_author(
-        icon_url=get_avatar_url(new_owner.discord_id),
+        icon_url=get_avatar_url(new_owner.discord_id if new_owner else None),
         name="Community ownership transferred",
     )
     await set_footer(embed, old_owner.discord_id, by)
-    if new_owner.community:
-        add_community_field(embed, new_owner.community)
+    if old_owner.community:
+        add_community_field(embed, old_owner.community)
     await add_admin_field(embed, old_owner, "Old Owner")
-    await add_admin_field(embed, new_owner, "New Owner")
+    if new_owner:
+        await add_admin_field(embed, new_owner, "New Owner")
+    else:
+        embed.add_field(name="New Owner", value="*None*", inline=True)
 
     await _audit(embed)
 

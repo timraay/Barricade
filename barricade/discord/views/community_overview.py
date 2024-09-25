@@ -34,13 +34,6 @@ class CommunityOverviewView(View):
                 label="Edit"
             ))
 
-    def fmt_name(self, admin: schemas.AdminRef):
-        res = f"**{self.community.owner.name}**"
-        if self.admin and admin.discord_id == self.admin.discord_id:
-            res += " (You)"
-        res += f"\n<@{admin.discord_id}>"
-        return res
-    
     async def open_edit_modal(self, interaction: Interaction):
         async with session_factory() as db:
             db_community = await get_community_by_id(db, self.community.id)
@@ -126,10 +119,14 @@ class CommunityOverviewView(View):
             if self.community.owner_id == admin.discord_id:
                 admin_list[-1] += f" {Emojis.OWNER}"
 
-        embed.add_field(
-            name=f"Admins ({len(self.community.admins)}/{MAX_ADMIN_LIMIT + 1})",
-            value="\n".join(admin_list),
-        )
+        if admin_list:
+            embed.add_field(
+                name=f"Admins ({len(self.community.admins)}/{MAX_ADMIN_LIMIT + 1})",
+                value="\n".join(admin_list),
+            )
+        else:
+            embed.color = Color.default()
+            embed.description = "> This community was abandoned!"
 
         embed.add_field(
             name="Platform",
