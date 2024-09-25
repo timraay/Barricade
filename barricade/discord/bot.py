@@ -107,8 +107,7 @@ def command_prefix(bot: Bot, message: discord.Message):
     return bot.user.mention + " " # type: ignore
 
 bot = Bot(
-    # intents=discord.Intents.default() | discord.Intents(members=True),
-    intents=discord.Intents.default(),
+    intents=discord.Intents.default() | discord.Intents(members=True),
     command_prefix=command_prefix,
     case_insensitive=True
 )
