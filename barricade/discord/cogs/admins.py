@@ -9,7 +9,7 @@ from discord.utils import escape_markdown as esc_md
 from barricade import schemas
 from barricade.db import session_factory
 from barricade.constants import MAX_ADMIN_LIMIT, DISCORD_GUILD_ID
-from barricade.crud.communities import get_admin_by_id
+from barricade.crud.communities import abandon_community, admin_leave_community, get_admin_by_id, transfer_ownership
 from barricade.discord.communities import update_user_roles
 from barricade.discord.utils import CustomException, get_command_mention
 from barricade.discord.views.admin_confirmation import (
@@ -44,6 +44,53 @@ class AdminsCog(commands.Cog):
             # Grant roles
             await update_user_roles(member.id, community=admin.community)
 
+    @commands.Cog.listener()
+    async def on_member_leave(self, member: discord.Member):
+        # Only run if user joins primary guild
+        if member.guild.id != DISCORD_GUILD_ID:
+            return
+        
+        async with session_factory() as db:
+            db_admin = await get_admin_by_id(db, discord_id=member.id)
+            # Return if member is not an admin of any community
+            if not db_admin or not db_admin.community:
+                return
+            
+            db_community = db_admin.community
+            
+            if db_admin.owned_community:
+                # The user is the community owner
+                await db_community.awaitable_attrs.admins
+                if len(db_community.admins) > 1:
+                    # If there's other admins in the community, transfer ownership to
+                    # an arbitrary one and then remove them
+                    db_new_owner = next(
+                        admin
+                        for admin in db_community.admins
+                        if admin.discord_id != member.id
+                    )
+                    await transfer_ownership(
+                        db, db_community.id, db_new_owner.discord_id,
+                        by=member, # type: ignore
+                    )
+                    await admin_leave_community(
+                        db, db_admin,
+                        by=member, # type: ignore
+                    )
+
+                else:
+                    # If no admins remain, abandon the community instead
+                    await abandon_community(
+                        db, db_community.id,
+                        by=member, # type: ignore
+                    )
+
+            else:
+                # If the user is just an admin, simply remove them
+                await admin_leave_community(
+                    db, db_admin,
+                    by=member, # type: ignore
+                )
     
     @app_commands.command(name="add-admin", description="Add one of your community's admins to the Bunker")
     @app_commands.guilds(DISCORD_GUILD_ID)
