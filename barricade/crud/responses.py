@@ -187,8 +187,10 @@ async def get_reports_for_player_with_no_community_response(
     
     stmt = select(models.Report) \
         .join(models.Report.players) \
+        .join(models.Report.token) \
         .where(
             models.PlayerReport.player_id == player_id,
+            models.ReportToken.community_id != community_id,
             not_(
                 select(models.PlayerReportResponse)
                     .where(

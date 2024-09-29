@@ -95,7 +95,8 @@ class _CommunityBase(BaseModel):
     alerts_role_id: Optional[int]
 
     @field_serializer(
-            'forward_guild_id', 'forward_channel_id',
+            'forward_guild_id', 'forward_channel_id', 'admin_role_id',
+            'confirmations_channel_id', 'alerts_channel_id', 'alerts_role_id',
             when_used='json-unless-none'
     )
     def convert_large_int_to_str(value: int): # type: ignore
@@ -160,17 +161,18 @@ class AdminRef(_AdminBase, _ModelFromAttributes):
 
 class CommunityRef(_CommunityBase, _ModelFromAttributes):
     id: int
-    owner_id: int
+    owner_id: Optional[int]
     
     @field_serializer(
-            'forward_guild_id', 'forward_channel_id', 'owner_id',
+            'forward_guild_id', 'forward_channel_id', 'admin_role_id',
+            'confirmations_channel_id', 'alerts_channel_id', 'alerts_role_id', 'owner_id',
             when_used='json-unless-none'
     )
     def convert_large_int_to_str(value: int): # type: ignore
         return str(value)
 
     def __repr__(self) -> str:
-        return f"Player[id={self.id}, name=\"{self.name}\"]"
+        return f"Community[id={self.id}, name=\"{self.name}\"]"
 
 class PlayerRef(_PlayerBase, _ModelFromAttributes):
     def __repr__(self) -> str:
@@ -223,7 +225,7 @@ class Admin(AdminRef):
     community: Optional[CommunityRef]
 
 class SafeCommunity(CommunityRef):
-    owner: AdminRef
+    owner: Optional[AdminRef]
     admins: list[AdminRef]
     integrations: list[SafeIntegrationConfig]
 
@@ -287,9 +289,14 @@ class PlayerBan(PlayerBanRef):
 class AdminCreateParams(_AdminBase):
     pass
 
-class CommunityEditParams(_CommunityBase, _ModelFromAttributes):
+class CommunityEditParams(_CommunityBase, _ModelFromAttributes, validate_assignment=True):
     forward_guild_id: Optional[int]
     forward_channel_id: Optional[int]
+    admin_role_id: Optional[int]
+    reasons_filter: Optional[ReportReasonFlag]
+    confirmations_channel_id: Optional[int]
+    alerts_channel_id: Optional[int]
+    alerts_role_id: Optional[int]
 
     @field_validator('contact_url')
     @classmethod
@@ -306,6 +313,11 @@ class CommunityCreateParams(CommunityEditParams):
     confirmations_channel_id: Optional[int] = None
     alerts_channel_id: Optional[int] = None
     alerts_role_id: Optional[int] = None
+
+    @field_validator('contact_url')
+    @classmethod
+    def strip_scheme_from_contact_url(cls, value: str):
+        return value.removeprefix("https://").removesuffix("/")
 
 class PlayerCreateParams(_PlayerBase):
     pass

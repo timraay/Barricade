@@ -8,10 +8,11 @@ from typing import AsyncGenerator, Sequence
 from barricade import schemas
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import is_player_reported
-from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response
+from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
 from barricade.db import session_factory
-from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention
+from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_forward_channel
 from barricade.discord.reports import get_alert_embed
+from barricade.discord.views.player_review import PlayerReviewView
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
     IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
@@ -103,12 +104,20 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                     # Locate all the messages, resending as necessary, and updating them with the most
                     # up-to-date details.
                     for report in sorted_reports:
-                        if report.token.community_id == community_id:
-                            message = await send_or_edit_report_management_message(report)
+                        db_community = await get_community_by_id(db, community.id)
+                        responses = await get_pending_responses(db, community, report.players)
+
+                        stats: dict[int, schemas.ResponseStats] = {}
+                        for player in report.players:
+                            stats[player.id] = await get_response_stats(db, player)
+
+                        if get_forward_channel(community):
+                            message = await send_or_edit_report_review_message(report, responses, community, stats=stats)
+
                         else:
-                            db_community = await get_community_by_id(db, community.id)
-                            responses = await get_pending_responses(db, community, report.players)
-                            message = await send_or_edit_report_review_message(report, responses, community)
+                            view = PlayerReviewView(responses=responses)
+                            embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
+                            message = await channel.send(embed=embed, view=view)
                         
                         if message:
                             # Remember the message
@@ -124,7 +133,8 @@ class IntegrationRequestHandler(WebsocketRequestHandler):
                         if pr.player_id == player_id
                     )
 
-                    if mention := get_alerts_role_mention(community):
+                    mention = await get_alerts_role_mention(community)
+                    if mention:
                         content = f"{mention} a potentially dangerous player has joined your server!"
                     else:
                         content = "A potentially dangerous player has joined your server!"

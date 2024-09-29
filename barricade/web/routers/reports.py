@@ -224,6 +224,7 @@ async def get_own_reports(
 ):
     result = await reports.get_all_reports(db,
         community_id=token.community_id,
+        load_token=True,
         limit=paginator.limit,
         offset=paginator.offset
     )

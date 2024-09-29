@@ -41,6 +41,33 @@ class BattlemetricsIntegration(Integration):
         super().__init__(config)
         self.config: schemas.BattlemetricsIntegrationConfigParams
 
+    def get_ban_reason(self, response: schemas.ResponseWithToken) -> str:
+        # BM imposes a character limit of 255 characters, so we want to make the
+        # message a little more concise:
+        # - Shorten the title
+        # - Use community tags instead of names
+        # - Remove "https://" from URLs
+        # If that is not enough, any characters that won't fit will be stripped from
+        # the reason.
+        report = response.player_report.report
+        reporting_community = report.token.community
+        message = (
+            f"Reported by {reporting_community.tag}\n"
+            f"Contact: {reporting_community.contact_url}"
+            "\n\n"
+            f"Banned by {response.community.tag}\n"
+            f"Contact: {response.community.contact_url}"
+            "\n\n"
+            "More info: bit.ly/BarricadeBanned"
+        ).replace("https://", "")
+
+        max_reasons_len = 255 - 27 - len(message) # remaining = max - title - msg
+        reasons = ', '.join(report.reasons_bitflag.to_list(report.reasons_custom))
+        if len(reasons) > max_reasons_len:
+            reasons = reasons[:max_reasons_len - 2] + ".."
+
+        return f"HLL Barricade banned for {reasons}\n\n{message}"
+
     # --- Abstract method implementations
 
     async def get_instance_name(self) -> str:
