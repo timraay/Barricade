@@ -7,6 +7,7 @@ from barricade import schemas
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.responses import get_pending_responses
 from barricade.db import models, session_factory
+from barricade.db.utils import compile_query
 from barricade.discord import bot
 from barricade.discord.communities import get_confirmations_channel, get_forward_channel
 from barricade.discord.reports import get_report_channel, get_report_embed
@@ -20,6 +21,7 @@ from barricade.urls import URLFactory
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
+    print("calling hook")
     async with session_factory.begin() as db:
         stmt = select(models.Community).where(
             models.Community.forward_guild_id.is_not(None),
@@ -34,18 +36,20 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             stmt = stmt.where(models.Community.is_pc.is_(True))
         elif report.token.platform == Platform.CONSOLE:
             stmt = stmt.where(models.Community.is_console.is_(True))
+        print(compile_query(stmt, literal_params=True))
 
         result = await db.scalars(stmt)
         db_communities = result.all()
+        print(len(db_communities), 'communities')
 
         if not db_communities:
+            print("No communities!!!")
             return
 
         for db_community in db_communities:
             try:
                 community = schemas.CommunityRef.model_validate(db_community)
-                if not get_forward_channel(community):
-                    return
+                print(repr(community))
                 
                 # Create pending responses
                 responses = [schemas.PendingResponse(
@@ -55,9 +59,12 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
                     community=community
                 ) for player in report.players]
 
+                print("sending...")
                 await send_or_edit_report_review_message(report, responses, community)
+                print("sent!")
 
             except:
+                print('errrr...')
                 logger = get_logger(db_community.id)
                 logger.exception("Failed to forward %r to %r", report, db_community)
 
@@ -154,11 +161,13 @@ async def send_or_edit_report_review_message(
     if report.token.community_id == community.id:
         # Since the community created the report, they should not
         # be able to review it.
+        print("owns report, raising...")
         raise ValueError("Report owner should not be able to review their own report")
     
     async with session_factory.begin() as db:
         view = PlayerReviewView(responses=responses)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
+        print("got view and embed")
         return await send_or_edit_message(
             db,
             report=report,
@@ -208,6 +217,7 @@ async def send_or_edit_message(
     db_message = await db.get(models.ReportMessage, (report.id, community.id))
     # If this was already sent before, try editing first
     if db_message:
+        print('message exists')
         # Get existing message
         message = bot.get_partial_message(db_message.channel_id, db_message.message_id)
         try:
@@ -220,6 +230,7 @@ async def send_or_edit_message(
 
     message = None
     if channel:
+        print('channel exists')
         try:
             # Send message
             message = await channel.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
@@ -229,6 +240,7 @@ async def send_or_edit_message(
                 community.forward_guild_id, community.forward_channel_id, type(e).__name__, e
             )
     else:
+        print('channel does not exist')
         logger.warn(
             "Forward channel %s/%s could not be found",
             community.forward_guild_id, community.forward_channel_id
@@ -236,6 +248,7 @@ async def send_or_edit_message(
 
     if admin and not message:
         # Could not send message to channel, try sending directly to admin instead
+        print('sending to admin instead')
         try:
             user = await bot.get_or_fetch_member(admin.discord_id)
             message = await user.send(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
@@ -243,6 +256,7 @@ async def send_or_edit_message(
             logger.error("Could not send report message to %s (ID: %s)", admin.name, admin.discord_id)
 
     if message:
+        print('saving message')
         # Add message to database
         message_data = schemas.ReportMessageCreateParams(
             report_id=report.id,

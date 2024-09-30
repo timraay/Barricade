@@ -67,16 +67,19 @@ async def revoke_user_roles(user_id: int, strict: bool = False):
     return True
 
 def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    print(community.model_dump())
     if not community.forward_guild_id or not community.forward_channel_id:
         return
     
     guild = bot.get_guild(community.forward_guild_id)
     if not guild:
+        print("no guild!!!")
         return
     
     channel = guild.get_channel(community.forward_channel_id)
     if channel and not isinstance(channel, discord.TextChannel):
         raise RuntimeError("Forward channel %r is not a TextChannel" % channel)
+    print(channel)
     return channel
 
 def get_confirmations_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
