@@ -44,8 +44,6 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         for db_community in db_communities:
             try:
                 community = schemas.CommunityRef.model_validate(db_community)
-                if not get_forward_channel(community):
-                    return
                 
                 # Create pending responses
                 responses = [schemas.PendingResponse(
