@@ -12,7 +12,7 @@ from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType, PlayerIDType
 from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, IntegrationFailureError, NotFoundError, IntegrationValidationError
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
-from barricade.utils import get_player_id_type, safe_create_task
+from barricade.utils import batched, get_player_id_type, safe_create_task
 
 REQUIRED_SCOPES = [
     "ban:create",
@@ -24,8 +24,9 @@ REQUIRED_SCOPES = [
 
 class BattlemetricsBan(NamedTuple):
     ban_id: str
-    player_id: int | None
+    player_id: str | None
     expired: bool
+    has_player_linked: bool
 
 class BattlemetricsIntegration(Integration):
     BASE_URL = "https://api.battlemetrics.com"
@@ -205,6 +206,8 @@ class BattlemetricsIntegration(Integration):
             raise RuntimeError("Integration has not yet been saved")
 
         remote_bans = await self.get_ban_list_bans()
+        unlinked_bans = [ban for ban in remote_bans.values() if not ban.has_player_linked]
+
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.config.community_id)
             community = schemas.CommunityRef.model_validate(db_community)
@@ -236,6 +239,8 @@ class BattlemetricsIntegration(Integration):
                 self.logger.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
                 await self.expire_ban(remote_ban.ban_id)
                 safe_send_to_community(community, embed=embed)
+
+        await self.link_bans_to_players(unlinked_bans)
 
     # --- Battlemetrics API wrappers
 
@@ -332,6 +337,33 @@ class BattlemetricsIntegration(Integration):
 
         return resp["data"]["id"]
 
+    async def edit_ban(self, remote_id: str, player_bm_id: str, identifier_id: str):
+        data = {
+            "data": {
+                "type": "ban",
+                "attributes": {
+                    "identifiers": [
+                        {
+                            "id": identifier_id
+                        }
+                    ],
+                },
+                "relationships": {
+                    "player": {
+                        "data": {
+                            "type": "player",
+                            "id": {player_bm_id}
+                        }
+                    }
+                }
+            }
+        }
+
+        url = f"{self.BASE_URL}/bans/{remote_id}"
+        resp: dict = await self._make_request(method="POST", url=url, data=data) # type: ignore
+
+        return resp["data"]["id"]
+
     async def remove_ban(self, ban_id: str):
         url = f"{self.BASE_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url)
@@ -362,6 +394,7 @@ class BattlemetricsIntegration(Integration):
             resp: dict = await self._make_request(method="GET", url=resp["links"]["next"]) # type: ignore # type: ignore
             for ban_data in resp["data"]:
                 ban_attrs = ban_data["attributes"]
+                has_player_linked = ban_data["relationships"].get("player") is not None
 
                 ban_id = str(ban_data["id"])
                 player_id = None
@@ -386,16 +419,55 @@ class BattlemetricsIntegration(Integration):
                 # If no valid identifier is found, remove remote ban and skip
                 if not player_id:
                     self.logger.warn("Could not find (valid) identifier for ban #%s %s", ban_id, identifiers)
-                    responses[ban_id] = BattlemetricsBan(ban_id, None, expired)
+                    responses[ban_id] = BattlemetricsBan(ban_id, None, expired, True)
                     safe_create_task(
                         self.remove_ban(ban_id),
                         "Failed to remove ban %s with unknown player ID" % ban_id
                     )
                     continue
 
-                responses[ban_id] = BattlemetricsBan(ban_id, player_id, expired)
+                responses[ban_id] = BattlemetricsBan(ban_id, player_id, expired, has_player_linked)
 
         return responses
+
+    async def link_bans_to_players(self, bans: list[BattlemetricsBan]):
+        url = f"{self.BASE_URL}/players/match"
+
+        for grouped_bans in batched(bans, n=100):
+            # Player Match Identifiers endpoint accepts up to 100 IDs at
+            # once and has a rate limit of five requests per second.
+            query_data = []
+            for ban in grouped_bans:
+                if ban.player_id is None:
+                    # In normal circumstances should not happen but you never know
+                    continue
+
+                query_data.append({
+                    "type": "identifier",
+                    "attributes": {
+                        "type": get_player_id_type(ban.player_id).value,
+                        "identifier": ban.player_id,
+                    }
+                })
+            
+            resp: dict = await self._make_request(
+                method="GET",
+                url=url,
+                data={ "data": query_data },
+            ) # type: ignore
+
+            identifier_to_ban_id = {
+                ban.player_id: ban.ban_id
+                for ban in grouped_bans
+            }
+            for player_data in resp["data"]:
+                assert player_data["type"] == "identifier"
+                identifier = player_data["attributes"]["identifier"]
+                identifier_id = player_data["id"]
+                player_bm_id = player_data["relationships"]["player"]["data"]["id"]
+                remote_id = identifier_to_ban_id[identifier]
+
+                await self.edit_ban(remote_id, player_bm_id, identifier_id)
 
 
     async def create_ban_list(self, community: schemas.Community):
@@ -405,7 +477,7 @@ class BattlemetricsIntegration(Integration):
                 "attributes": {
                     "name": f"HLL Barricade - {community.name} (ID: {community.id})",
                     "action": "kick",
-                    "defaultIdentifiers": ["steamID"],
+                    "defaultIdentifiers": ["steamID", "hllWindowsID"],
                     "defaultReasons": [],
                     "defaultAutoAddEnabled": True
                 },
