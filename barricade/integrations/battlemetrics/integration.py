@@ -505,7 +505,6 @@ class BattlemetricsIntegration(Integration):
                 for s in expected_scopes:
                     if s.startswith(scope + ":"):
                         expected_scopes[s] = True
-                        break
 
         missing_scopes = {scope for scope, v in expected_scopes.items() if not v}
         missing_required_scopes = missing_scopes & REQUIRED_SCOPES
