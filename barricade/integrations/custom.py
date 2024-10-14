@@ -18,7 +18,7 @@ from barricade.exceptions import (
     IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
-from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
+from barricade.forwarding import send_or_edit_report_review_message
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.integrations.websocket import (
     BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload, NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload,
@@ -184,9 +184,10 @@ class CustomIntegration(Integration):
         self.ws.stop()
     
     def update_connection(self):
-        self.ws.address = self.config.api_url
+        self.ws.address = self.get_ws_url()
         self.ws.token = self.config.api_key
-        self.ws.update_connection()
+        if self.ws.is_started():
+            self.ws.update_connection()
 
     @is_enabled
     @is_websocket_enabled

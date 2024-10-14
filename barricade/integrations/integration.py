@@ -81,6 +81,9 @@ class Integration(ABC):
         db_config = await update_integration_config(db, self.config) # type: ignore
         self.config = self.meta.config_cls.model_validate(db_config)
 
+        # Update connection
+        self.update_connection()
+
         # Also update integration known to manager (if any)
         manager.get_by_config(self.config)
         
