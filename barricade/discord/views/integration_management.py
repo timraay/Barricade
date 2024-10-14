@@ -235,6 +235,34 @@ class IntegrationManagementView(View):
             raise CustomException("This integration no longer exists")
         return integration
     
+    async def validate_integration(self, integration: Integration, save_comment: bool = False):
+        assert integration.config.id is not None
+
+        try:
+            missing_optional_permissions = await integration.validate(self.community)
+        except IntegrationMissingPermissionsError as e:
+            if save_comment:
+                self.comments[integration.config.id] = "Missing permissions"
+            raise CustomException(
+                "Failed to configure integration!",
+                (
+                    "Your API token is missing the following permissions/scopes:\n - "
+                    + "\n - ".join(e.missing_permissions)
+                    + "\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Frequently-Asked-Questions#what-permissions-do-integrations-require) for a full list of required permissions."
+                )
+                # TODO: Create separate FAQ section with all permissions listed
+            )
+        except IntegrationValidationError as e:
+            if save_comment:
+                self.comments[integration.config.id] = str(e)
+            raise CustomException("Failed to configure integration!", str(e))
+        except Exception as e:
+            if save_comment:
+                self.comments[integration.config.id] = "Unexpected validation error"
+            raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
+        
+        return missing_optional_permissions
+    
     async def submit_integration_config(self, interaction: Interaction, integration: Integration):
         # Defer the interaction in case below steps take longer than 3 seconds
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -243,21 +271,7 @@ class IntegrationManagementView(View):
             # Make sure user is admin
             await self.validate_adminship(db, interaction.user.id)
 
-            # Validate config
-            try:
-                missing_optional_permissions = await integration.validate(self.community)
-            except IntegrationMissingPermissionsError as e:
-                raise CustomException(
-                    "Failed to configure integration!",
-                    (
-                        "Your API token is missing the following permissions/scopes:\n\n -"
-                         + "\n -".join(e.missing_permissions)
-                         + "\n\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers) for a full list of required permissions."
-                    )
-                    # TODO: Create separate FAQ section with all permissions listed
-                )
-            except IntegrationValidationError as e:
-                raise CustomException("Failed to configure integration!", str(e))
+            missing_optional_permissions = await self.validate_integration(integration)
             
             # Update config in DB
             if integration.config.id:
@@ -274,9 +288,9 @@ class IntegrationManagementView(View):
 
         if missing_optional_permissions:
             embed_desc = (
-                "-# **Note:** Your API token is missing the following **optional** permissions:\n-# \n-# -"
-                + "\n-# -".join(missing_optional_permissions)
-                + "\n-# \n-# These permissions might become required in the future. Refer to the wiki for more information."
+                "-# **Note:** Your API token is missing the following **optional** permissions:\n-# - "
+                + "\n-# - ".join(missing_optional_permissions)
+                + "\n-# These permissions might become required in the future. Refer to the wiki for more information."
             )
         else:
             embed_desc = None
@@ -318,22 +332,22 @@ class IntegrationManagementView(View):
             assert integration.config.id is not None
 
             # Validate config
-            try:
-                await integration.validate(self.community)
-            except IntegrationValidationError as e:
-                self.comments[integration.config.id] = str(e)
-                raise CustomException("Failed to validate integration!", str(e))
-            except Exception as e:
-                self.comments[integration.config.id] = "Unexpected validation error"
-                raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
-            
+            missing_optional_permissions = await self.validate_integration(integration)
             self.comments.pop(integration.config.id, None)
             
             await integration.enable()
 
+
+        embed_desc = await get_name_hyperlink(integration)
+        if missing_optional_permissions:
+            embed_desc += (
+                "\n-# **Note:** Your API token is missing the following **optional** permissions:\n-# - "
+                + "\n-# - ".join(missing_optional_permissions)
+                + "\n-# These permissions might become required in the future. Refer to the wiki for more information."
+            )
+
         await interaction.response.send_message(embed=get_success_embed(
-            f"Enabled {integration.meta.name} integration!",
-            await get_name_hyperlink(integration)
+            f"Enabled {integration.meta.name} integration!", embed_desc
         ), ephemeral=True)
         await self.edit()
 
