@@ -55,7 +55,9 @@ def get_config_from_community(community: models.Community, integration_id: int):
 
 async def get_name_hyperlink(integration: Integration):
     try:
-        name = esc_md(await integration.get_instance_name())
+        name = esc_md(
+            await asyncio.wait_for(integration.get_instance_name(), timeout=5)
+        )
     except:
         name = "*Name unknown*"
 
@@ -94,10 +96,17 @@ class IntegrationManagementView(View):
 
         row = 0
         num_enabled = 0
+
+        # Gather integration names in parallel, might be potentially slow if done sequentially
+        integration_names = await asyncio.gather(*(
+            get_name_hyperlink(integration)
+            for integration in self.integrations.values()
+        ))
+
         for row, integration in enumerate(self.integrations.values()):
             assert integration.config.id is not None
             enabled = integration.config.enabled
-            name = await get_name_hyperlink(integration)
+            name = integration_names[row]
 
             self.add_item(discord.ui.Button(
                 style=ButtonStyle.green if enabled else ButtonStyle.gray,
@@ -192,8 +201,9 @@ class IntegrationManagementView(View):
             await self.edit()
         
         else:
+            await interaction.response.defer(ephemeral=True)
             embed = await self.get_embed_update_self()
-            await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+            await interaction.followup.send(embed=embed, view=self)
             self.message = await interaction.original_response()
     
     async def edit(self, interaction: Optional[Interaction] = None):
