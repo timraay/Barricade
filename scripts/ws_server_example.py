@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, Header, WebSocket, WebSocketDisconnect, We
 import pydantic
 import uvicorn
 
-from barricade.integrations.websocket import ServerRequestType, RequestBody, ResponseBody
+from barricade.integrations.custom.models import ServerRequestType, RequestBody, ResponseBody
 
 app = FastAPI()
 

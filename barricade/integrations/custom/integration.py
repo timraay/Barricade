@@ -1,29 +1,21 @@
 import inspect
 import aiohttp
-from cachetools import TTLCache
-import discord
 from functools import wraps
 from typing import AsyncGenerator, Sequence
 
 from barricade import schemas
-from barricade.crud.communities import get_community_by_id
-from barricade.crud.reports import is_player_reported
-from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
 from barricade.db import session_factory
-from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_forward_channel
-from barricade.discord.reports import get_alert_embed
-from barricade.discord.views.player_review import PlayerReviewView
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
     IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
     AlreadyBannedError, IntegrationValidationError
 )
-from barricade.forwarding import send_or_edit_report_management_message, send_or_edit_report_review_message
-from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
-from barricade.integrations.websocket import (
-    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload, NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload,
-    UnbanPlayersRequestPayload, Websocket, WebsocketRequestException, WebsocketRequestHandler
+from barricade.integrations.custom.models import (
+    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload,
+    NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload, UnbanPlayersRequestPayload
 )
+from barricade.integrations.custom.websocket import CustomWebsocket
+from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 
 def is_websocket_enabled(func):
     @wraps(func)
@@ -49,108 +41,6 @@ def is_websocket_enabled(func):
 
     return decorated
 
-class IntegrationRequestHandler(WebsocketRequestHandler):
-    __is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
-
-    def __init__(self, ws: Websocket, integration: 'Integration'):
-        super().__init__(ws)
-        self.integration = integration
-    
-    async def scan_players(self, payload: dict | None) -> dict | None:
-        reported_player_ids: list[str] = []
-
-        player_ids: list[str] | None = payload.get("player_ids") if payload else None
-        if not player_ids:
-            raise WebsocketRequestException("Missing player_ids")
-
-        # Go over all players to check whether they have been reported
-        async with session_factory() as db:
-            for player_id in player_ids:
-                # First look for a cached response, otherwise fetch from DB
-                cache_hit = self.__is_player_reported.get(player_id)
-                if cache_hit is not None:
-                    if cache_hit:
-                        reported_player_ids.append(player_id)
-                else:
-                    is_reported = await is_player_reported(db, player_id)
-                    self.__is_player_reported[player_id] = is_reported
-                    if is_reported:
-                        reported_player_ids.append(player_id)
-        
-            if reported_player_ids:
-                # There are one or more players that have reports
-                community_id = self.integration.config.community_id
-                
-                db_community = await get_community_by_id(db, community_id)
-                community = schemas.CommunityRef.model_validate(db_community)
-
-                channel = get_alerts_channel(community)
-                if not channel:
-                    # We have nowhere to send the alert, so we just ignore
-                    return
-
-                for player_id in reported_player_ids:
-                    # For each player, get all reports that this community has not yet responded to
-                    db_reports = await get_reports_for_player_with_no_community_response(
-                        db, player_id, community_id, community.reasons_filter
-                    )
-
-                    messages: list[discord.Message] = []
-                    sorted_reports = sorted(
-                        (schemas.ReportWithToken.model_validate(db_report) for db_report in db_reports),
-                        key=lambda x: x.created_at
-                    )
-
-                    # Locate all the messages, resending as necessary, and updating them with the most
-                    # up-to-date details.
-                    for report in sorted_reports:
-                        db_community = await get_community_by_id(db, community.id)
-                        responses = await get_pending_responses(db, community, report.players)
-
-                        stats: dict[int, schemas.ResponseStats] = {}
-                        for player in report.players:
-                            stats[player.id] = await get_response_stats(db, player)
-
-                        if get_forward_channel(community):
-                            message = await send_or_edit_report_review_message(report, responses, community, stats=stats)
-
-                        else:
-                            view = PlayerReviewView(responses=responses)
-                            embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
-                            message = await channel.send(embed=embed, view=view)
-                        
-                        if message:
-                            # Remember the message
-                            messages.append(message)
-
-                    if not messages:
-                        # No messages were located, so we don't have any reports to point the user at.
-                        continue
-
-                    # Get the most recent PlayerReport for the most up-to-date name
-                    player = next(
-                        pr for pr in sorted_reports[-1].players
-                        if pr.player_id == player_id
-                    )
-
-                    mention = await get_alerts_role_mention(community)
-                    if mention:
-                        content = f"{mention} a potentially dangerous player has joined your server!"
-                    else:
-                        content = "A potentially dangerous player has joined your server!"
-
-                    reports_urls = list(zip(sorted_reports, (message.jump_url for message in messages)))
-                    embed = get_alert_embed(
-                        reports_urls=list(reversed(reports_urls)),
-                        player=player
-                    )
-
-                    await channel.send(
-                        content=content,
-                        embed=embed,
-                        allowed_mentions=discord.AllowedMentions(roles=True),
-                    )
-
 class CustomIntegration(Integration):
     meta = IntegrationMetaData(
         name="Custom",
@@ -162,12 +52,7 @@ class CustomIntegration(Integration):
     def __init__(self, config: schemas.CustomIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.CustomIntegrationConfigParams
-        self.ws = Websocket(
-            address=self.get_ws_url(),
-            token=config.api_key,
-            request_handler_factory=lambda ws: IntegrationRequestHandler(ws, self),
-            logger=self.logger,
-        )
+        self.ws = CustomWebsocket.from_integration(self)
 
     def get_api_url(self):
         return self.config.api_url
@@ -217,9 +102,11 @@ class CustomIntegration(Integration):
     def get_instance_url(self) -> str:
         return self.config.api_url
 
-    async def validate(self, community: schemas.Community):
+    async def validate(self, community: schemas.Community) -> set[str]:
         if community.id != self.config.community_id:
             raise IntegrationValidationError("Communities do not match")
+        
+        return set()
 
     @is_enabled
     async def ban_player(self, response: schemas.ResponseWithToken):

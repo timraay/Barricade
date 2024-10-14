@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+import itertools
 from typing import Sequence, NamedTuple
+from uuid import uuid4
 import aiohttp
 
 from barricade import schemas
@@ -9,18 +11,26 @@ from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
-from barricade.enums import Emojis, IntegrationType, PlayerIDType
-from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, IntegrationFailureError, NotFoundError, IntegrationValidationError
+from barricade.enums import Emojis, IntegrationType
+from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, IntegrationFailureError, IntegrationMissingPermissionsError, NotFoundError, IntegrationValidationError
+from barricade.integrations.battlemetrics.utils import find_player_id_in_attributes
+from barricade.integrations.battlemetrics.websocket import BattlemetricsWebsocket
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
-from barricade.utils import get_player_id_type, safe_create_task
+from barricade.utils import get_player_id_type, safe_create_task, async_ttl_cache
 
-REQUIRED_SCOPES = [
+REQUIRED_SCOPES = {
     "ban:create",
     "ban:edit",
     "ban:delete",
     "ban-list:create",
-    "ban-list:read"
-]
+    "ban-list:read",
+    "rcon:read",
+}
+
+OPTIONAL_SCOPES = {
+    "trigger:read",
+    "trigger:create",
+}
 
 class BattlemetricsBan(NamedTuple):
     ban_id: str
@@ -28,7 +38,8 @@ class BattlemetricsBan(NamedTuple):
     expired: bool
 
 class BattlemetricsIntegration(Integration):
-    BASE_URL = "https://api.battlemetrics.com"
+    BASE_API_URL = "https://api.battlemetrics.com"
+    BASE_WS_URL = "wss://ws.battlemetrics.com?audit_log=id={}"
 
     meta = IntegrationMetaData(
         name="Battlemetrics",
@@ -40,6 +51,25 @@ class BattlemetricsIntegration(Integration):
     def __init__(self, config: schemas.BattlemetricsIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.BattlemetricsIntegrationConfigParams
+        self.ws = BattlemetricsWebsocket(self)
+
+    def get_ws_url(self):
+        return self.BASE_WS_URL.format(uuid4())
+
+    # --- Extended parent methods
+
+    def start_connection(self):
+        self.ws.start()
+    
+    def stop_connection(self):
+        self.ws.stop()
+    
+    def update_connection(self):
+        self.ws.address = self.config.api_url
+        self.ws.token = self.config.api_key
+        self.ws.update_connection()
+
+    # TODO: Extend on_report_create to send alerts if a newly reported player is currently online
 
     def get_ban_reason(self, response: schemas.ResponseWithToken) -> str:
         # BM imposes a character limit of 255 characters, so we want to make the
@@ -71,18 +101,18 @@ class BattlemetricsIntegration(Integration):
     # --- Abstract method implementations
 
     async def get_instance_name(self) -> str:
-        url = f"{self.BASE_URL}/organizations/{self.config.organization_id}"
+        url = f"{self.BASE_API_URL}/organizations/{self.config.organization_id}"
         resp: dict = await self._make_request(method="GET", url=url) # type: ignore
         return resp["data"]["attributes"]["name"]
     
     def get_instance_url(self) -> str:
         return f"https://battlemetrics.com/rcon/orgs/{self.config.organization_id}/edit"
 
-    async def validate(self, community: schemas.Community):
+    async def validate(self, community: schemas.Community) -> set[str]:
         if community.id != self.config.community_id:
             raise IntegrationValidationError("Communities do not match")
 
-        await self.validate_scopes()
+        missing_optional_scopes = await self.validate_scopes()
 
         if not self.config.banlist_id:
             try:
@@ -91,6 +121,8 @@ class BattlemetricsIntegration(Integration):
                 raise IntegrationValidationError("Failed to create ban list") from e
         else:
             await self.validate_ban_list()
+        
+        return missing_optional_scopes
 
     @is_enabled
     async def ban_player(self, response: schemas.ResponseWithToken):
@@ -327,17 +359,17 @@ class BattlemetricsIntegration(Integration):
             }
         }
 
-        url = f"{self.BASE_URL}/bans"
+        url = f"{self.BASE_API_URL}/bans"
         resp: dict = await self._make_request(method="POST", url=url, data=data) # type: ignore
 
         return resp["data"]["id"]
 
     async def remove_ban(self, ban_id: str):
-        url = f"{self.BASE_URL}/bans/{ban_id}"
+        url = f"{self.BASE_API_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url)
 
     async def expire_ban(self, ban_id: str):
-        url = f"{self.BASE_URL}/bans/{ban_id}"
+        url = f"{self.BASE_API_URL}/bans/{ban_id}"
         await self._make_request(method="PATCH", url=url, data={
             "data": {
                 "type": "ban",
@@ -354,7 +386,7 @@ class BattlemetricsIntegration(Integration):
             "filter[expired]": "false"
         }
 
-        url = f"{self.BASE_URL}/bans"
+        url = f"{self.BASE_API_URL}/bans"
         resp: dict = await self._make_request(method="GET", url=url, data=data) # type: ignore
         responses = {}
 
@@ -364,17 +396,9 @@ class BattlemetricsIntegration(Integration):
                 ban_attrs = ban_data["attributes"]
 
                 ban_id = str(ban_data["id"])
-                player_id = None
 
                 # Find identifier of valid type
-                identifiers = ban_attrs["identifiers"]
-                for identifier_data in identifiers:
-                    try:
-                        PlayerIDType(identifier_data["type"])
-                    except KeyError:
-                        continue
-                    player_id = identifier_data["identifier"]
-                    break
+                player_id, _ = find_player_id_in_attributes(ban_attrs)
 
                 expires_at_str = ban_attrs["expires_at"]
                 if not expires_at_str:
@@ -385,7 +409,7 @@ class BattlemetricsIntegration(Integration):
                 
                 # If no valid identifier is found, remove remote ban and skip
                 if not player_id:
-                    self.logger.warn("Could not find (valid) identifier for ban #%s %s", ban_id, identifiers)
+                    self.logger.warning("Could not find (valid) identifier for ban #%s", ban_id, ban_attrs["identifiers"])
                     responses[ban_id] = BattlemetricsBan(ban_id, None, expired)
                     safe_create_task(
                         self.remove_ban(ban_id),
@@ -426,7 +450,7 @@ class BattlemetricsIntegration(Integration):
             }
         }
 
-        url = f"{self.BASE_URL}/ban-lists"
+        url = f"{self.BASE_API_URL}/ban-lists"
         resp: dict = await self._make_request(method="POST", url=url, data=data) # type: ignore
 
         assert resp["data"]["type"] == "banList"
@@ -435,7 +459,7 @@ class BattlemetricsIntegration(Integration):
     async def validate_ban_list(self):
         data = {"include": "owner"}
 
-        url = f"{self.BASE_URL}/ban-lists/{self.config.banlist_id}"
+        url = f"{self.BASE_API_URL}/ban-lists/{self.config.banlist_id}"
         try:
             resp: dict = await self._make_request(method="GET", url=url, data=data) # type: ignore
         except Exception as e:
@@ -467,23 +491,44 @@ class BattlemetricsIntegration(Integration):
             # TODO: Create more specific exception class
             raise Exception("Invalid API key")
 
-    async def validate_scopes(self):
+    async def validate_scopes(self) -> set[str]:
         try:
             scopes = await self.get_api_scopes()
         except Exception as e:
             raise IntegrationValidationError("Failed to retrieve API scopes") from e
 
-        required_scopes = {s: False for s in REQUIRED_SCOPES}
+        expected_scopes = {s: False for s in itertools.chain(REQUIRED_SCOPES, OPTIONAL_SCOPES)}
         for scope in scopes:
-            if scope == "ban" or scope == "ban-list":
-                for s in required_scopes:
+            if scope in expected_scopes:
+                expected_scopes[scope] = True
+            else:
+                for s in expected_scopes:
                     if s.startswith(scope + ":"):
-                        required_scopes[s] = True
-            elif scope in required_scopes:
-                required_scopes[scope] = True
+                        expected_scopes[s] = True
+                        break
 
-        # TODO: Raise if missing
-        if not all(required_scopes.values()):
-            raise IntegrationValidationError("Missing scopes: %s" % ", ".join(
-                [k for k, v in required_scopes.items() if v is False]
-            )) 
+        missing_scopes = {scope for scope, v in expected_scopes.items() if not v}
+        missing_required_scopes = missing_scopes & REQUIRED_SCOPES
+        missing_optional_scopes = missing_scopes & OPTIONAL_SCOPES
+        
+        if missing_required_scopes:
+            raise IntegrationMissingPermissionsError(
+                missing_required_scopes,
+                "Missing scopes: %s" % ", ".join(
+                    [k for k, v in expected_scopes.items() if v is False]
+                )
+            )
+        
+        return missing_optional_scopes
+
+    @async_ttl_cache(size=9999, seconds=60*60*24)
+    async def get_server_ids_from_org(self) -> list[str]:
+        data = {
+            "filter[rcon]": 1,
+            "filter[game]": "hll"
+        }
+
+        url = f"{self.BASE_API_URL}/servers"
+        resp: dict = await self._make_request(method="GET", url=url, data=data) # type: ignore
+
+        return [server["id"] for server in resp["data"]]

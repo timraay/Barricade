@@ -11,7 +11,7 @@ from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
-from barricade.exceptions import IntegrationValidationError
+from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
 from barricade.integrations.custom import CustomIntegration, is_websocket_enabled
 from barricade.integrations.integration import IntegrationMetaData, is_enabled
 
@@ -73,7 +73,7 @@ class CRCONIntegration(CustomIntegration):
         return self.config.api_url + "/api"
 
     def get_ws_url(self):
-        return self.config.api_url + "/ws/barricade"  
+        return self.config.api_url + "/ws/barricade"
 
     # --- Abstract method implementations
 
@@ -84,7 +84,7 @@ class CRCONIntegration(CustomIntegration):
     async def validate(self, community: schemas.Community):
         await super().validate(community)
         
-        await self.validate_api_access()
+        missing_optional_perms = await self.validate_api_access()
         
         if not self.config.banlist_id:
             try:
@@ -93,6 +93,8 @@ class CRCONIntegration(CustomIntegration):
                 raise IntegrationValidationError("Failed to create blacklist") from e
         else:
             await self.validate_blacklist()
+
+        return missing_optional_perms
 
     @is_enabled
     @is_websocket_enabled
@@ -134,7 +136,7 @@ class CRCONIntegration(CustomIntegration):
 
     # --- CRCON API wrappers
 
-    async def validate_api_access(self):
+    async def validate_api_access(self) -> set[str]:
         try:
             resp = await self._make_request(method="GET", endpoint="/get_version")
         except Exception as e:
@@ -158,12 +160,18 @@ class CRCONIntegration(CustomIntegration):
             raise IntegrationValidationError("Failed to connect") from e
         result = resp["result"]
         is_superuser = result.get("is_superuser", False)
-        permissions = set([
-            p["permission"] for p in result.get("permissions", [])
-        ])
+        if not is_superuser:
+            permissions = set([
+                p["permission"] for p in result.get("permissions", [])
+            ])
 
-        if not is_superuser and not permissions.issuperset(REQUIRED_PERMISSIONS):
-            raise IntegrationValidationError("Token owner has insufficient permissions")
+            missing_permissions = REQUIRED_PERMISSIONS.difference(permissions)
+            if missing_permissions:
+                raise IntegrationMissingPermissionsError(
+                    missing_permissions, "Token owner has insufficient permissions"
+                )
+        
+        return set()
     
     async def create_blacklist(self, community: schemas.Community):
         self.logger.info("%r: Creating new blacklist", self)

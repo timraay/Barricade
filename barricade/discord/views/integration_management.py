@@ -13,7 +13,7 @@ from barricade.crud.communities import get_admin_by_id, get_community_by_id, get
 from barricade.db import models, session_factory
 from barricade.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import IntegrationValidationError
+from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
 from barricade.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
@@ -235,7 +235,17 @@ class IntegrationManagementView(View):
 
             # Validate config
             try:
-                await integration.validate(self.community)
+                missing_optional_permissions = await integration.validate(self.community)
+            except IntegrationMissingPermissionsError as e:
+                raise CustomException(
+                    "Failed to configure integration!",
+                    (
+                        "Your API token is missing the following permissions/scopes:\n\n -"
+                         + "\n -".join(e.missing_permissions)
+                         + "\n\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers) for a full list of required permissions."
+                    )
+                    # TODO: Create separate FAQ section with all permissions listed
+                )
             except IntegrationValidationError as e:
                 raise CustomException("Failed to configure integration!", str(e))
             
@@ -252,8 +262,18 @@ class IntegrationManagementView(View):
 
             self.comments.pop(integration.config.id, None)
 
+        if missing_optional_permissions:
+            embed_desc = (
+                "-# **Note:** Your API token is missing the following **optional** permissions:\n-# \n-# -"
+                + "\n-# -".join(missing_optional_permissions)
+                + "\n-# \n-# These permissions might become required in the future. Refer to the wiki for more information."
+            )
+        else:
+            embed_desc = None
+
         await interaction.followup.send(embed=get_success_embed(
-            f"Configured {integration.meta.name} integration!"
+            f"Configured {integration.meta.name} integration!",
+            embed_desc
         ))
         await self.edit()
 
