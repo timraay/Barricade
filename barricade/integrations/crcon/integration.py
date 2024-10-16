@@ -14,6 +14,7 @@ from barricade.enums import Emojis, IntegrationType
 from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
 from barricade.integrations.custom import CustomIntegration, is_websocket_enabled
 from barricade.integrations.integration import IntegrationMetaData, is_enabled
+from barricade.utils import async_ttl_cache
 
 RE_VERSION = re.compile(r"v(?P<major>\d+).(?P<minor>\d+).(?P<patch>\d+)")
 
@@ -77,6 +78,7 @@ class CRCONIntegration(CustomIntegration):
 
     # --- Abstract method implementations
 
+    @async_ttl_cache(size=9999, seconds=60*10)
     async def get_instance_name(self) -> str:
         resp = await self._make_request(method="GET", endpoint="/get_public_info")
         return resp["result"]["name"]["short_name"]

@@ -101,6 +101,7 @@ class BattlemetricsIntegration(Integration):
 
     # --- Abstract method implementations
 
+    @async_ttl_cache(size=9999, seconds=60*10)
     async def get_instance_name(self) -> str:
         url = f"{self.BASE_API_URL}/organizations/{self.config.organization_id}"
         resp: dict = await self._make_request(method="GET", url=url) # type: ignore
