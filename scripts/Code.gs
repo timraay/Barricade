@@ -1,4 +1,5 @@
 const API_URL = "http://localhost:8080/reports/submit";
+const TOKEN_LEN = 22;
 
 function extractPlayerData(arr, start) {
   return {
@@ -10,7 +11,7 @@ function extractPlayerData(arr, start) {
 
 function sendResponse(e) {
   const itemResponses = e.response.getItemResponses().map(r => r.getResponse());
-  const token = itemResponses[0];
+  const token = itemResponses[0].slice(0, TOKEN_LEN);
   const players = [extractPlayerData(itemResponses, 1)];
   const reasons = itemResponses[4];
   const description = itemResponses[5];
@@ -22,7 +23,7 @@ function sendResponse(e) {
     players.push(extractPlayerData(itemResponses, i + 1));
   }
 
-  const isEdit = itemResponses[itemResponses.length - 1] === "1";
+  const isEdit = (itemResponses[0].slice(TOKEN_LEN) || itemResponses[itemResponses.length - 1]) === "1";
 
   const data = {
     id: e.response.getId(),

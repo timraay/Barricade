@@ -67,7 +67,8 @@ class FormEntryID(IntEnum):
 
 def get_report_edit_url(report: schemas.ReportWithToken):
     params = {}
-    FormEntryID.token_value.encode_str(params, report.token.value)
+    # Add a 1 instead of a 0 at the end of the token to serve as a flag that this is an edit
+    FormEntryID.token_value.encode_str(params, report.token.value + "1")
 
     FormEntryID.desc.encode_str(params, report.body)
     FormEntryID.reason.encode_flag(params, report.reasons_bitflag, report.reasons_custom)
@@ -138,7 +139,9 @@ class URLFactory:
         db_token = await create_token(db, params, by=by)
 
         url_params = {}
-        FormEntryID.token_value.encode_str(url_params, db_token.value)
+        # The token needs to be appended with either 0 or 1, to flag
+        # whether an existing report is being edited.
+        FormEntryID.token_value.encode_str(url_params, db_token.value + "0")
         url = REPORT_FORM_URL + urlencode(url_params)
         URLFactory._cache[key] = url
 
