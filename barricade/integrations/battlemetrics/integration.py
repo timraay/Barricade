@@ -20,16 +20,17 @@ from barricade.utils import get_player_id_type, safe_create_task, async_ttl_cach
 
 REQUIRED_SCOPES = {
     "ban:create",
-    "ban:edit",
+    "ban:update",
     "ban:delete",
+    "ban:read",
     "ban-list:create",
     "ban-list:read",
     "rcon:read",
 }
 
 OPTIONAL_SCOPES = {
-    "trigger:read",
     "trigger:create",
+    "trigger:read",
 }
 
 class BattlemetricsBan(NamedTuple):
