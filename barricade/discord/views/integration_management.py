@@ -13,7 +13,7 @@ from barricade.crud.communities import get_admin_by_id, get_community_by_id, get
 from barricade.db import models, session_factory
 from barricade.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import IntegrationValidationError
+from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
 from barricade.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
@@ -55,7 +55,9 @@ def get_config_from_community(community: models.Community, integration_id: int):
 
 async def get_name_hyperlink(integration: Integration):
     try:
-        name = esc_md(await integration.get_instance_name())
+        name = esc_md(
+            await asyncio.wait_for(integration.get_instance_name(), timeout=5)
+        )
     except:
         name = "*Name unknown*"
 
@@ -94,10 +96,17 @@ class IntegrationManagementView(View):
 
         row = 0
         num_enabled = 0
+
+        # Gather integration names in parallel, might be potentially slow if done sequentially
+        integration_names = await asyncio.gather(*(
+            get_name_hyperlink(integration)
+            for integration in self.integrations.values()
+        ))
+
         for row, integration in enumerate(self.integrations.values()):
             assert integration.config.id is not None
             enabled = integration.config.enabled
-            name = await get_name_hyperlink(integration)
+            name = integration_names[row]
 
             self.add_item(discord.ui.Button(
                 style=ButtonStyle.green if enabled else ButtonStyle.gray,
@@ -192,8 +201,9 @@ class IntegrationManagementView(View):
             await self.edit()
         
         else:
+            await interaction.response.defer(ephemeral=True)
             embed = await self.get_embed_update_self()
-            await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+            await interaction.followup.send(embed=embed, view=self)
             self.message = await interaction.original_response()
     
     async def edit(self, interaction: Optional[Interaction] = None):
@@ -225,6 +235,34 @@ class IntegrationManagementView(View):
             raise CustomException("This integration no longer exists")
         return integration
     
+    async def validate_integration(self, integration: Integration, save_comment: bool = False):
+        assert integration.config.id is not None
+
+        try:
+            missing_optional_permissions = await integration.validate(self.community)
+        except IntegrationMissingPermissionsError as e:
+            if save_comment:
+                self.comments[integration.config.id] = "Missing permissions"
+            raise CustomException(
+                "Failed to configure integration!",
+                (
+                    "Your API token is missing the following permissions/scopes:\n - "
+                    + "\n - ".join(e.missing_permissions)
+                    + "\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Frequently-Asked-Questions#what-permissions-do-integrations-require) for a full list of required permissions."
+                )
+                # TODO: Create separate FAQ section with all permissions listed
+            )
+        except IntegrationValidationError as e:
+            if save_comment:
+                self.comments[integration.config.id] = str(e)
+            raise CustomException("Failed to configure integration!", str(e))
+        except Exception as e:
+            if save_comment:
+                self.comments[integration.config.id] = "Unexpected validation error"
+            raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
+        
+        return missing_optional_permissions
+    
     async def submit_integration_config(self, interaction: Interaction, integration: Integration):
         # Defer the interaction in case below steps take longer than 3 seconds
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -233,11 +271,7 @@ class IntegrationManagementView(View):
             # Make sure user is admin
             await self.validate_adminship(db, interaction.user.id)
 
-            # Validate config
-            try:
-                await integration.validate(self.community)
-            except IntegrationValidationError as e:
-                raise CustomException("Failed to configure integration!", str(e))
+            missing_optional_permissions = await self.validate_integration(integration)
             
             # Update config in DB
             if integration.config.id:
@@ -252,8 +286,18 @@ class IntegrationManagementView(View):
 
             self.comments.pop(integration.config.id, None)
 
+        if missing_optional_permissions:
+            embed_desc = (
+                "-# **Note:** Your API token is missing the following **optional** permissions:\n-# - "
+                + "\n-# - ".join(missing_optional_permissions)
+                + "\n-# These permissions might become required in the future. Refer to the wiki for more information."
+            )
+        else:
+            embed_desc = None
+
         await interaction.followup.send(embed=get_success_embed(
-            f"Configured {integration.meta.name} integration!"
+            f"Configured {integration.meta.name} integration!",
+            embed_desc
         ))
         await self.edit()
 
@@ -288,22 +332,22 @@ class IntegrationManagementView(View):
             assert integration.config.id is not None
 
             # Validate config
-            try:
-                await integration.validate(self.community)
-            except IntegrationValidationError as e:
-                self.comments[integration.config.id] = str(e)
-                raise CustomException("Failed to validate integration!", str(e))
-            except Exception as e:
-                self.comments[integration.config.id] = "Unexpected validation error"
-                raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
-            
+            missing_optional_permissions = await self.validate_integration(integration)
             self.comments.pop(integration.config.id, None)
             
             await integration.enable()
 
+
+        embed_desc = await get_name_hyperlink(integration)
+        if missing_optional_permissions:
+            embed_desc += (
+                "\n-# **Note:** Your API token is missing the following **optional** permissions:\n-# - "
+                + "\n-# - ".join(missing_optional_permissions)
+                + "\n-# These permissions might become required in the future. Refer to the wiki for more information."
+            )
+
         await interaction.response.send_message(embed=get_success_embed(
-            f"Enabled {integration.meta.name} integration!",
-            await get_name_hyperlink(integration)
+            f"Enabled {integration.meta.name} integration!", embed_desc
         ), ephemeral=True)
         await self.edit()
 

@@ -81,6 +81,9 @@ class Integration(ABC):
         db_config = await update_integration_config(db, self.config) # type: ignore
         self.config = self.meta.config_cls.model_validate(db_config)
 
+        # Update connection
+        self.update_connection()
+
         # Also update integration known to manager (if any)
         manager.get_by_config(self.config)
         
@@ -387,13 +390,18 @@ class Integration(ABC):
             The URL of the connected instance."""
 
     @abstractmethod
-    async def validate(self, community: schemas.Community):
+    async def validate(self, community: schemas.Community) -> set[str]:
         """Validate the integration's config.
 
         Parameters
         ----------
         community : schemas.Community
             The community owning this integration
+
+        Returns
+        -------
+        set[str]
+            A set of optional permissions that are missing
 
         Raises
         ------
