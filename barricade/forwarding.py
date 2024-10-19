@@ -1,15 +1,18 @@
 import asyncio
+from typing import Sequence
+from cachetools import TTLCache
 import discord
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.responses import get_pending_responses
+from barricade.crud.reports import is_player_reported
+from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
 from barricade.db import models, session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_confirmations_channel, get_forward_channel
-from barricade.discord.reports import get_report_channel, get_report_embed
+from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
+from barricade.discord.reports import get_alert_embed, get_report_channel, get_report_embed
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.enums import Platform
@@ -44,8 +47,6 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         for db_community in db_communities:
             try:
                 community = schemas.CommunityRef.model_validate(db_community)
-                if not get_forward_channel(community):
-                    return
                 
                 # Create pending responses
                 responses = [schemas.PendingResponse(
@@ -144,6 +145,102 @@ async def invoke_integration_report_create_hook(report: schemas.ReportWithToken)
 async def remove_token_url_from_cache(report: schemas.ReportWithToken):
     URLFactory.remove(report.token)
 
+
+# Player Alerts
+
+__is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
+
+async def send_alert_to_community_for_unreviewed_players(community_id: int, player_ids: Sequence[str]) -> dict | None:
+    reported_player_ids: list[str] = []
+    
+    async with session_factory() as db:
+        # Go over all players to check whether they have been reported
+        for player_id in player_ids:
+            # First look for a cached response, otherwise fetch from DB
+            cache_hit = __is_player_reported.get(player_id)
+            if cache_hit is not None:
+                if cache_hit:
+                    reported_player_ids.append(player_id)
+            else:
+                is_reported = await is_player_reported(db, player_id)
+                __is_player_reported[player_id] = is_reported
+                if is_reported:
+                    reported_player_ids.append(player_id)
+
+        if reported_player_ids:
+            # There are one or more players that have reports
+            db_community = await get_community_by_id(db, community_id)
+            community = schemas.CommunityRef.model_validate(db_community)
+
+            channel = get_alerts_channel(community)
+            if not channel:
+                # We have nowhere to send the alert, so we just ignore
+                return
+
+            for player_id in reported_player_ids:
+                # For each player, get all reports that this community has not yet responded to
+                db_reports = await get_reports_for_player_with_no_community_response(
+                    db, player_id, community_id, community.reasons_filter
+                )
+
+                messages: list[discord.Message] = []
+                sorted_reports = sorted(
+                    (schemas.ReportWithToken.model_validate(db_report) for db_report in db_reports),
+                    key=lambda x: x.created_at
+                )
+
+                # Locate all the messages, resending as necessary, and updating them with the most
+                # up-to-date details.
+                for report in sorted_reports:
+                    db_community = await get_community_by_id(db, community.id)
+                    responses = await get_pending_responses(db, community, report.players)
+
+                    stats: dict[int, schemas.ResponseStats] = {}
+                    for player in report.players:
+                        stats[player.id] = await get_response_stats(db, player)
+
+                    if get_forward_channel(community):
+                        message = await send_or_edit_report_review_message(report, responses, community, stats=stats)
+
+                    else:
+                        view = PlayerReviewView(responses=responses)
+                        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
+                        message = await channel.send(embed=embed, view=view)
+                    
+                    if message:
+                        # Remember the message
+                        messages.append(message)
+
+                if not messages:
+                    # No messages were located, so we don't have any reports to point the user at.
+                    continue
+
+                # Get the most recent PlayerReport for the most up-to-date name
+                player = next(
+                    pr for pr in sorted_reports[-1].players
+                    if pr.player_id == player_id
+                )
+
+                mention = await get_alerts_role_mention(community)
+                if mention:
+                    content = f"{mention} a potentially dangerous player has joined your server!"
+                else:
+                    content = "A potentially dangerous player has joined your server!"
+
+                reports_urls = list(zip(sorted_reports, (message.jump_url for message in messages)))
+                embed = get_alert_embed(
+                    reports_urls=list(reversed(reports_urls)),
+                    player=player
+                )
+
+                await channel.send(
+                    content=content,
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions(roles=True),
+                )
+
+
+# Utility methods
 
 async def send_or_edit_report_review_message(
     report: schemas.ReportWithToken,

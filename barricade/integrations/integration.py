@@ -390,13 +390,18 @@ class Integration(ABC):
             The URL of the connected instance."""
 
     @abstractmethod
-    async def validate(self, community: schemas.Community):
+    async def validate(self, community: schemas.Community) -> set[str]:
         """Validate the integration's config.
 
         Parameters
         ----------
         community : schemas.Community
             The community owning this integration
+
+        Returns
+        -------
+        set[str]
+            A set of optional permissions that are missing
 
         Raises
         ------

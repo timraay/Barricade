@@ -51,6 +51,12 @@ class IntegrationCommandError(IntegrationFailureError):
 class IntegrationValidationError(IntegrationFailureError):
     """Exception raised when an integration fails to validate"""
 
+class IntegrationMissingPermissionsError(IntegrationValidationError):
+    """Exception raised when an integration fails to validate due to a lack of permissions"""
+    def __init__(self, missing_permissions: set[str], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.missing_permissions = missing_permissions
+
 class IntegrationBanError(IntegrationFailureError):
     """Exception raised when an integration fails to ban or
     unban a player."""
