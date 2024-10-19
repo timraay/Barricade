@@ -9,7 +9,7 @@ def find_player_id_in_attributes(attrs: dict):
     for identifier_data in identifiers:
         try:
             player_id_type = PlayerIDType(identifier_data["type"])
-        except KeyError:
+        except ValueError:
             continue
         player_id = identifier_data["identifier"]
         break

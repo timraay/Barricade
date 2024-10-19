@@ -66,7 +66,7 @@ class BattlemetricsIntegration(Integration):
         self.ws.stop()
     
     def update_connection(self):
-        self.ws.address = self.config.api_url
+        self.ws.address = self.get_ws_url()
         self.ws.token = self.config.api_key
         self.ws.update_connection()
 
@@ -525,7 +525,8 @@ class BattlemetricsIntegration(Integration):
     @async_ttl_cache(size=9999, seconds=60*60*24)
     async def get_server_ids_from_org(self) -> list[str]:
         data = {
-            "filter[rcon]": 1,
+            "filter[organizations]": self.config.organization_id,
+            "filter[rcon]": "true",
             "filter[game]": "hll"
         }
 

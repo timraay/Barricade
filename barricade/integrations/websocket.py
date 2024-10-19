@@ -84,10 +84,10 @@ class Websocket:
         # Parse URL
         parsed_url = urlparse(self.address)
 
-        # Overwrite scheme to be "ws"
+        # Overwrite scheme to be "ws" or "wss"
         if parsed_url.scheme == "https":
             parsed_url = parsed_url._replace(scheme="wss")
-        else:
+        elif parsed_url.scheme == "http":
             parsed_url = parsed_url._replace(scheme="ws")
 
         # Rebuild URL
@@ -108,8 +108,14 @@ class Websocket:
     def start(self):
         if self.is_started():
             self.stop()
-                
-        self._ws_task = asyncio.create_task(self._ws_loop())
+        
+        class_name = type(self).__name__
+        self._ws_task = safe_create_task(
+            self._ws_loop(),
+            err_msg=f"{class_name} failed to connect and was stopped",
+            logger=self.logger,
+            name=f"{class_name}[{self.address}]"
+        )
         self._ws = asyncio.Future()
     
     def stop(self):
@@ -119,7 +125,9 @@ class Websocket:
         self._ws.cancel()
     
     def update_connection(self):
-        self.start()
+        # Restart the connection
+        if self.is_started():
+            self.start()
 
     async def _ws_loop(self):
         try:
@@ -156,11 +164,16 @@ class Websocket:
                 self._ws.set_exception(e)
 
         finally:
-            # When exiting the loop, stop the task and cancel the future
             self._ws_task = None
+
+            # When exiting the loop, stop the task and cancel the future
             if not self._ws.done():
                 self._ws.cancel()
-        
+            
+            # Propagate fatal websocket errors to the websocket task
+            if e := self._ws.exception():
+                raise e
+
     async def _invoke_setup_hook(self, ws: websockets.WebSocketClientProtocol):
         try:
             await self.setup_hook()
