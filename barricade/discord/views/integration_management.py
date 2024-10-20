@@ -92,7 +92,6 @@ class IntegrationManagementView(View):
     async def get_embed_update_self(self):
         """Update this view and return the associated embed."""
         embed = discord.Embed()
-        self.clear_items()
 
         row = 0
         num_enabled = 0
@@ -103,6 +102,7 @@ class IntegrationManagementView(View):
             for integration in self.integrations.values()
         ))
 
+        self.clear_items()
         for row, integration in enumerate(self.integrations.values()):
             assert integration.config.id is not None
             enabled = integration.config.enabled

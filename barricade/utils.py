@@ -1,5 +1,5 @@
 import asyncio
-from typing import Coroutine
+from typing import Coroutine, Iterable, Sequence, TypeVar
 from cachetools import TTLCache
 from cachetools.keys import hashkey
 from functools import wraps
@@ -65,3 +65,9 @@ class SingletonMeta(type):
     
 class Singleton(metaclass=SingletonMeta):
     pass
+
+T = TypeVar('T')
+def batched(iterable: Sequence[T], n=1) -> Iterable[Iterable[T]]:
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]

@@ -5,10 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Python Debugger: App",
             "type": "debugpy",
             "request": "launch",
             "program": "./app.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: Tmp",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./tmp.py",
             "console": "integratedTerminal"
         }
     ]
