@@ -13,24 +13,24 @@ from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
 from barricade.exceptions import IntegrationBanError, IntegrationBulkBanError, IntegrationFailureError, IntegrationMissingPermissionsError, NotFoundError, IntegrationValidationError
-from barricade.integrations.battlemetrics.utils import find_player_id_in_attributes
+from barricade.integrations.battlemetrics.utils import Scope, find_player_id_in_attributes
 from barricade.integrations.battlemetrics.websocket import BattlemetricsWebsocket
 from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
 from barricade.utils import batched, get_player_id_type, safe_create_task, async_ttl_cache
 
 REQUIRED_SCOPES = {
-    "ban:create",
-    "ban:update",
-    "ban:delete",
-    "ban:read",
-    "ban-list:create",
-    "ban-list:read",
-    "rcon:read",
+    Scope.from_string("ban:create:ban-list:{banlist_id}"),
+    Scope.from_string("ban:update:ban-list:{banlist_id}"),
+    Scope.from_string("ban:delete:ban-list:{banlist_id}"),
+    Scope.from_string("ban:read:ban-list:{banlist_id}"),
+    Scope.from_string("ban-list:create:org:{organization_id}"),
+    Scope.from_string("ban-list:read:org:{organization_id}"),
+    Scope.from_string("rcon:read", flexible=True),
 }
 
 OPTIONAL_SCOPES = {
-    "trigger:create",
-    "trigger:read",
+    Scope.from_string("trigger:create:org:{organization_id}"),
+    Scope.from_string("trigger:read:org:{organization_id}"),
 }
 
 class BattlemetricsBan(NamedTuple):
@@ -548,7 +548,7 @@ class BattlemetricsIntegration(Integration):
         if organization_id != self.config.organization_id:
             raise IntegrationValidationError("Organization ID mismatch: Asked for %s but got %s", self.config.organization_id, resp["data"]["id"])
 
-    async def get_api_scopes(self) -> set[str]:
+    async def get_api_scopes(self) -> set[Scope]:
         """Retrieves the tokens scopes from the oauth.
         Documentation: None.
         Returns:
@@ -561,7 +561,10 @@ class BattlemetricsIntegration(Integration):
         resp: dict = await self._make_request(method="POST", url=url, data=data) # type: ignore
 
         if resp["active"]:
-            return set(resp["scope"].split(" "))
+            return {
+                Scope.from_string(s)
+                for s in resp["scope"].split(" ")
+            }
         else:
             # TODO: Create more specific exception class
             raise Exception("Invalid API key")
@@ -572,28 +575,25 @@ class BattlemetricsIntegration(Integration):
         except Exception as e:
             raise IntegrationValidationError("Failed to retrieve API scopes") from e
 
-        expected_scopes = {s: False for s in itertools.chain(REQUIRED_SCOPES, OPTIONAL_SCOPES)}
+        params = self.config.model_dump()
+        missing_scopes = {s for s in itertools.chain(REQUIRED_SCOPES, OPTIONAL_SCOPES)}
         for scope in scopes:
-            if scope in expected_scopes:
-                expected_scopes[scope] = True
-            else:
-                for s in expected_scopes:
-                    if s.startswith(scope + ":"):
-                        expected_scopes[s] = True
+            for expected_scope in list(missing_scopes):
+                if scope.covers(expected_scope, params=params):
+                    missing_scopes.remove(expected_scope)
 
-        missing_scopes = {scope for scope, v in expected_scopes.items() if not v}
         missing_required_scopes = missing_scopes & REQUIRED_SCOPES
         missing_optional_scopes = missing_scopes & OPTIONAL_SCOPES
         
         if missing_required_scopes:
             raise IntegrationMissingPermissionsError(
-                missing_required_scopes,
+                {str(s) for s in missing_required_scopes},
                 "Missing scopes: %s" % ", ".join(
-                    [k for k, v in expected_scopes.items() if v is False]
+                    [str(s) for s in missing_scopes]
                 )
             )
         
-        return missing_optional_scopes
+        return {str(s) for s in missing_optional_scopes}
 
     @async_ttl_cache(size=9999, seconds=60*60*24)
     async def get_server_ids_from_org(self) -> list[str]:
