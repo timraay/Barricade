@@ -250,7 +250,6 @@ class IntegrationManagementView(View):
                     + "\n - ".join(e.missing_permissions)
                     + "\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Frequently-Asked-Questions#what-permissions-do-integrations-require) for a full list of required permissions."
                 )
-                # TODO: Create separate FAQ section with all permissions listed
             )
         except IntegrationValidationError as e:
             if save_comment:
