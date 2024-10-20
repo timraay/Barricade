@@ -1,10 +1,11 @@
 
 import asyncio
-from barricade.integrations.websocket import Websocket, ClientRequestType
+from barricade.integrations.custom.websocket import CustomWebsocket
+from barricade.integrations.custom.models import ClientRequestType
 
 
 async def main():
-    ws = Websocket("ws://localhost:8000/ws", token="password")
+    ws = CustomWebsocket("ws://localhost:8000/ws", token="password")
     ws.start()
     await ws.wait_until_connected(timeout=3)
 

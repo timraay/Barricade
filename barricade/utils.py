@@ -1,5 +1,5 @@
 import asyncio
-from typing import Coroutine
+from typing import Coroutine, Iterable, Sequence, TypeVar
 from cachetools import TTLCache
 from cachetools.keys import hashkey
 from functools import wraps
@@ -27,12 +27,17 @@ def async_ttl_cache(size: int, seconds: int):
         return wrapper
     return decorator
 
-def safe_create_task(coro: Coroutine, err_msg: str | None = None, name: str | None = None):
+def safe_create_task(
+        coro: Coroutine,
+        err_msg: str | None = None,
+        name: str | None = None,
+        logger: logging.Logger = logging # type: ignore
+):
     def _task_inner(t: asyncio.Task):
         if t.cancelled():
-            logging.warn(f"Task {task.get_name()} was cancelled")
+            logger.warning(f"Task {task.get_name()} was cancelled")
         elif exc := t.exception():
-            logging.error(
+            logger.error(
                 err_msg or f"Unexpected error during task {task.get_name()}",
                 exc_info=exc
             )
@@ -60,3 +65,9 @@ class SingletonMeta(type):
     
 class Singleton(metaclass=SingletonMeta):
     pass
+
+T = TypeVar('T')
+def batched(iterable: Sequence[T], n=1) -> Iterable[Iterable[T]]:
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
