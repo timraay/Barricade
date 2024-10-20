@@ -1,6 +1,7 @@
+import asyncio
 from datetime import datetime, timezone
 import itertools
-from typing import Sequence, NamedTuple
+from typing import AsyncGenerator, Sequence, NamedTuple
 from uuid import uuid4
 import aiohttp
 
@@ -32,6 +33,11 @@ OPTIONAL_SCOPES = {
     Scope.from_string("trigger:create:org:{organization_id}"),
     Scope.from_string("trigger:read:org:{organization_id}"),
 }
+
+class BattlemetricsPlayerID(NamedTuple):
+    player_id: str
+    bm_player_id: str
+    bm_player_id_id: str
 
 class BattlemetricsBan(NamedTuple):
     ban_id: str
@@ -271,7 +277,7 @@ class BattlemetricsIntegration(Integration):
                         "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
                     )
                 )
-                self.logger.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
+                self.logger.warning("Ban exists on the remote but not locally, expiring: %r", remote_ban)
                 await self.expire_ban(remote_ban.ban_id)
                 safe_send_to_community(community, embed=embed)
 
@@ -372,22 +378,20 @@ class BattlemetricsIntegration(Integration):
 
         return resp["data"]["id"]
 
-    async def edit_ban(self, remote_id: str, player_bm_id: str, identifier_id: str):
+    async def edit_ban(self, remote_id: str, player_id_data: BattlemetricsPlayerID):
         data = {
             "data": {
                 "type": "ban",
                 "attributes": {
                     "identifiers": [
-                        {
-                            "id": identifier_id
-                        }
+                        int(player_id_data.bm_player_id_id),
                     ],
                 },
                 "relationships": {
                     "player": {
                         "data": {
                             "type": "player",
-                            "id": {player_bm_id}
+                            "id": player_id_data.bm_player_id
                         }
                     }
                 }
@@ -395,9 +399,11 @@ class BattlemetricsIntegration(Integration):
         }
 
         url = f"{self.BASE_API_URL}/bans/{remote_id}"
-        resp: dict = await self._make_request(method="POST", url=url, data=data) # type: ignore
-
-        return resp["data"]["id"]
+        await self._make_request(method="PATCH", url=url, data=data) # type: ignore
+        self.logger.info(
+            "Linked ban %s to profile with ID %s and identifier ID %s",
+            remote_id, player_id_data.bm_player_id, player_id_data.bm_player_id_id
+        )
 
     async def remove_ban(self, ban_id: str):
         url = f"{self.BASE_API_URL}/bans/{ban_id}"
@@ -418,15 +424,14 @@ class BattlemetricsIntegration(Integration):
         data = {
             "filter[banList]": str(self.config.banlist_id),
             "page[size]": 100,
-            "filter[expired]": "false"
+            "filter[expired]": "true"
         }
 
         url = f"{self.BASE_API_URL}/bans"
         resp: dict = await self._make_request(method="GET", url=url, data=data) # type: ignore
         responses = {}
 
-        while resp["links"].get("next"):
-            resp: dict = await self._make_request(method="GET", url=resp["links"]["next"]) # type: ignore # type: ignore
+        while True:
             for ban_data in resp["data"]:
                 ban_attrs = ban_data["attributes"]
                 has_player_linked = ban_data["relationships"].get("player") is not None
@@ -436,11 +441,11 @@ class BattlemetricsIntegration(Integration):
                 # Find identifier of valid type
                 player_id, _ = find_player_id_in_attributes(ban_attrs)
 
-                expires_at_str = ban_attrs["expires_at"]
+                expires_at_str = ban_attrs.get("expires")
                 if not expires_at_str:
                     expired = False
                 else:
-                    expires_at = datetime.fromisoformat(ban_data)
+                    expires_at = datetime.fromisoformat(expires_at_str)
                     expired = expires_at <= datetime.now(tz=timezone.utc)
                 
                 # If no valid identifier is found, remove remote ban and skip
@@ -455,47 +460,64 @@ class BattlemetricsIntegration(Integration):
 
                 responses[ban_id] = BattlemetricsBan(ban_id, player_id, expired, has_player_linked)
 
+            link_next = resp["links"].get("next")
+            if link_next:
+                resp: dict = await self._make_request(method="GET", url=link_next) # type: ignore
+            else:
+                break
+
         return responses
 
-    async def link_bans_to_players(self, bans: list[BattlemetricsBan]):
-        url = f"{self.BASE_API_URL}/players/match"
+    async def match_player_identifiers(self, player_ids: Sequence[str]) -> AsyncGenerator[BattlemetricsPlayerID, None]:
+        url = f"{self.BASE_API_URL}/players/quick-match"
 
-        for grouped_bans in batched(bans, n=100):
-            # Player Match Identifiers endpoint accepts up to 100 IDs at
-            # once and has a rate limit of five requests per second.
+        do_sleep = False
+        for grouped_player_ids in batched(player_ids, n=100):
+            # Player Quick Match Identifiers endpoint accepts up to 100 IDs at
+            # once and has a rate limit of ten requests per second.
+            if do_sleep:
+                await asyncio.sleep(0.1)
+            else:
+                do_sleep = True
+
             query_data = []
-            for ban in grouped_bans:
-                if ban.player_id is None:
-                    # In normal circumstances should not happen but you never know
-                    continue
-
+            for player_id in grouped_player_ids:
                 query_data.append({
                     "type": "identifier",
                     "attributes": {
-                        "type": get_player_id_type(ban.player_id).value,
-                        "identifier": ban.player_id,
+                        "type": get_player_id_type(player_id).value,
+                        "identifier": player_id,
                     }
                 })
             
             resp: dict = await self._make_request(
-                method="GET",
+                method="POST",
                 url=url,
                 data={ "data": query_data },
             ) # type: ignore
 
-            identifier_to_ban_id = {
-                ban.player_id: ban.ban_id
-                for ban in grouped_bans
-            }
-            for player_data in resp["data"]:
-                assert player_data["type"] == "identifier"
-                identifier = player_data["attributes"]["identifier"]
-                identifier_id = player_data["id"]
-                player_bm_id = player_data["relationships"]["player"]["data"]["id"]
-                remote_id = identifier_to_ban_id[identifier]
+            for data in resp["data"]:
+                assert data["type"] == "identifier"
+                yield BattlemetricsPlayerID(
+                    player_id=data["attributes"]["identifier"],
+                    bm_player_id=data["relationships"]["player"]["data"]["id"],
+                    bm_player_id_id=data["id"],
+                )
 
-                await self.edit_ban(remote_id, player_bm_id, identifier_id)
+    async def link_bans_to_players(self, bans: list[BattlemetricsBan]):
+        player_to_ban_id = {
+            ban.player_id: ban.ban_id
+            for ban in bans
+            if ban.player_id
+        }
+        player_ids = list(player_to_ban_id.keys())
 
+        async for player_id_data in self.match_player_identifiers(player_ids):
+            remote_id = player_to_ban_id[player_id_data.player_id]
+            await self.edit_ban(
+                remote_id=remote_id,
+                player_id_data=player_id_data,
+            )
 
     async def create_ban_list(self, community: schemas.Community):
         data = {
