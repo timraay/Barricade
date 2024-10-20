@@ -26,7 +26,7 @@ REQUIRED_SCOPES = {
     Scope.from_string("ban:read:ban-list:{banlist_id}"),
     Scope.from_string("ban-list:create:org:{organization_id}"),
     Scope.from_string("ban-list:read:org:{organization_id}"),
-    Scope.from_string("rcon:read", flexible=True),
+    Scope.from_string("rcon:read:server", flexible=True),
 }
 
 OPTIONAL_SCOPES = {
