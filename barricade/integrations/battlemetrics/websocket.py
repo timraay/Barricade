@@ -26,7 +26,7 @@ class BattlemetricsWebsocket(Websocket):
         self._counter = itertools.count()
     
     async def setup_hook(self):
-        await self.execute(ClientRequestType.auth, payload=self.token)
+        await self.execute(ClientRequestType.auth, payload=self.token, is_sensitive=True)
         self.logger.info("Authorized Battlemetrics websocket")
 
         server_ids = await self.integration.get_server_ids_from_org()
@@ -87,7 +87,7 @@ class BattlemetricsWebsocket(Websocket):
         else:
             waiter.set_result(response.p)
 
-    async def execute(self, request_type: ClientRequestType, payload: Optional[dict | list | str] = None) -> Any:
+    async def execute(self, request_type: ClientRequestType, payload: Optional[dict | list | str] = None, is_sensitive: bool = False) -> Any:
         # First make sure websocket is connected
         ws = await self.wait_until_connected(2)
 
@@ -102,7 +102,7 @@ class BattlemetricsWebsocket(Websocket):
 
         self.logger.info(
             "Sent websocket request #%s %s %s",
-            request.i, request.t.name, request.p
+            request.i, request.t.name, "[********]" if is_sensitive else request.p
         )
 
         try:
