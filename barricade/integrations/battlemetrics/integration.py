@@ -69,7 +69,8 @@ class BattlemetricsIntegration(Integration):
     def update_connection(self):
         self.ws.address = self.get_ws_url()
         self.ws.token = self.config.api_key
-        self.ws.update_connection()
+        if self.config.enabled:
+            self.ws.update_connection()
 
     # TODO: Extend on_report_create to send alerts if a newly reported player is currently online
 

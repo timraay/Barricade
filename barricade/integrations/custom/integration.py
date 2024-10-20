@@ -71,7 +71,7 @@ class CustomIntegration(Integration):
     def update_connection(self):
         self.ws.address = self.get_ws_url()
         self.ws.token = self.config.api_key
-        if self.ws.is_started():
+        if self.config.enabled:
             self.ws.update_connection()
 
     @is_enabled
