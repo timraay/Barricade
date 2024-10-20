@@ -74,9 +74,3 @@ class Scope:
             for other_part, self_part
             in zip(other_parts, self.parts)
         )
-        # for i, (self_part, other_part) in enumerate(zip(self_parts[:len(other)], other.parts)):
-        #     print(i, self_part, other_part, i in self.dynamic_part_indices, self_part != other_part)
-        #     if self_part != other_part:
-        #         return False
-        
-        # return True
