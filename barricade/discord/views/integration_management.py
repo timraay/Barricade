@@ -236,12 +236,14 @@ class IntegrationManagementView(View):
         return integration
     
     async def validate_integration(self, integration: Integration, save_comment: bool = False):
-        assert integration.config.id is not None
+        if save_comment and integration.config.id is None:
+            raise ValueError("save_comment cannot be True if the integration hasn't been saved yet")
 
         try:
             missing_optional_permissions = await integration.validate(self.community)
         except IntegrationMissingPermissionsError as e:
             if save_comment:
+                assert integration.config.id is not None
                 self.comments[integration.config.id] = "Missing permissions"
             raise CustomException(
                 "Failed to configure integration!",
@@ -253,10 +255,12 @@ class IntegrationManagementView(View):
             )
         except IntegrationValidationError as e:
             if save_comment:
+                assert integration.config.id is not None
                 self.comments[integration.config.id] = str(e)
             raise CustomException("Failed to configure integration!", str(e))
         except Exception as e:
             if save_comment:
+                assert integration.config.id is not None
                 self.comments[integration.config.id] = "Unexpected validation error"
             raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
         
