@@ -450,7 +450,7 @@ class BattlemetricsIntegration(Integration):
                 
                 # If no valid identifier is found, remove remote ban and skip
                 if not player_id:
-                    self.logger.warning("Could not find (valid) identifier for ban #%s", ban_id, ban_attrs["identifiers"])
+                    self.logger.warning("Could not find (valid) identifier for ban #%s %s", ban_id, ban_attrs["identifiers"])
                     responses[ban_id] = BattlemetricsBan(ban_id, None, expired, True)
                     safe_create_task(
                         self.remove_ban(ban_id),
