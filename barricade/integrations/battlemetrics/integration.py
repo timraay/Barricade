@@ -20,13 +20,13 @@ from barricade.integrations.integration import Integration, IntegrationMetaData,
 from barricade.utils import batched, get_player_id_type, safe_create_task, async_ttl_cache
 
 REQUIRED_SCOPES = {
-    Scope.from_string("ban:create:ban-list:{banlist_id}"),
-    Scope.from_string("ban:update:ban-list:{banlist_id}"),
-    Scope.from_string("ban:delete:ban-list:{banlist_id}"),
-    Scope.from_string("ban:read:ban-list:{banlist_id}"),
+    Scope.from_string("ban:create:org:{organization_id}"),
+    Scope.from_string("ban:update:org:{organization_id}"),
+    Scope.from_string("ban:delete:org:{organization_id}"),
+    Scope.from_string("ban:read:org:{organization_id}"),
     Scope.from_string("ban-list:create:org:{organization_id}"),
     Scope.from_string("ban-list:read:org:{organization_id}"),
-    Scope.from_string("rcon:read:server", flexible=True),
+    Scope.from_string("rcon:read"),
 }
 
 OPTIONAL_SCOPES = {
@@ -271,7 +271,7 @@ class BattlemetricsIntegration(Integration):
                 embed = get_danger_embed(
                     "Found unrecognized ban on Battlemetrics ban list!",
                     (
-                        f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/{remote_ban.ban_id}) that Barricade does not recognize."
+                        f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/edit/{remote_ban.ban_id}) that Barricade does not recognize."
                         " Please do not put any of your own bans on this ban list."
                         "\n\n"
                         "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
@@ -450,7 +450,7 @@ class BattlemetricsIntegration(Integration):
                 
                 # If no valid identifier is found, remove remote ban and skip
                 if not player_id:
-                    self.logger.warning("Could not find (valid) identifier for ban #%s", ban_id, ban_attrs["identifiers"])
+                    self.logger.warning("Could not find (valid) identifier for ban #%s %s", ban_id, ban_attrs["identifiers"])
                     responses[ban_id] = BattlemetricsBan(ban_id, None, expired, True)
                     safe_create_task(
                         self.remove_ban(ban_id),
