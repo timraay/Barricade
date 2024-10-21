@@ -154,8 +154,11 @@ class Websocket:
                                 await self.handle_message(message)
                             except:
                                 self.logger.exception("Failed to handle incoming message: %s", message)
-                    except websockets.ConnectionClosed:
+                    except websockets.ConnectionClosed as e:
                         # If the websocket was closed, try reconnecting
+                        if e.code == 4000:
+                            # An issue popped up in the setup hook. Raise so we reconnect with exponential backoff.
+                            raise
                         continue
                     finally:
                         # Change the ws to pending again while we reconnect
@@ -179,7 +182,7 @@ class Websocket:
             await self.setup_hook()
         except:
             self.logger.exception("Failed to invoke setup hook")
-            await ws.close()
+            await ws.close(code=4000)
 
     async def handle_message(self, message: str | bytes):
         pass
