@@ -271,7 +271,7 @@ class BattlemetricsIntegration(Integration):
                 embed = get_danger_embed(
                     "Found unrecognized ban on Battlemetrics ban list!",
                     (
-                        f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/{remote_ban.ban_id}) that Barricade does not recognize."
+                        f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/edit/{remote_ban.ban_id}) that Barricade does not recognize."
                         " Please do not put any of your own bans on this ban list."
                         "\n\n"
                         "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
