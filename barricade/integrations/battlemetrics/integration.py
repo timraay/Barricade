@@ -20,13 +20,13 @@ from barricade.integrations.integration import Integration, IntegrationMetaData,
 from barricade.utils import batched, get_player_id_type, safe_create_task, async_ttl_cache
 
 REQUIRED_SCOPES = {
-    Scope.from_string("ban:create:ban-list:{banlist_id}"),
-    Scope.from_string("ban:update:ban-list:{banlist_id}"),
-    Scope.from_string("ban:delete:ban-list:{banlist_id}"),
-    Scope.from_string("ban:read:ban-list:{banlist_id}"),
+    Scope.from_string("ban:create:org:{organization_id}"),
+    Scope.from_string("ban:update:org:{organization_id}"),
+    Scope.from_string("ban:delete:org:{organization_id}"),
+    Scope.from_string("ban:read:org:{organization_id}"),
     Scope.from_string("ban-list:create:org:{organization_id}"),
     Scope.from_string("ban-list:read:org:{organization_id}"),
-    Scope.from_string("rcon:read:server", flexible=True),
+    Scope.from_string("rcon:read"),
 }
 
 OPTIONAL_SCOPES = {
