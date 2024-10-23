@@ -209,3 +209,50 @@ async def get_reports_for_player_with_no_community_response(
 
     result = await db.scalars(stmt)
     return result.all()
+
+async def get_successful_responses_without_bans(db: AsyncSession, community_id: int, integration_id: int):
+    """Find all players that an integration has not banned yet, that should
+    be banned. Returns one response with token for each player found.
+
+    If multiple responses to the same player exist, one is arbitrarly picked.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    community_id : int
+        The ID of the community
+    integration_id : int
+        The ID of the integration
+
+    Returns
+    -------
+    Sequence[models.PlayerReportResponse]
+        A sequence of responses, with the report token included
+    """
+    stmt = (
+        select(models.PlayerReportResponse)
+        .where(
+            models.PlayerReportResponse.community_id == community_id,
+            models.PlayerReportResponse.banned.is_(True),
+        )
+        .join(models.PlayerReportResponse.player_report)
+        .where(
+            not_(exists(
+                select(models.PlayerBan)
+                .where(
+                    models.PlayerBan.integration_id == integration_id,
+                    models.PlayerBan.player_id == models.PlayerReport.player_id,
+                )
+            ))
+        )
+        .distinct(models.PlayerReport.player_id)
+        .options(
+            selectinload(models.PlayerReportResponse.player_report)
+            .selectinload(models.PlayerReport.report)
+            .selectinload(models.Report.token)
+        )
+    )
+    
+    result = await db.scalars(stmt)
+    return result.all()

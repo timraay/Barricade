@@ -10,11 +10,12 @@ from barricade import schemas
 from barricade.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.integrations import create_integration_config, update_integration_config
+from barricade.crud.responses import get_successful_responses_without_bans
 from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import AlreadyExistsError, IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
+from barricade.exceptions import AlreadyExistsError, IntegrationBulkBanError, IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
 from barricade.db import models
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -364,6 +365,35 @@ class Integration(ABC):
             "\n\n"
             "More info: https://bit.ly/BarricadeBanned"
         )
+
+    @is_saved
+    @is_enabled
+    async def repopulate(self):
+        assert self.config.id is not None
+
+        async with session_factory() as db:
+            # Get all responses where the community chose to ban the player yet
+            # the integration has not banned yet.
+            db_responses = await get_successful_responses_without_bans(
+                db,
+                community_id=self.config.community_id,
+                integration_id=self.config.id,
+            )
+            responses = [
+                schemas.ResponseWithToken.model_validate(db_response)
+                for db_response in db_responses
+            ]
+
+        for response in responses:
+            print(response)
+
+        total = len(responses)
+        try:
+            await self.bulk_ban_players(responses=responses)
+        except IntegrationBulkBanError as e:
+            return (total - len(e.player_ids), total)
+        else:
+            return (total, total)
 
     # --- Commands to implement
 

@@ -190,56 +190,76 @@ class BattlemetricsIntegration(Integration):
     async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
         ban_ids = []
         failed = []
-        async with session_factory.begin() as db:
-            for response in responses:
-                player_id = response.player_report.player_id
-                report = response.player_report.report
-                report_channel = get_report_channel(report.token.platform)
+        async with session_factory() as db:
+            try:
+                for i, response in enumerate(responses, start=1):
+                    player_id = response.player_report.player_id
+                    report = response.player_report.report
+                    report_channel = get_report_channel(report.token.platform)
 
-                db_ban = await self.get_ban(db, player_id)
-                if db_ban is not None:
-                    continue
+                    db_ban = await self.get_ban(db, player_id)
+                    if db_ban is not None:
+                        continue
 
-                reason = self.get_ban_reason(response)
-                note = (
-                    f"Banned for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}.\n"
-                    f"Reported by {report.token.community.name} ({report.token.community.contact_url})\n"
-                    f"Link to Bunker message: {report_channel.jump_url}/{report.message_id}"
-                )
-                try:
-                    ban_id = await self.add_ban(
-                        identifier=player_id,
-                        reason=reason,
-                        note=note,
+                    reason = self.get_ban_reason(response)
+                    note = (
+                        f"Banned for {', '.join(report.reasons_bitflag.to_list(report.reasons_custom))}.\n"
+                        f"Reported by {report.token.community.name} ({report.token.community.contact_url})\n"
+                        f"Link to Bunker message: {report_channel.jump_url}/{report.message_id}"
                     )
-                except IntegrationFailureError:
-                    failed.append(player_id)
-                else:
-                    ban_ids.append((player_id, ban_id))
-        
-            await self.set_multiple_ban_ids(db, *ban_ids)
+                    try:
+                        ban_id = await self.add_ban(
+                            identifier=player_id,
+                            reason=reason,
+                            note=note,
+                        )
+                    except IntegrationFailureError as e:
+                        self.logger.error("Bulk ban %s/%s %s failed: %s", i, len(responses), player_id, e)
+                        failed.append(player_id)
+                        if i == 5 and len(failed) == 5:
+                            raise IntegrationFailureError(
+                                "Failed to bulk ban the first 5 players, stopped prematurely"
+                            )
+                    else:
+                        ban_ids.append((player_id, ban_id))
+
+            finally:
+                await self.set_multiple_ban_ids(db, *ban_ids)
+                await db.commit()
         
         if failed:
-            raise IntegrationBulkBanError(failed, "Failed to ban players")
+            raise IntegrationBulkBanError(failed, "Failed to ban players %s" % ", ".join(failed))
 
     @is_enabled
     async def bulk_unban_players(self, player_ids: Sequence[str]):
         failed = []
-        async with session_factory.begin() as db:
-            for player_id in player_ids:
-                db_ban = await self.get_ban(db, player_id)
-                if not db_ban:
-                    continue
+        i = 0
+        async with session_factory() as db:
+            try:
+                for player_id in player_ids:
+                    db_ban = await self.get_ban(db, player_id)
+                    if not db_ban:
+                        continue
 
-                try:
-                    await self.remove_ban(db_ban.remote_id)
-                except IntegrationFailureError:
-                    failed.append(player_id)
-                else:
-                    await db.delete(db_ban)
+                    i += 1
+                    try:
+                        await self.remove_ban(db_ban.remote_id)
+                    except IntegrationFailureError as e:
+                        self.logger.error("Bulk unban %s/%s %s failed: %s", i, player_id, len(player_ids), e)
+                        failed.append(player_id)
+                        if i == 5 and len(failed) == 5:
+                            raise IntegrationFailureError(
+                                "Failed to bulk unban the first 5 players, stopped prematurely"
+                            )
+                    else:
+                        await db.delete(db_ban)
+                        await db.flush()
+
+            finally:
+                await db.commit()
         
         if failed:
-            raise IntegrationBulkBanError(failed, "Failed to unban players")
+            raise IntegrationBulkBanError(failed, "Failed to unban players %s" % ", ".join(failed))
     
     @is_enabled
     async def synchronize(self):

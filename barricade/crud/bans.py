@@ -74,10 +74,16 @@ async def create_ban(db: AsyncSession, ban: schemas.PlayerBanCreateParams):
     return db_ban
 
 async def bulk_create_bans(db: AsyncSession, bans: list[schemas.PlayerBanCreateParams]):
+    if not bans:
+        return
     stmt = insert(models.PlayerBan).values(
         [ban.model_dump() for ban in bans]
-    ).on_conflict_do_update(
-        index_elements=["player_id", "integration_id"]
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["player_id", "integration_id"],
+        set_={
+            "remote_id": stmt.excluded.remote_id,
+        }
     )
     await db.execute(stmt)
     await db.flush()
