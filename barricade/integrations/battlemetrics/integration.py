@@ -158,8 +158,8 @@ class BattlemetricsIntegration(Integration):
                     reason=reason,
                     note=note,
                 )
-            except IntegrationFailureError:
-                raise
+            except IntegrationFailureError as e:
+                raise IntegrationBanError(player_id, str(e))
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
             
@@ -173,14 +173,14 @@ class BattlemetricsIntegration(Integration):
                 raise NotFoundError("Ban does not exist")
 
             try:
-                await self.remove_ban(db_ban.remote_id)
+                await self.remove_ban(db_ban.remote_id, handle_exc=False)
             except aiohttp.ClientResponseError as e:
                 if e.status == 404:
                     self.logger.error("Battlemetrics Ban with ID %s for player %s not found", db_ban.remote_id, player_id)
                 else:
-                    raise IntegrationBanError(player_id, "Failed to unban player")
-            except IntegrationFailureError:
-                raise
+                    raise IntegrationBanError(player_id, e.message)
+            except (IntegrationFailureError, aiohttp.ClientError) as e:
+                raise IntegrationBanError(player_id, str(e))
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
 
@@ -305,7 +305,7 @@ class BattlemetricsIntegration(Integration):
 
     # --- Battlemetrics API wrappers
 
-    async def _make_request(self, method: str, url: str, data: dict | None = None) -> dict | str | None:
+    async def _make_request(self, method: str, url: str, data: dict | None = None, handle_exc: bool = True) -> dict | str | None:
         """Make an API request.
 
         Parameters
@@ -327,31 +327,41 @@ class BattlemetricsIntegration(Integration):
         Exception
             Doom and gloom
         """
-        headers = {"Authorization": f"Bearer {self.config.api_key}"}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            if method in {"POST", "PATCH"}:
-                kwargs = {"json": data}
-            else:
-                kwargs = {"params": data}
-
-            async with session.request(method=method, url=url, **kwargs) as r: # type: ignore
-                content_type = r.headers.get('content-type', '')
-                response: dict | str | None
-                if "json" in content_type:
-                    response = await r.json()
-                elif "text/html" in content_type:
-                    response = (await r.content.read()).decode()
-                elif not content_type:
-                    response = None
+        try:
+            headers = {"Authorization": f"Bearer {self.config.api_key}"}
+            async with aiohttp.ClientSession(headers=headers) as session:
+                if method in {"POST", "PATCH"}:
+                    kwargs = {"json": data}
                 else:
-                    raise Exception(f"Unsupported content type: {content_type}")
-                
-                if not r.ok:
-                    self.logger.error(
-                        "Failed request %s %s. Data = %s, Response = %s",
-                        method, url, kwargs, response
-                    )
-                    r.raise_for_status()
+                    kwargs = {"params": data}
+
+                async with session.request(method=method, url=url, **kwargs) as r: # type: ignore
+                    content_type = r.headers.get('content-type', '')
+                    response: dict | str | None
+                    if "json" in content_type:
+                        response = await r.json()
+                    elif "text/html" in content_type:
+                        response = (await r.content.read()).decode()
+                    elif not content_type:
+                        response = None
+                    else:
+                        raise Exception(f"Unsupported content type: {content_type}")
+                    
+                    if not r.ok:
+                        self.logger.error(
+                            "Failed request %s %s. Data = %s, Response = %s",
+                            method, url, kwargs, response
+                        )
+                        r.raise_for_status()
+
+        except aiohttp.ClientError as e:
+            if not handle_exc:
+                raise
+
+            if isinstance(e, aiohttp.ClientResponseError):
+                raise IntegrationFailureError(e.message) from e
+            else:
+                raise IntegrationFailureError(str(e)) from e
 
         return response
 
@@ -425,9 +435,9 @@ class BattlemetricsIntegration(Integration):
             remote_id, player_id_data.bm_player_id, player_id_data.bm_player_id_id
         )
 
-    async def remove_ban(self, ban_id: str):
+    async def remove_ban(self, ban_id: str, handle_exc: bool = True):
         url = f"{self.BASE_API_URL}/bans/{ban_id}"
-        await self._make_request(method="DELETE", url=url)
+        await self._make_request(method="DELETE", url=url, handle_exc=handle_exc)
 
     async def expire_ban(self, ban_id: str):
         url = f"{self.BASE_API_URL}/bans/{ban_id}"
