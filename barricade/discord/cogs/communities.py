@@ -4,12 +4,11 @@ import discord
 from discord import Interaction
 from discord import app_commands
 from discord.ext import commands
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.db import session_factory
 from barricade.constants import DISCORD_GUILD_ID
-from barricade.crud.communities import get_admin_by_id, get_community_by_id
+from barricade.crud.communities import get_community_by_id
 from barricade.discord.autocomplete import atcp_community
 from barricade.discord.communities import get_alerts_channel, get_confirmations_channel, get_forward_channel
 from barricade.discord.utils import CustomException, get_command_mention

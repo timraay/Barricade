@@ -122,7 +122,7 @@ class CustomException(Exception):
         super().__init__(*args)
 
 
-async def handle_error(interaction: Interaction | commands.Context, error: Exception):
+def get_error_embed_from_exc(error: Exception):
     if isinstance(error, (app_commands.CommandInvokeError, commands.CommandInvokeError)):
         error = error.original
 
@@ -165,6 +165,11 @@ async def handle_error(interaction: Interaction | commands.Context, error: Excep
     else:
         embed = get_error_embed("An unexpected error occured!", esc_md(str(error)))
         logging.error("An unexpected error occured when handling an interaction", exc_info=error)
+    
+    return embed
+
+async def handle_error(interaction: Interaction | commands.Context, error: Exception):
+    embed = get_error_embed_from_exc(error)
 
     if isinstance(interaction, Interaction):
         if interaction.response.is_done() or interaction.is_expired():
