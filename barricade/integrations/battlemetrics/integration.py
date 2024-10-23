@@ -20,18 +20,18 @@ from barricade.integrations.integration import Integration, IntegrationMetaData,
 from barricade.utils import batched, get_player_id_type, safe_create_task, async_ttl_cache
 
 REQUIRED_SCOPES = {
-    Scope.from_string("ban:create:org:{organization_id}"),
-    Scope.from_string("ban:update:org:{organization_id}"),
-    Scope.from_string("ban:delete:org:{organization_id}"),
-    Scope.from_string("ban:read:org:{organization_id}"),
-    Scope.from_string("ban-list:create:org:{organization_id}"),
-    Scope.from_string("ban-list:read:org:{organization_id}"),
+    Scope.from_string("ban:create"),
+    Scope.from_string("ban:update"),
+    Scope.from_string("ban:delete"),
+    Scope.from_string("ban:read"),
+    Scope.from_string("ban-list:create"),
+    Scope.from_string("ban-list:read"),
     Scope.from_string("rcon:read"),
 }
 
 OPTIONAL_SCOPES = {
-    Scope.from_string("trigger:create:org:{organization_id}"),
-    Scope.from_string("trigger:read:org:{organization_id}"),
+    Scope.from_string("trigger:create"),
+    Scope.from_string("trigger:read"),
 }
 
 class BattlemetricsPlayerID(NamedTuple):
