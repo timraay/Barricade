@@ -1,5 +1,6 @@
-import re
 from datetime import datetime, timezone
+from io import BytesIO
+import re
 
 import discord
 from discord import ButtonStyle, Interaction
@@ -92,10 +93,22 @@ class ReportManagementButton(
                     db_report.token.expires_at = datetime.now(tz=timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA
                     # Send URL to user
                     url = get_report_edit_url(schemas.ReportWithToken.model_validate(db_report))
-                    await interaction.response.send_message(
-                        content="## " + format_url("Open Google Form", url),
-                        ephemeral=True
-                    )
+                    body = "## " + format_url("Open Google Form", url)
+
+                    if len(body) <= 4096:
+                        await interaction.response.send_message(
+                            embed=discord.Embed(description=body),
+                            ephemeral=True
+                        )
+                    else:
+                        fp = BytesIO(url.encode())
+                        fp.seek(0)
+                        file = discord.File(fp, "url.txt")
+                        await interaction.response.send_message(
+                            content="The URL was too large, so it has been uploaded as a file instead.",
+                            file=file,
+                            ephemeral=True
+                        )
 
                 case _:
                     raise ValueError("Unknown command %s" % self.command)
