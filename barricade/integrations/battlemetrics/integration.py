@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
+import hashlib
 import itertools
 from typing import AsyncGenerator, Sequence, NamedTuple
 from uuid import uuid4
@@ -528,8 +529,21 @@ class BattlemetricsIntegration(Integration):
 
             for data in resp["data"]:
                 assert data["type"] == "identifier"
+
+                attrs: dict = data["attributes"]
+                player_id = attrs.get("identifier")
+                if not player_id:
+                    # Older Team17 IDs may not have an identifier field and instead have their
+                    # old, unhashed ID in the metadata field.
+                    if metadata := attrs.get("metadata"):
+                        if unhashed := metadata.get("unhashed"):
+                            player_id = hashlib.md5(unhashed.encode(), usedforsecurity=False).hexdigest()
+                if not player_id:
+                    self.logger.warning("Unable to identify player ID from identifier: %s", attrs)
+                    continue
+
                 yield BattlemetricsPlayerID(
-                    player_id=data["attributes"]["identifier"],
+                    player_id=player_id,
                     bm_player_id=data["relationships"]["player"]["data"]["id"],
                     bm_player_id_id=data["id"],
                 )
