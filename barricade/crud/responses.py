@@ -1,10 +1,12 @@
 from sqlalchemy import exists, not_, select, func, or_
+import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
 from barricade.enums import ReportReasonFlag, ReportRejectReason
+from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
 
@@ -38,6 +40,10 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
     if not db_prr:
         db_prr = models.PlayerReportResponse(**params.model_dump())
         db.add(db_prr)
+        try:
+            await db.flush()
+        except sqlalchemy.exc.IntegrityError:
+            raise NotFoundError("Report or community no longer exists")
         await db.commit()
         await db.refresh(db_prr)
         await db_prr.player_report.report.awaitable_attrs.token
