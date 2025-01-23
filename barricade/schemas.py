@@ -348,7 +348,7 @@ class ReportMessageCreateParams(_ReportMessageBase):
 class ResponseCreateParams(_ResponseBase):
     reject_reason: Optional[ReportRejectReason] = None
 
-class PendingResponse(_ResponseBase):
+class PendingResponse(_ResponseBase, _ModelFromAttributes):
     player_report: PlayerReportRef
     community: CommunityRef
     banned: Optional[bool] = None # type: ignore
