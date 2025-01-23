@@ -46,6 +46,8 @@ class ReportManagementButton(
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_report = await get_report_by_id(db, self.report_id, load_relations=True)
+            if not db_report:
+                raise NotFoundError("This report no longer exists")
             report = schemas.ReportWithRelations.model_validate(db_report)
             if interaction.user.id != report.token.admin_id:
                 await assert_has_admin_role(interaction.user, report.token.community) # type: ignore
@@ -83,11 +85,7 @@ class ReportManagementButton(
                         ephemeral=True,
                     )
 
-                case "edit":
-                    db_report = await get_report_by_id(db, self.report_id, load_token=True)
-                    if not db_report:
-                        raise NotFoundError("This report no longer exists")
-                    
+                case "edit":                    
                     # Generate new token and update expiration date
                     db_report.token.value = db_report.token.generate_value()
                     db_report.token.expires_at = datetime.now(tz=timezone.utc) + REPORT_TOKEN_EXPIRE_DELTA
