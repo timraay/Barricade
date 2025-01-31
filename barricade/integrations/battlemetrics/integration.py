@@ -7,9 +7,9 @@ from uuid import uuid4
 import aiohttp
 
 from barricade import schemas
-from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
+from barricade.crud.bans import bulk_delete_bans, expire_bans_of_player, get_bans_by_integration
 from barricade.crud.communities import get_community_by_id
-from barricade.db import session_factory
+from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
@@ -131,7 +131,7 @@ class BattlemetricsIntegration(Integration):
             except Exception as e:
                 raise IntegrationValidationError("Failed to create ban list") from e
         else:
-            await self.validate_ban_list()
+            await self.validate_ban_list(community)
         
         return missing_optional_scopes
 
@@ -564,6 +564,13 @@ class BattlemetricsIntegration(Integration):
             )
 
     async def create_ban_list(self, community: schemas.Community):
+        self.logger.info("%r: Creating new ban list", self)
+
+        if self.config.banlist_id:
+            self.logger.info("%s: Clearing bans from previous ban list")
+            async with session_factory.begin() as db:
+                await bulk_delete_bans(db, models.PlayerBan.integration_id == self.config.id)
+        
         data = {
             "data": {
                 "type": "banList",
@@ -597,19 +604,31 @@ class BattlemetricsIntegration(Integration):
         assert resp["data"]["type"] == "banList"
         self.config.banlist_id = resp["data"]["id"]
 
-    async def validate_ban_list(self):
+    async def validate_ban_list(self, community: schemas.Community):
         data = {"include": "owner"}
 
         url = f"{self.BASE_API_URL}/ban-lists/{self.config.banlist_id}"
         try:
+            # Fetch the ban list
             resp: dict = await self._make_request(method="GET", url=url, data=data) # type: ignore
         except Exception as e:
+            if isinstance(e, aiohttp.ClientResponseError) and e.status == 404:
+                # The ban list no longer exists. Create a new one.
+                self.logger.error("%r: Ban list #%s not found! Creating new list.", self, self.config.banlist_id)
+                try:
+                    await self.create_ban_list(community)
+                    return
+                except Exception as e:
+                    raise IntegrationValidationError("Failed to recreate ban list") from e
+
             raise IntegrationValidationError("Failed to retrieve ban list") from e
 
+        # Make sure banlist UUID is the same
         banlist_id = resp["data"]["id"]
         if banlist_id != self.config.banlist_id:
             raise IntegrationValidationError("Ban list UUID mismatch: Asked for %s but got %s", self.config.banlist_id, resp["data"]["id"])
         
+        # Make sure organization ID is the same
         organization_id = resp["data"]["relationships"]["owner"]["data"]["id"]
         if organization_id != self.config.organization_id:
             raise IntegrationValidationError("Organization ID mismatch: Asked for %s but got %s", self.config.organization_id, resp["data"]["id"])
