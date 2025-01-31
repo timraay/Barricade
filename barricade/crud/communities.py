@@ -552,7 +552,7 @@ async def transfer_ownership(
     await db.refresh(db_admin)
 
     community = schemas.Community.model_validate(db_community)
-    await update_user_roles(db_community.owner_id, community=community)
+    await update_user_roles(db_admin.discord_id, community=community)
     await update_user_roles(old_owner.discord_id, community=community, strict=False)
 
     safe_create_task(
