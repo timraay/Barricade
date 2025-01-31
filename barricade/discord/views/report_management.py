@@ -44,6 +44,8 @@ class ReportManagementButton(
     
     @handle_error_wrap
     async def callback(self, interaction: Interaction):
+        await interaction.response.defer(ephemeral=True)
+
         async with session_factory.begin() as db:
             db_report = await get_report_by_id(db, self.report_id, load_relations=True)
             report = schemas.ReportWithRelations.model_validate(db_report)
@@ -58,23 +60,30 @@ class ReportManagementButton(
 
                     view = ReportManagementView(report)
                     embed = await view.get_embed(report, stats=stats)
-                    await interaction.response.edit_message(embed=embed, view=view)
+                    await interaction.edit_original_response(embed=embed, view=view)
 
                 case "del":
                     async def confirm_delete(_interaction: Interaction):
+                        await _interaction.response.defer(ephemeral=True)
+
                         async with session_factory.begin() as db:
                             await delete_report(db, self.report_id, by=interaction.user) # type: ignore
+
+                        try:
                             await interaction.message.delete() # type: ignore
-                            await _interaction.response.edit_message(
-                                embed=get_success_embed(f"Report #{self.report_id} deleted!"),
-                                view=None
-                            )
+                        except discord.NotFound:
+                            pass
+
+                        await _interaction.edit_original_response(
+                            embed=get_success_embed(f"Report #{self.report_id} deleted!"),
+                            view=None
+                        )
 
                     view = View()
                     view.add_item(
-                        CallableButton(confirm_delete, style=ButtonStyle.red, label="Delete Report")
+                        CallableButton(confirm_delete, style=ButtonStyle.red, label="Delete Report", single_use=True)
                     )
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         embed=get_danger_embed(
                             "Are you sure you want to delete this report?",
                             "This action is irreversible."
@@ -96,7 +105,7 @@ class ReportManagementButton(
                     body = "## " + format_url("Open Google Form", url)
 
                     if len(body) <= 4096:
-                        await interaction.response.send_message(
+                        await interaction.followup.send(
                             embed=discord.Embed(description=body),
                             ephemeral=True
                         )
@@ -104,7 +113,7 @@ class ReportManagementButton(
                         fp = BytesIO(url.encode())
                         fp.seek(0)
                         file = discord.File(fp, "url.txt")
-                        await interaction.response.send_message(
+                        await interaction.followup.send(
                             content="The URL was too large, so it has been uploaded as a file instead.",
                             file=file,
                             ephemeral=True
