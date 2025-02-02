@@ -69,6 +69,8 @@ DISCORD_AUDIT_CHANNEL_ID = int(os.getenv('DISCORD_AUDIT_CHANNEL_ID') or 0)
 
 # How many admins each community is allowed to have (excluding the owner)
 MAX_ADMIN_LIMIT = 3
+# How many integrations each community is allowed to have
+MAX_INTEGRATION_LIMIT = 3
 
 # The URL of the report form. Must end in a "?".
 # Note that this cannot just be changed. There's a lot of constants in barricade.urls as well.

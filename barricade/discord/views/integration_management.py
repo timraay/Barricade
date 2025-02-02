@@ -9,9 +9,10 @@ from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
+from barricade.constants import MAX_INTEGRATION_LIMIT
 from barricade.crud.communities import get_admin_by_id, get_community_by_id, get_community_by_owner_id
 from barricade.db import models, session_factory
-from barricade.discord.utils import View, Modal, CallableButton, CustomException, format_url, get_success_embed, get_question_embed
+from barricade.discord.utils import CallableSelect, View, Modal, CallableButton, CustomException, format_url, get_danger_embed, get_success_embed, get_question_embed
 from barricade.enums import IntegrationType
 from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
 from barricade.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
@@ -53,20 +54,23 @@ def get_config_from_community(community: models.Community, integration_id: int):
     raise CustomException("This integration no longer exists")
 
 
-async def get_name_hyperlink(integration: Integration):
+async def get_name(integration: Integration):
     try:
-        name = esc_md(
+        return esc_md(
             await asyncio.wait_for(integration.get_instance_name(), timeout=5)
         )
     except:
-        name = "*Name unknown*"
+        return "*Name unknown*"
 
+async def get_name_hyperlink(integration: Integration):
+    name = await get_name(integration)
     return format_url(name, integration.get_instance_url())
 
 
 class IntegrationManagementView(View):
     def __init__(self, community: schemas.Community):
         super().__init__(timeout=60*30)
+        self.selected_integration_id: int | None = None
         self.community = schemas.Community.model_validate(community)
         self.comments: dict[int, str] = {}
         self.update_integrations()
@@ -93,74 +97,96 @@ class IntegrationManagementView(View):
         """Update this view and return the associated embed."""
         embed = discord.Embed()
 
-        row = 0
+        i = 0
         num_enabled = 0
 
         # Gather integration names in parallel, might be potentially slow if done sequentially
         integration_names = await asyncio.gather(*(
-            get_name_hyperlink(integration)
+            get_name(integration)
             for integration in self.integrations.values()
         ))
 
         self.clear_items()
-        for row, integration in enumerate(self.integrations.values()):
+
+        integration_select = CallableSelect(
+            self.select_integration,
+            placeholder="Select an integration...",
+            options=[],
+            row=0,
+        )
+
+        for i, integration in enumerate(self.integrations.values()):
             assert integration.config.id is not None
             enabled = integration.config.enabled
-            name = integration_names[row]
-
-            self.add_item(discord.ui.Button(
-                style=ButtonStyle.green if enabled else ButtonStyle.gray,
-                emoji=integration.meta.emoji,
-                label=f"# {row+1}.",
-                row=row,
-                disabled=True
-            ))
+            name = integration_names[i]
+            name_hyperlink = format_url(name, integration.get_instance_url())
 
             if enabled:
-                embed.add_field(
-                    name=f"{row+1}. {integration.meta.name}",
-                    value=f"{name}\n**`Enabled`** \\🟢",
-                    inline=True
-                )
+                emoji = "🟢"
+                embed_value = f"{name_hyperlink}\n**Enabled** \\🟢"
+                num_enabled += 1
+            else:
+                emoji = "🔴"
+                embed_value = f"{name_hyperlink}\n**Disabled** \\🔴"
+                if comment := self.comments.get(integration.config.id):
+                    embed_value += f"\n-# {comment}"
             
+            integration_select.add_option(
+                label=name,
+                description=integration.meta.name,
+                value=str(integration.config.id),
+                emoji=emoji,
+                default=(integration.config.id == self.selected_integration_id),
+            )
+
+            embed.add_field(
+                name=f"{i+1}. {integration.meta.name}",
+                value=embed_value,
+                inline=True
+            )
+
+        if (self.integrations):
+            self.add_item(integration_select)
+
+        integration = self.integrations.get(self.selected_integration_id) # type: ignore
+        if integration:
+            assert integration.config.id is not None
+
+            if integration.config.enabled:
                 self.add_item(CallableButton(
                     partial(self.disable_integration, integration.config.id),
                     style=ButtonStyle.blurple,
                     label="Disable",
-                    row=row
+                    row=1
                 ))
-
-                num_enabled += 1
-
             else:
-                value = f"{name}\n`Disabled` \\🔴"
-                if comment := self.comments.get(integration.config.id):
-                    value += f"\n-# {comment}"
-                embed.add_field(
-                    name=f"{row+1}. {integration.meta.name}",
-                    value=value,
-                    inline=True
-                )
-
                 self.add_item(CallableButton(
                     partial(self.enable_integration, integration.config.id),
                     style=ButtonStyle.green,
                     label="Enable",
-                    row=row
+                    row=1
                 ))
             
             self.add_item(CallableButton(
                 partial(self.configure_integration, type(integration), integration.config.id),
-                style=ButtonStyle.gray if enabled else ButtonStyle.blurple,
+                style=ButtonStyle.gray if integration.config.enabled else ButtonStyle.blurple,
                 label="Reconfigure...",
-                row=row
+                row=1
             ))
+
+            if not integration.config.enabled:
+                self.add_item(CallableButton(
+                    partial(self.delete_integration, integration.config.id),
+                    style=ButtonStyle.red,
+                    label="Delete",
+                    row=1
+                ))
 
         self.add_item(CallableButton(
             self.add_integration,
             style=ButtonStyle.gray,
             label="Add integration...",
-            row=row + 1
+            row=2
         ))
 
         embed.title = f"Connected integrations ({num_enabled})"
@@ -307,6 +333,13 @@ class IntegrationManagementView(View):
 
     # --- Button action handlers
 
+    async def select_integration(self, interaction: Interaction, values: list[str]):
+        integration_id = int(values[0])
+        integration = self.get_integration(integration_id)
+        self.selected_integration_id = integration.config.id
+
+        await self.edit(interaction=interaction)
+
     async def configure_integration(self, integration_cls: type[Integration], integration_id: int | None, interaction: Interaction):
         async with session_factory() as db:
             await self.validate_adminship(db, interaction.user.id)
@@ -369,8 +402,47 @@ class IntegrationManagementView(View):
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
         await self.edit()
+    
+    async def delete_integration(self, integration_id: int, interaction: Interaction):
+        integration = self.get_integration(integration_id)
+
+        async def confirm_delete(_interaction: Interaction):
+            await _interaction.response.defer()
+
+            async with session_factory() as db:
+                await self.validate_adminship(db, interaction.user.id)
+
+            await integration.delete()
+
+            await _interaction.edit_original_response(
+                embed=get_success_embed(f"{integration.meta.name} integration #{integration_id} deleted!"),
+                view=None
+            )
+            await self.edit()
+        
+        view = View()
+        view.add_item(
+            CallableButton(confirm_delete, style=ButtonStyle.red, label="Delete Integration", single_use=True)
+        )
+        await interaction.response.send_message(
+            embed=get_danger_embed(
+                "Are you sure you want to delete this integration?",
+                "This action is irreversible."
+            ),
+            view=view,
+            ephemeral=True,
+        )
 
     async def add_integration(self, interaction: Interaction):
+        if len(self.integrations) >= MAX_INTEGRATION_LIMIT:
+            raise CustomException(
+                "You have reached the max number of integrations!",
+                (
+                    "Only 3 integrations can be added to a community at a time."
+                    " Note that you do not need to setup an integration for each individual server."
+                    " Reach out to Bunker admins to request an exemption."
+                )
+            )
         self.clear_items()
         for integration_cls in INTEGRATION_TYPES:
             self.add_item(CallableButton(
