@@ -438,7 +438,7 @@ class IntegrationManagementView(View):
             raise CustomException(
                 "You have reached the max number of integrations!",
                 (
-                    "Only 3 integrations can be added to a community at a time."
+                    f"Only {MAX_INTEGRATION_LIMIT} integrations can be added to a community at a time."
                     " Note that you do not need to setup an integration for each individual server."
                     " Reach out to Bunker admins to request an exemption."
                 )
