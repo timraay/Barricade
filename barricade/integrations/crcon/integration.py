@@ -5,9 +5,9 @@ from typing import TypedDict
 from aiohttp import ClientResponseError
 
 from barricade import schemas
-from barricade.crud.bans import expire_bans_of_player, get_bans_by_integration
+from barricade.crud.bans import bulk_delete_bans, expire_bans_of_player, get_bans_by_integration
 from barricade.crud.communities import get_community_by_id
-from barricade.db import session_factory
+from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
@@ -94,7 +94,7 @@ class CRCONIntegration(CustomIntegration):
             except Exception as e:
                 raise IntegrationValidationError("Failed to create blacklist") from e
         else:
-            await self.validate_blacklist()
+            await self.validate_blacklist(community)
 
         return missing_optional_perms
 
@@ -177,6 +177,12 @@ class CRCONIntegration(CustomIntegration):
     
     async def create_blacklist(self, community: schemas.Community):
         self.logger.info("%r: Creating new blacklist", self)
+
+        if self.config.banlist_id:
+            self.logger.info("%s: Clearing bans from previous blacklist")
+            async with session_factory.begin() as db:
+                await bulk_delete_bans(db, models.PlayerBan.integration_id == self.config.id)
+
         resp = await self._make_request(
             method="POST",
             endpoint="/create_blacklist",
@@ -187,7 +193,7 @@ class CRCONIntegration(CustomIntegration):
         )
         self.config.banlist_id = str(resp["result"]["id"])
     
-    async def validate_blacklist(self):
+    async def validate_blacklist(self, community: schemas.Community):
         # we use get_blacklists instead of get_blacklist because the latter will also fetch
         # and return all bans which makes it very inefficient for simply checking its existence.
         resp = await self._make_request(
@@ -198,8 +204,13 @@ class CRCONIntegration(CustomIntegration):
         for blacklist in blacklists:
             if str(blacklist["id"]) == self.config.banlist_id:
                 return
-        
-        raise IntegrationValidationError("Failed to retrieve blacklist")
+            
+        # If we reach this point, the blacklist no longer exists. Create a new one.
+        self.logger.error("%r: Blacklist #%s not found! Creating new list. Data: %s", self, self.config.banlist_id, resp)
+        try:
+            await self.create_blacklist(community)
+        except Exception as e:
+            raise IntegrationValidationError("Failed to recreate blacklist") from e
 
     async def get_blacklist_bans(self):
         records: dict[str, BlacklistRecord] = {}

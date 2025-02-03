@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI, APIRouter, HTTPException, Security, status
 
 from barricade import schemas
 from barricade.crud import communities
-from barricade.exceptions import AlreadyExistsError, TooManyAdminsError, NotFoundError, AdminOwnsCommunityError
+from barricade.exceptions import AlreadyExistsError, MaxLimitReachedError, NotFoundError, AdminOwnsCommunityError
 from barricade.db import DatabaseDep, models
 from barricade.web import schemas as web_schemas
 from barricade.web.paginator import PaginatorDep, PaginatedResponse
@@ -50,7 +50,7 @@ async def create_admin(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An admin with this ID already exists"
         )
-    except TooManyAdminsError:
+    except MaxLimitReachedError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Community is at admin limit",
@@ -95,7 +95,7 @@ async def admin_join_community(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admin is already part of a community"
         )
-    except TooManyAdminsError:
+    except MaxLimitReachedError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Community is at admin limit",

@@ -9,7 +9,7 @@ from typing import Sequence
 from barricade import schemas
 from barricade.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.integrations import create_integration_config, update_integration_config
+from barricade.crud.integrations import create_integration_config, delete_integration_config, update_integration_config
 from barricade.crud.responses import get_successful_responses_without_bans
 from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
@@ -79,7 +79,8 @@ class Integration(ABC):
     
     @is_saved
     async def update(self, db: AsyncSession):
-        db_config = await update_integration_config(db, self.config) # type: ignore
+        assert isinstance(self.config, schemas.IntegrationConfig)
+        db_config = await update_integration_config(db, self.config)
         self.config = self.meta.config_cls.model_validate(db_config)
 
         # Update connection
@@ -172,6 +173,20 @@ class Integration(ABC):
                 self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
             
             raise
+
+    @is_saved
+    async def delete(self):
+        if self.config.enabled:
+            raise IntegrationDisabledError("Integration %r needs to be disabled before it can be deleted" % self)
+        
+        assert isinstance(self.config, schemas.IntegrationConfig)
+        IntegrationManager().remove(self.config.id)
+
+        async with session_factory.begin() as db:
+            await delete_integration_config(db, self.config)
+
+        self.config = schemas.IntegrationConfigParams.model_validate(self.config)
+        self.config.id = None
 
     async def _loop(self):
         self.logger.info("Starting loop for integration %r", self)    
