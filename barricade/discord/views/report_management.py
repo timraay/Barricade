@@ -12,7 +12,7 @@ from barricade.crud.responses import get_response_stats
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
-from barricade.discord.utils import CallableButton, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
+from barricade.discord.utils import CallableButton, CustomException, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
 from barricade.enums import Emojis
 from barricade.exceptions import NotFoundError
 from barricade.urls import get_report_edit_url
@@ -48,6 +48,11 @@ class ReportManagementButton(
 
         async with session_factory.begin() as db:
             db_report = await get_report_by_id(db, self.report_id, load_relations=True)
+            if not db_report:
+                raise CustomException(
+                    "Report not found!",
+                    "This report was most likely deleted already."
+                )
             report = schemas.ReportWithRelations.model_validate(db_report)
             if interaction.user.id != report.token.admin_id:
                 await assert_has_admin_role(interaction.user, report.token.community) # type: ignore
