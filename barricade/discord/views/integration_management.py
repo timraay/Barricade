@@ -133,7 +133,7 @@ class IntegrationManagementView(View):
             
             integration_select.add_option(
                 label=name,
-                description=integration.meta.name,
+                description=f"{i+1}. {integration.meta.name}",
                 value=str(integration.config.id),
                 emoji=emoji,
                 default=(integration.config.id == self.selected_integration_id),
