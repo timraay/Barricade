@@ -10,7 +10,7 @@ from barricade.discord.audit import audit_community_admin_add, audit_community_a
 from barricade.discord.communities import revoke_user_roles, update_user_roles
 from barricade.exceptions import (
     AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
-    TooManyAdminsError, NotFoundError
+    MaxLimitReachedError, NotFoundError
 )
 from barricade.logger import get_logger
 from barricade.utils import safe_create_task
@@ -353,7 +353,7 @@ async def create_new_admin(
     ------
     AlreadyExistsError
         This admin already exists
-    TooManyAdminsError
+    MaxLimitReachedError
         The community is not allowed any more admins
     NotFoundError
         No community with the given ID exists
@@ -368,7 +368,7 @@ async def create_new_admin(
             raise NotFoundError("Community with ID %s does not exist" % params.community_id)
         elif len(db_community.admins) > MAX_ADMIN_LIMIT:
             # -1 to exclude owner, +1 to include the new admin
-            raise TooManyAdminsError
+            raise MaxLimitReachedError(MAX_ADMIN_LIMIT)
 
     db_admin = models.Admin(**params.model_dump())
     db.add(db_admin)
@@ -466,7 +466,7 @@ async def admin_join_community(
     ------
     AlreadyExistsError
         The admin is already part of a community
-    TooManyAdminsError
+    MaxLimitReachedError
         The community is not allowed any more admins
     """
     if db_admin.community_id:
@@ -477,7 +477,7 @@ async def admin_join_community(
         
     if len(await db_community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
         # -1 to exclude owner, +1 to include the new admin
-        raise TooManyAdminsError
+        raise MaxLimitReachedError(MAX_ADMIN_LIMIT)
         
     db_admin.community_id = db_community.id
     if not db_community.owner_id:
@@ -552,7 +552,7 @@ async def transfer_ownership(
     await db.refresh(db_admin)
 
     community = schemas.Community.model_validate(db_community)
-    await update_user_roles(db_community.owner_id, community=community)
+    await update_user_roles(db_admin.discord_id, community=community)
     await update_user_roles(old_owner.discord_id, community=community, strict=False)
 
     safe_create_task(
@@ -576,7 +576,8 @@ async def abandon_community(
     owner = schemas.Admin.model_validate(db_owner)
 
     if len(db_community.admins) > 1:
-        raise TooManyAdminsError(
+        raise MaxLimitReachedError(
+            1,
             "All admins but the owner have to be removed first before"
             " the owner can abandon the community"
         )

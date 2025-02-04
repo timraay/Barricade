@@ -14,7 +14,7 @@ class PlayerBan(ModelBase):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     player_id: Mapped[str] = mapped_column(ForeignKey("players.id"))
-    integration_id: Mapped[int] = mapped_column(ForeignKey("integrations.id"))
+    integration_id: Mapped[int] = mapped_column(ForeignKey("integrations.id", ondelete="CASCADE"))
 
     remote_id: Mapped[str]
 

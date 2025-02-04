@@ -23,10 +23,10 @@ class AdminOwnsCommunityError(Exception):
         self.admin = admin
         super().__init__(*args)
 
-class TooManyAdminsError(Exception):
-    """Raised when attempting to exceed the upper limit of
-    admins each community is allowed to have"""
-    def __init__(self, *args):
+class MaxLimitReachedError(Exception):
+    """Raised when attempting to exceed an upper limit"""
+    def __init__(self, limit: int, *args):
+        self.limit = limit
         super().__init__(*args)
 
 class InvalidPlatformError(Exception):

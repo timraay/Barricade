@@ -1,14 +1,26 @@
-from sqlalchemy import update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
+from barricade.constants import MAX_INTEGRATION_LIMIT
 from barricade.db import models
-from barricade.exceptions import NotFoundError
+from barricade.exceptions import MaxLimitReachedError, NotFoundError
 
 async def create_integration_config(
         db: AsyncSession,
         params: schemas.IntegrationConfigParams,
 ):
+    stmt = (
+        select(func.count("*")) # type: ignore
+        .select_from(models.Integration)
+        .where(models.Integration.community_id == params.community_id)
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+    assert row is not None
+    if row[0] >= MAX_INTEGRATION_LIMIT:
+        raise MaxLimitReachedError(MAX_INTEGRATION_LIMIT)
+
     db_integration = models.Integration(
         **params.model_dump(exclude={"integration_type"}),
         integration_type=params.integration_type # may be ClassVar
@@ -38,3 +50,15 @@ async def update_integration_config(
         raise NotFoundError("Integration does not exist")
 
     return db_integration
+
+async def delete_integration_config(
+        db: AsyncSession,
+        config: schemas.IntegrationConfig,
+):
+    db_integration = await db.get(models.Integration, config.id)
+    if not db_integration:
+        raise NotFoundError("Integration does not exist")
+    
+    await db.delete(db_integration)
+    await db.flush()
+    return
