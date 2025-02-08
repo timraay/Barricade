@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import discord
 from discord import Interaction
@@ -360,17 +360,42 @@ class CommunitiesCog(commands.Cog):
 
     @app_commands.command(name="community", description="Get information about a community")
     @app_commands.guilds(DISCORD_GUILD_ID)
-    @app_commands.autocomplete(community=atcp_community)
-    @app_commands.describe(community="The name of a community")
-    async def get_community_overview(self, interaction: Interaction, community: int):
+    @app_commands.autocomplete(community_id=atcp_community)
+    @app_commands.describe(
+        community_id="The name of a community",
+        user="An admin of a community",
+    )
+    @app_commands.rename(
+        community_id="community",
+        user="admin"
+    )
+    async def get_community_overview(
+        self,
+        interaction: Interaction,
+        community_id: Optional[int] = None,
+        user: Optional[discord.Member] = None,
+    ):
         async with session_factory() as db:
-            db_community = await get_community_by_id(db, community)
-            if not db_community:
-                raise CustomException(
-                    "This community does not exist!"
-                )
-            _community = schemas.Community.model_validate(db_community)
-        view = CommunityOverviewView(_community, interaction.user) # type: ignore
+            if community_id:
+                db_community = await get_community_by_id(db, community_id)
+                if not db_community:
+                    raise CustomException("This community does not exist!")
+            elif user:
+                db_admin = await get_admin(db, user.id)
+                if not db_admin or not db_admin.community:
+                    raise CustomException("User is not an admin of a community!")
+                db_community = db_admin.community
+            else:
+                db_admin = await get_admin(db, interaction.user.id)
+                if not db_admin or not db_admin.community:
+                    raise CustomException(
+                        "You are not an admin of a community!",
+                        "Specify a community or user to look for other communities."
+                    )
+                db_community = db_admin.community
+
+            community = schemas.CommunityRef.model_validate(db_community)
+        view = CommunityOverviewView(community, interaction.user) # type: ignore
         await view.send(interaction)
 
 async def setup(bot: 'Bot'):
