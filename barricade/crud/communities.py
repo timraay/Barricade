@@ -199,6 +199,33 @@ async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_rela
     ).options(*options)
     return await db.scalar(stmt)
 
+async def get_community_by_admin_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
+    """Look up the community an admin is part of by their discord ID.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    discord_id : int
+        The discord ID of the admin
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+
+    Returns
+    -------
+    Community | None
+        The Community model, or None if it does not exist
+    """
+    if load_relations:
+        options = (Load(models.Admin).selectinload("*"),)
+    else:
+        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+
+    stmt = select(models.Community).join(models.Community.admins).where(
+        models.Admin.discord_id == discord_id
+    ).options(*options)
+    return await db.scalar(stmt)
+
 
 async def create_new_community(
         db: AsyncSession,

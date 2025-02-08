@@ -8,7 +8,7 @@ from discord.ext import commands
 from barricade import schemas
 from barricade.db import session_factory
 from barricade.constants import DISCORD_GUILD_ID
-from barricade.crud.communities import get_community_by_id
+from barricade.crud.communities import get_community_by_admin_id, get_community_by_id
 from barricade.discord.autocomplete import atcp_community
 from barricade.discord.communities import get_alerts_channel, get_confirmations_channel, get_forward_channel
 from barricade.discord.utils import CustomException, get_command_mention
@@ -16,7 +16,10 @@ from barricade.discord.views.role_confirmation import AdminRoleConfirmationView,
 from barricade.discord.views.community_overview import CommunityOverviewView
 from barricade.discord.views.integration_management import IntegrationManagementView
 from barricade.discord.views.reasons_filter import ReasonsFilterView
-from barricade.discord.views.channel_confirmation import AlertsChannelConfirmationView, ConfirmationsChannelConfirmationView, ReportChannelConfirmationView, UpdateGuildConfirmationView, assert_community_guild, get_admin
+from barricade.discord.views.channel_confirmation import (
+    AlertsChannelConfirmationView, ConfirmationsChannelConfirmationView, ReportChannelConfirmationView, UpdateGuildConfirmationView,
+    assert_community_guild, get_admin,
+)
 
 if TYPE_CHECKING:
     from barricade.discord.bot import Bot
@@ -381,21 +384,21 @@ class CommunitiesCog(commands.Cog):
                 if not db_community:
                     raise CustomException("This community does not exist!")
             elif user:
-                db_admin = await get_admin(db, user.id)
-                if not db_admin or not db_admin.community:
+                db_community = await get_community_by_admin_id(db, user.id)
+                if not db_community:
                     raise CustomException("User is not an admin of a community!")
-                db_community = db_admin.community
             else:
-                db_admin = await get_admin(db, interaction.user.id)
-                if not db_admin or not db_admin.community:
+                db_community = await get_community_by_admin_id(db, interaction.user.id)
+                if not db_community:
                     raise CustomException(
                         "You are not an admin of a community!",
                         "Specify a community or user to look for other communities."
                     )
-                db_community = db_admin.community
 
-            community = schemas.CommunityRef.model_validate(db_community)
-        view = CommunityOverviewView(community, interaction.user) # type: ignore
+            community = schemas.Community.model_validate(db_community)
+
+        assert isinstance(interaction.user, discord.Member)
+        view = CommunityOverviewView(community, interaction.user)
         await view.send(interaction)
 
 async def setup(bot: 'Bot'):
