@@ -601,7 +601,7 @@ async def abandon_community(
             db_config.enabled = False
             continue
 
-        await integration.disable()
+        await integration.disable(force=True)
 
     await revoke_user_roles(owner.discord_id)
 
