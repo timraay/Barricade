@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Load, selectinload
 
 from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
@@ -159,7 +159,7 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_token: bool = 
         The report model, or None if it does not exist
     """
     if load_relations:
-        options = (selectinload("*"),)
+        options = (Load(models.Report).selectinload("*"),)
     elif load_token:
         options = (selectinload(models.Report.players), selectinload(models.Report.token),)
     else:

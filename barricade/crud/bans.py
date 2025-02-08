@@ -4,7 +4,7 @@ from sqlalchemy import exists, select, delete, not_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import Load, selectinload, joinedload
 
 from barricade import schemas
 from barricade.crud.reports import get_report_by_id
@@ -33,7 +33,7 @@ async def get_ban_by_id(db: AsyncSession, ban_id: int, load_relations: bool = Fa
         The admin model, or None if it does not exist
     """
     if load_relations:
-        options = (selectinload("*"),)
+        options = (Load(models.PlayerBan).selectinload("*"),)
     else:
         options = ()
 
@@ -45,7 +45,7 @@ async def get_ban_by_player_and_integration(db: AsyncSession, player_id: str, in
         models.PlayerBan.integration_id == integration_id
     )
     if load_relations:
-        stmt = stmt.options(selectinload("*"))
+        stmt = stmt.options(Load(models.PlayerBan).selectinload("*"))
     return await db.scalar(stmt)
 
 async def get_bans_by_integration(db: AsyncSession, integration_id: int):
