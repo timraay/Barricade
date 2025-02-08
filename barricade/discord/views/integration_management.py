@@ -73,8 +73,8 @@ class IntegrationManagementView(View):
         self.selected_integration_id: int | None = None
         self.community = schemas.Community.model_validate(community)
         self.comments: dict[int, str] = {}
-        self.update_integrations()
         self.logger = get_logger(self.community.id)
+        self.update_integrations()
 
     def update_integrations(self):
         """Take the current community and repopulate the list
@@ -413,6 +413,12 @@ class IntegrationManagementView(View):
                 await self.validate_adminship(db, interaction.user.id)
 
             await integration.delete()
+
+            if config := next(
+                (itg for itg in self.community.integrations if itg.id == integration_id),
+                None
+            ):
+                self.community.integrations.remove(config)
 
             await _interaction.edit_original_response(
                 embed=get_success_embed(f"{integration.meta.name} integration #{integration_id} deleted!"),
