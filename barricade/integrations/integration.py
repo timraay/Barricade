@@ -180,10 +180,9 @@ class Integration(ABC):
             raise IntegrationDisabledError("Integration %r needs to be disabled before it can be deleted" % self)
         
         assert isinstance(self.config, schemas.IntegrationConfig)
-        IntegrationManager().remove(self.config.id)
-
         async with session_factory.begin() as db:
             await delete_integration_config(db, self.config)
+            IntegrationManager().remove(self.config.id)
 
         self.config = schemas.IntegrationConfigParams.model_validate(self.config)
         self.config.id = None

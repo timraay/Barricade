@@ -26,4 +26,4 @@ class Integration(ModelBase):
     organization_id: Mapped[Optional[str]]
 
     community: Mapped['Community'] = relationship(back_populates="integrations")
-    bans: Mapped[list['PlayerBan']] = relationship(back_populates="integration")
+    bans: Mapped[list['PlayerBan']] = relationship(back_populates="integration", cascade="all, delete-orphan")
