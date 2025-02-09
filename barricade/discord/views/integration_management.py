@@ -19,6 +19,7 @@ from barricade.integrations import Integration, BattlemetricsIntegration, CRCONI
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
+from barricade.utils import async_ttl_cache
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$")
@@ -62,19 +63,30 @@ async def get_name(integration: Integration):
     except:
         return "*Name unknown*"
 
-async def get_name_hyperlink(integration: Integration):
-    name = await get_name(integration)
-    return format_url(name, integration.get_instance_url())
-
-
 class IntegrationManagementView(View):
     def __init__(self, community: schemas.Community):
         super().__init__(timeout=60*30)
         self.selected_integration_id: int | None = None
         self.community = schemas.Community.model_validate(community)
+        self.integration_names: dict[int, str] = {}
         self.comments: dict[int, str] = {}
         self.logger = get_logger(self.community.id)
         self.update_integrations()
+    
+    async def get_integration_name(self, integration: Integration):
+        if not integration.config.id:
+            return await get_name(integration)
+        
+        if name := self.integration_names.get(integration.config.id):
+            return name
+        
+        name = await get_name(integration)
+        self.integration_names[integration.config.id] = name
+        return name
+
+    async def get_integration_hyperlink(self, integration: Integration):
+        name = await self.get_integration_name(integration)
+        return format_url(name, integration.get_instance_url())
 
     def update_integrations(self):
         """Take the current community and repopulate the list
@@ -102,7 +114,7 @@ class IntegrationManagementView(View):
 
         # Gather integration names in parallel, might be potentially slow if done sequentially
         integration_names = await asyncio.gather(*(
-            get_name(integration)
+            self.get_integration_name(integration)
             for integration in self.integrations.values()
         ))
 
@@ -374,7 +386,7 @@ class IntegrationManagementView(View):
             await integration.enable()
 
 
-        embed_desc = await get_name_hyperlink(integration)
+        embed_desc = await self.get_integration_hyperlink(integration)
         if missing_optional_permissions:
             embed_desc += (
                 "\n-# **Note:** Your API token is missing the following **optional** permissions:\n-# - "
@@ -395,7 +407,7 @@ class IntegrationManagementView(View):
         
         embed = get_success_embed(
             f"Disabled {integration.meta.name} integration!",
-            await get_name_hyperlink(integration)
+            await self.get_integration_hyperlink(integration)
         )
         if interaction.response.is_done():
             await interaction.response.edit_message(embed=embed, view=None)
@@ -424,6 +436,7 @@ class IntegrationManagementView(View):
                 embed=get_success_embed(f"{integration.meta.name} integration #{integration_id} deleted!"),
                 view=None
             )
+            self.update_integrations()
             await self.edit()
         
         view = View()
