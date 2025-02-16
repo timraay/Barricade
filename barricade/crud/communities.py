@@ -88,7 +88,7 @@ async def get_all_communities(db: AsyncSession, load_relations: bool = False, li
         A sequence of all communities
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
@@ -114,7 +114,7 @@ async def get_community_by_id(db: AsyncSession, community_id: int, load_relation
         The community model, or None if it does not exist
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
@@ -138,7 +138,7 @@ async def get_community_by_name(db: AsyncSession, name: str, load_relations: boo
         The community model, or None if it does not exist
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
@@ -163,7 +163,7 @@ async def get_community_by_guild_id(db: AsyncSession, guild_id: int, load_relati
         The community model, or None if it does not exist
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
@@ -190,7 +190,7 @@ async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_rela
         The Community model, or None if it does not exist
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
@@ -217,7 +217,7 @@ async def get_community_by_admin_id(db: AsyncSession, discord_id: int, load_rela
         The Community model, or None if it does not exist
     """
     if load_relations:
-        options = (Load(models.Admin).selectinload("*"),)
+        options = (Load(models.Community).selectinload("*"),)
     else:
         options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
 
