@@ -26,6 +26,7 @@ class AdminRoleConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             
             await assert_community_guild(db_admin.community, interaction)
             db_admin.community.admin_role_id = self.role.id
@@ -78,6 +79,7 @@ class AlertsRoleConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
 
             await assert_community_guild(db_admin.community, interaction)
             db_admin.community.alerts_role_id = (

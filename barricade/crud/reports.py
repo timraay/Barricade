@@ -70,6 +70,8 @@ async def create_token(
     admin = await get_admin_by_id(db, params.admin_id)
     if not admin:
         raise NotFoundError("No admin with ID %s" % params.admin_id)
+    if not admin.community:
+        raise NotFoundError("Admin with ID %s is not part of any community" % params.admin_id)
     if admin.community_id != params.community_id:
         raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
     

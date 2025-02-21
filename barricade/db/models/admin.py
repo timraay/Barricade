@@ -16,6 +16,6 @@ class Admin(ModelBase):
     name: Mapped[str]
     community_id: Mapped[Optional[int]] = mapped_column(ForeignKey("communities.id"), nullable=True)
 
-    community: Mapped['Community'] = relationship(back_populates="admins", foreign_keys=[community_id])
+    community: Mapped[Optional['Community']] = relationship(back_populates="admins", foreign_keys=[community_id])
     owned_community: Mapped[Optional['Community']] = relationship(back_populates="owner", foreign_keys="Community.owner_id")
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="admin")

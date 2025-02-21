@@ -131,7 +131,7 @@ class AdminsCog(commands.Cog):
                     )
                 )
             
-            view = AdminAddConfirmationView(owner.community, user)
+            view = AdminAddConfirmationView(owner.owned_community, user)
             await view.send(interaction)
 
     @app_commands.command(name="remove-admin", description="Remove an admin's access from the Bunker")
@@ -157,7 +157,7 @@ class AdminsCog(commands.Cog):
                 )
 
             admin = await get_admin_by_id(db, user.id)
-            if not admin or admin.community_id != owner.community_id:
+            if not admin or not admin.community or admin.community_id != owner.community_id:
                 raise CustomException(
                     f"{esc_md(user.nick or user.display_name)} is not an admin of your community!"
                 )
@@ -186,9 +186,9 @@ class AdminsCog(commands.Cog):
             admin = await get_admin_by_id(db, user.id)
 
             # Make sure admin exists
-            if not admin or admin.community_id is None:
+            if not admin or admin.community is None:
                 raise CustomException(
-                    f"{esc_md(user.nick or user.display_name)} is not part of {esc_md(owner.community.name)}!",
+                    f"{esc_md(user.nick or user.display_name)} is not part of {esc_md(owner.owned_community.name)}!",
                     (
                         f"Use {await get_command_mention(interaction.client.tree, 'add-admin', guild_only=True)}" # type: ignore
                         " first to add them to your community, before transfering ownership to them."
@@ -200,7 +200,7 @@ class AdminsCog(commands.Cog):
                     f"{esc_md(user.nick or user.display_name)} already is part of another community!"
                 )
             
-            view = OwnershipTransferConfirmationView(owner.community, user)
+            view = OwnershipTransferConfirmationView(owner.owned_community, user)
             await view.send(interaction)
 
     @app_commands.command(name="leave-community", description="Remove your admin access from the Bunker")

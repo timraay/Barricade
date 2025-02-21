@@ -26,6 +26,7 @@ class IntegrationsCog(commands.Cog):
         
         async with session_factory() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
 
             community_id = db_admin.community.id
             

@@ -65,6 +65,7 @@ class UpdateGuildConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             db_community = db_admin.community
 
             db_community.forward_guild_id = self.guild.id
@@ -117,6 +118,7 @@ class ReportChannelConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             db_community = db_admin.community
             
             await assert_community_guild(db_community, interaction)
@@ -175,6 +177,7 @@ class ConfirmationsChannelConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             db_community = db_admin.community
 
             await assert_community_guild(db_community, interaction)
@@ -238,6 +241,7 @@ class AlertsChannelConfirmationView(View):
     async def confirm(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             db_community = db_admin.community
 
             await assert_community_guild(db_community, interaction)

@@ -37,7 +37,7 @@ class EnrollView(View):
     async def send_owner_form(self, is_pc: bool, interaction: Interaction):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
-            if admin:
+            if admin and admin.community:
                 if not admin.owned_community:
                     raise CustomException(
                         f"You are already an admin for {admin.community.name}!",

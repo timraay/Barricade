@@ -60,6 +60,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             
             community_id = db_admin.community.id
             
@@ -83,6 +84,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             if channel.permissions_for(channel.guild.default_role).read_messages:
@@ -101,6 +103,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             view = ReportChannelConfirmationView(None)
@@ -111,6 +114,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             if db_admin.community.forward_guild_id and db_admin.community.forward_guild_id != channel.guild.id:
@@ -135,6 +139,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             view = ConfirmationsChannelConfirmationView(None)
@@ -145,6 +150,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             if db_admin.community.forward_guild_id and db_admin.community.forward_guild_id != channel.guild.id:
@@ -169,6 +175,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             view = AlertsChannelConfirmationView(None)
@@ -179,6 +186,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             if db_admin.community.forward_guild_id:
@@ -197,6 +205,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             if db_admin.community.forward_guild_id:
@@ -215,6 +224,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             view = AlertsRoleConfirmationView(None)
@@ -225,6 +235,7 @@ class CommunitiesCog(commands.Cog):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
             
             community = schemas.CommunityRef.model_validate(db_admin.community)
