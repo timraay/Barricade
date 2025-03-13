@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import is_player_reported
-from barricade.crud.responses import get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
+from barricade.crud.responses import get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
@@ -109,15 +109,26 @@ async def delete_public_report_message(report: schemas.ReportWithRelations):
 
 @add_hook(EventHooks.report_delete)
 async def delete_private_report_messages(report: schemas.ReportWithRelations):
-    for message_data in report.messages:
-        try:
-            message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
-            await message.delete()
-        except discord.HTTPException:
-            pass
-        except:
-            logger = get_logger(message_data.community_id)
-            logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
+    async with session_factory() as db:
+        for message_data in report.messages:
+            try:
+                db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
+                message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
+                if any(db_response.banned for db_response in db_responses):
+                    await message.edit(view=None)
+                    await message.reply(
+                        embed=discord.Embed(
+                            description="-# **This report was deleted!** One or more bans have been revoked as a result.",
+                            color=discord.Colour.red()
+                        )
+                    )
+                else:
+                    await message.delete()
+            except discord.HTTPException:
+                pass
+            except:
+                logger = get_logger(message_data.community_id)
+                logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
 
 # Integration NEW_REPORT hook
