@@ -3,6 +3,7 @@ from barricade import schemas
 from barricade.constants import DISCORD_ADMIN_ROLE_ID, DISCORD_OWNER_ROLE_ID, DISCORD_PC_ROLE_ID, DISCORD_CONSOLE_ROLE_ID
 from barricade.discord.bot import bot
 from barricade.discord.utils import CustomException
+from barricade.logger import get_logger
 from barricade.utils import safe_create_task
 
 def get_admin_roles() -> tuple[discord.Role, discord.Role, discord.Role, discord.Role]:
@@ -130,7 +131,8 @@ def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
     safe_create_task(
         channel.send(*args, **kwargs),
         err_msg="Failed to send message to %r" % community,
-        name="communitymessage_%s" % community.id
+        name="communitymessage_%s" % community.id,
+        logger=get_logger(community.id),
     )
 
 
