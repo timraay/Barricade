@@ -1,15 +1,16 @@
 import discord
 from discord.utils import escape_markdown as esc_md
+import logging
 
 from barricade import schemas
-from barricade.constants import DISCORD_CONSOLE_REPORTS_CHANNEL_ID, DISCORD_PC_REPORTS_CHANNEL_ID
+from barricade.constants import DISCORD_CONSOLE_REPORTS_CHANNEL_ID, DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_DISCORD_CHANNEL_ID
 from barricade.discord.bot import bot
 from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
 from barricade.enums import Emojis, Platform, ReportReasonFlag
 from barricade.utils import get_player_id_type, PlayerIDType
 
-def get_report_channel(platform: Platform):
+def get_report_channel(platform: Platform) -> discord.TextChannel:
     if platform == Platform.PC:
         channel_id = DISCORD_PC_REPORTS_CHANNEL_ID
     elif platform == Platform.CONSOLE:
@@ -22,6 +23,18 @@ def get_report_channel(platform: Platform):
         raise RuntimeError("%s report channel could not be found" % platform.name)
     elif not isinstance(channel, discord.TextChannel):
         raise RuntimeError("%s report channel is not a text channel" % platform.name)
+    return channel
+
+def get_t17_support_forward_channel() -> discord.TextChannel | None:
+    if not T17_SUPPORT_DISCORD_CHANNEL_ID:
+        return None
+
+    channel = bot.primary_guild.get_channel(T17_SUPPORT_DISCORD_CHANNEL_ID)
+    if not channel:
+        logging.warning("T17 Support forward channel could not be found")
+    elif not isinstance(channel, discord.TextChannel):
+        logging.error("T17 Support forward channel is not a text channel")
+        channel = None
     return channel
 
 async def get_report_embed(

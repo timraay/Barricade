@@ -7,10 +7,12 @@ class PlayerIDType(str, Enum):
     UUID = "hllWindowsID"
 
 class Platform(str, Enum):
+    # Careful when renaming, used by PSQL
     PC = "pc"
     CONSOLE = "console"
 
 class ReportRejectReason(StrEnum):
+    # Careful when renaming, used by PSQL
     INSUFFICIENT = "Insufficient"
     INCONCLUSIVE = "Inconclusive"
 
@@ -119,3 +121,10 @@ class Emojis(StrEnum):
     UNBANNED = "<:unbanned:1283018344051511316>"
     SILHOUETTE = "<:silhouette:1283389193724366960>"
     REFRESH = "<:refresh:1283790096461594655>"
+
+class ReportMessageType(Enum):
+    # Careful when renaming, used by PSQL
+    PUBLIC = auto()
+    MANAGE = auto()
+    REVIEW = auto()
+    T17_SUPPORT = auto()

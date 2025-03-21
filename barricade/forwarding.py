@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Sequence
 from cachetools import TTLCache
 import discord
@@ -6,16 +7,18 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
+from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.reports import is_player_reported
-from barricade.crud.responses import get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_response, get_response_stats
+from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, is_player_reported
+from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_response
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
-from barricade.discord.reports import get_alert_embed, get_report_channel, get_report_embed
+from barricade.discord.reports import get_alert_embed, get_report_channel, get_report_embed, get_t17_support_forward_channel
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
-from barricade.enums import Platform
+from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
+from barricade.enums import Platform, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -85,17 +88,25 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
         for message_data in report.messages:
             try:
                 # Get new message content
-                if message_data.community_id == report.token.community_id:
+                if message_data.message_type == ReportMessageType.MANAGE:
                     await send_or_edit_report_management_message(report)
-                else:
+                elif message_data.message_type == ReportMessageType.REVIEW:
+                    if not message_data.community_id:
+                        logging.error("Report message has type REVIEW but is missing community id")
+                        continue
+
                     # Create pending responses
                     db_community = await get_community_by_id(db, message_data.community_id)
                     community = schemas.Community.model_validate(db_community)
 
                     responses = await get_pending_responses(db, community, report.players)
                     await send_or_edit_report_review_message(report, responses, community)
+                elif message_data.message_type == ReportMessageType.T17_SUPPORT:
+                    await send_or_edit_t17_support_report_review_message(report)
+                else:
+                    raise ValueError("Unknown message type \"%s\"" % message_data.message_type)
             except:
-                logger = get_logger(message_data.community_id)
+                logger = get_logger(message_data.community_id) if message_data.community_id else logging
                 logger.exception("Unexpected error occurred while attempting to edit %r", message_data)
 
 @add_hook(EventHooks.report_delete)
@@ -112,22 +123,38 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
     async with session_factory() as db:
         for message_data in report.messages:
             try:
-                db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
                 message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
-                if any(db_response.banned for db_response in db_responses):
+
+                # Send warning if community had banned this player
+                if message_data.message_type == ReportMessageType.REVIEW and message_data.community_id:
+                    db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
+                    if any(db_response.banned for db_response in db_responses):
+                        await message.edit(view=None)
+                        await message.reply(
+                            embed=discord.Embed(
+                                description="-# **This report was deleted!** One or more bans have been revoked as a result.",
+                                color=discord.Colour.red()
+                            )
+                        )
+                        continue
+                
+                # Send warning if T17 Support was notified about this player
+                elif message_data.message_type == ReportMessageType.T17_SUPPORT:
                     await message.edit(view=None)
                     await message.reply(
                         embed=discord.Embed(
-                            description="-# **This report was deleted!** One or more bans have been revoked as a result.",
+                            description="-# **This report was deleted!** If this user was game banned, consider revoking it.",
                             color=discord.Colour.red()
                         )
                     )
-                else:
-                    await message.delete()
+                    continue
+                
+                # Otherwise: Simply delete the report
+                await message.delete()
             except discord.HTTPException:
                 pass
             except:
-                logger = get_logger(message_data.community_id)
+                logger = get_logger(message_data.community_id) if message_data.community_id else logging
                 logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
 
@@ -206,9 +233,7 @@ async def send_alert_to_community_for_unreviewed_players(community_id: int, play
                     db_community = await get_community_by_id(db, community.id)
                     responses = await get_pending_responses(db, community, report.players)
 
-                    stats: dict[int, schemas.ResponseStats] = {}
-                    for player in report.players:
-                        stats[player.id] = await get_response_stats(db, player)
+                    stats = await bulk_get_response_stats(db, report.players)
 
                     if get_forward_channel(community):
                         message = await send_or_edit_report_review_message(report, responses, community, stats=stats)
@@ -250,6 +275,30 @@ async def send_alert_to_community_for_unreviewed_players(community_id: int, play
                     allowed_mentions=discord.AllowedMentions(roles=True),
                 )
 
+# Forward to T17 Support
+
+def should_forward_to_staff(report: schemas.ReportWithToken, stats: schemas.ResponseStats) -> bool:
+    num_responses = stats.num_banned + stats.num_rejected
+    return (
+        num_responses >= T17_SUPPORT_NUM_REQUIRED_RESPONSES
+        and stats.num_rejected <= T17_SUPPORT_NUM_ALLOWED_REJECTS
+        and (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) != 0
+    )
+
+if T17_SUPPORT_DISCORD_CHANNEL_ID:
+    @add_hook(EventHooks.player_ban)
+    async def send_cheating_report_to_staff(response: schemas.ResponseWithToken):
+        channel = get_t17_support_forward_channel()
+        if not channel:
+            return
+
+        async with session_factory() as db:
+            db_report = await get_report_by_id(db, response.player_report.report_id, load_token=True)
+            report = schemas.ReportWithToken.model_validate(db_report)
+            stats = await bulk_get_response_stats(db, report.players)
+
+            await send_or_edit_t17_support_report_review_message(report, stats=stats)
+
 
 # Utility methods
 
@@ -271,6 +320,7 @@ async def send_or_edit_report_review_message(
             db,
             report=report,
             community=community,
+            message_type=ReportMessageType.REVIEW,
             channel=get_forward_channel(community),
             embed=embed,
             view=view,
@@ -292,6 +342,7 @@ async def send_or_edit_report_management_message(
             db,
             report=report,
             community=community,
+            message_type=ReportMessageType.MANAGE,
             channel=get_confirmations_channel(community),
             embed=embed,
             view=view,
@@ -300,10 +351,28 @@ async def send_or_edit_report_management_message(
             allowed_mentions=discord.AllowedMentions(users=[user])
         )
 
+async def send_or_edit_t17_support_report_review_message(
+    report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
+):
+    async with session_factory.begin() as db:
+        view = T17SupportPlayerReviewView(report)
+        embed = await T17SupportPlayerReviewView.get_embed(report, stats=stats)
+        return await send_or_edit_message(
+            db,
+            report=report,
+            community=None,
+            message_type=ReportMessageType.T17_SUPPORT,
+            channel=get_t17_support_forward_channel(),
+            embed=embed,
+            view=view,
+        )
+
 async def send_or_edit_message(
     db: AsyncSession,
     report: schemas.ReportRef,
-    community: schemas.CommunityRef,
+    community: schemas.CommunityRef | None,
+    message_type: ReportMessageType,
     channel: discord.TextChannel | None,
     embed: discord.Embed,
     view: discord.ui.View,
@@ -311,11 +380,22 @@ async def send_or_edit_message(
     admin: schemas.AdminRef | None = None,
     allowed_mentions: discord.AllowedMentions = discord.AllowedMentions.none()
 ):
-    logger = get_logger(community.id)
+    if community:
+        logger = get_logger(community.id)
+        community_id = community.id
+    else:
+        logger = logging
+        community_id = None
 
-    db_message = await db.get(models.ReportMessage, (report.id, community.id))
+    db_message = await get_report_message_by_community_id(db, report.id, community_id)
     # If this was already sent before, try editing first
     if db_message:
+        if db_message.message_type != message_type:
+            logger.warning(
+                'Found existing message %s with type %s but expected %s',
+                db_message.message_id, db_message.message_type, message_type,
+            )
+
         # Get existing message
         message = bot.get_partial_message(db_message.channel_id, db_message.message_id)
         try:
@@ -334,12 +414,12 @@ async def send_or_edit_message(
         except discord.HTTPException as e:
             logger.error(
                 "Failed to send message to %s/%s. %s: %s",
-                community.forward_guild_id, community.forward_channel_id, type(e).__name__, e
+                channel.guild.id, channel.id, type(e).__name__, e
             )
     else:
-        logger.warn(
+        logger.warning(
             "Forward channel %s/%s could not be found",
-            community.forward_guild_id, community.forward_channel_id
+            (community.forward_guild_id, community.forward_channel_id) if community else (None, None)
         )
 
     if admin and not message:
@@ -354,9 +434,10 @@ async def send_or_edit_message(
         # Add message to database
         message_data = schemas.ReportMessageCreateParams(
             report_id=report.id,
-            community_id=community.id,
+            community_id=community_id,
             channel_id=message.channel.id,
             message_id=message.id,
+            message_type=message_type,
         )
 
         db_message = models.ReportMessage(**message_data.model_dump())

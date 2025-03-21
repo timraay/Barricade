@@ -1,3 +1,4 @@
+from typing import Sequence
 from sqlalchemy import exists, not_, select, func, or_
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,7 +98,7 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef):
+async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef) -> schemas.ResponseStats:
     stmt = select(
         models.PlayerReportResponse.banned,
         models.PlayerReportResponse.reject_reason,
@@ -128,6 +129,12 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
                 data.reject_reasons[result.reject_reason] += result.amount
 
     return data
+
+async def bulk_get_response_stats(db: AsyncSession, players: Sequence[schemas.PlayerReportRef]) -> dict[int, schemas.ResponseStats]:
+    stats: dict[int, schemas.ResponseStats] = {}
+    for player in players:
+        stats[player.id] = await get_response_stats(db, player)
+    return stats
 
 async def get_pending_responses(
         db: AsyncSession,
