@@ -367,12 +367,17 @@ class PlayerReviewView(View):
             else:
                 button_style = ButtonStyle.gray
 
+            if reason == ReportRejectReason.INCONCLUSIVE:
+                disabled = response.banned is False
+            else:
+                disabled = response.banned is False and response.reject_reason != ReportRejectReason.INCONCLUSIVE
+
             self.add_item(
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
                         label=label,
                         style=button_style,
-                        disabled=response.banned is False,
+                        disabled=disabled,
                         row=1
                     ),
                     command="reject",
