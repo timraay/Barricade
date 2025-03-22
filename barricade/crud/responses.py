@@ -171,13 +171,17 @@ async def get_pending_responses(
     
     return list(responses.values())
 
-async def get_reports_for_player_with_no_community_response(
+async def get_reports_for_player_with_no_community_review(
         db: AsyncSession,
         player_id: str,
         community_id: int,
         reasons_filter: ReportReasonFlag | None = None
 ):
-    """Get all reports of a specific player which the given community has not yet responded to.
+    """Get all reports of a specific player which the given community has not yet reviewed.
+
+    "Reviewed" in this particular context means one of two things:
+    - The community has not yet responded to the report
+    - The community has responded with "Lacks evidence" (`ReportRejectReason.INCONCLUSIVE`)
 
     Parameters
     ----------
@@ -197,20 +201,24 @@ async def get_reports_for_player_with_no_community_response(
         A sequence of report models
     """
     options = (selectinload(models.Report.players), selectinload(models.Report.token))
-    
     stmt = select(models.Report) \
         .join(models.Report.players) \
         .join(models.Report.token) \
         .where(
             models.PlayerReport.player_id == player_id,
             models.ReportToken.community_id != community_id,
-            not_(
-                select(models.PlayerReportResponse)
-                    .where(
+            or_(
+                not_(
+                    exists().where(
                         models.PlayerReportResponse.community_id == community_id,
                         models.PlayerReportResponse.pr_id == models.PlayerReport.id
                     )
-                    .exists()
+                ),
+                exists().where(
+                    models.PlayerReportResponse.community_id == community_id,
+                    models.PlayerReportResponse.pr_id == models.PlayerReport.id,
+                    models.PlayerReportResponse.reject_reason == ReportRejectReason.INCONCLUSIVE,
+                )
             )
         ) \
         .options(*options)

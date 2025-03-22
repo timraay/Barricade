@@ -10,7 +10,7 @@ from barricade import schemas
 from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, is_player_reported
-from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_response
+from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_review
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
@@ -217,7 +217,7 @@ async def send_alert_to_community_for_unreviewed_players(community_id: int, play
 
             for player_id in reported_player_ids:
                 # For each player, get all reports that this community has not yet responded to
-                db_reports = await get_reports_for_player_with_no_community_response(
+                db_reports = await get_reports_for_player_with_no_community_review(
                     db, player_id, community_id, community.reasons_filter
                 )
 
