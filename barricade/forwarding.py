@@ -277,17 +277,23 @@ async def send_alert_to_community_for_unreviewed_players(community_id: int, play
 
 # Forward to T17 Support
 
-def should_forward_to_staff(report: schemas.ReportWithToken, stats: schemas.ResponseStats) -> bool:
-    num_responses = stats.num_banned + stats.num_rejected
-    return (
-        num_responses >= T17_SUPPORT_NUM_REQUIRED_RESPONSES
-        and stats.num_rejected <= T17_SUPPORT_NUM_ALLOWED_REJECTS
-        and (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) != 0
+def should_forward_to_staff(report: schemas.ReportWithToken, stats: dict[int, schemas.ResponseStats]) -> bool:
+    if (
+        (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) != 0
         and (
             not T17_SUPPORT_CUTOFF_DATE
             or report.created_at >= T17_SUPPORT_CUTOFF_DATE
         )
-    )
+    ):
+        for stat in stats.values():
+            num_responses = stat.num_banned + stat.num_rejected
+            if (
+                num_responses >= T17_SUPPORT_NUM_REQUIRED_RESPONSES
+                and stat.num_rejected <= T17_SUPPORT_NUM_ALLOWED_REJECTS
+            ):
+                return True
+    
+    return False
 
 if T17_SUPPORT_DISCORD_CHANNEL_ID:
     @add_hook(EventHooks.player_ban)
@@ -301,7 +307,8 @@ if T17_SUPPORT_DISCORD_CHANNEL_ID:
             report = schemas.ReportWithToken.model_validate(db_report)
             stats = await bulk_get_response_stats(db, report.players)
 
-            await send_or_edit_t17_support_report_review_message(report, stats=stats)
+            if should_forward_to_staff(report, stats):
+                await send_or_edit_t17_support_report_review_message(report, stats=stats)
 
 
 # Utility methods
