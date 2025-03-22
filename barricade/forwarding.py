@@ -7,7 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
+from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, is_player_reported
 from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_review
@@ -283,6 +283,10 @@ def should_forward_to_staff(report: schemas.ReportWithToken, stats: schemas.Resp
         num_responses >= T17_SUPPORT_NUM_REQUIRED_RESPONSES
         and stats.num_rejected <= T17_SUPPORT_NUM_ALLOWED_REJECTS
         and (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) != 0
+        and (
+            not T17_SUPPORT_CUTOFF_DATE
+            or report.created_at >= T17_SUPPORT_CUTOFF_DATE
+        )
     )
 
 if T17_SUPPORT_DISCORD_CHANNEL_ID:
