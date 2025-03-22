@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_valid
 from typing import Literal, Optional
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
-from barricade.enums import Platform, ReportRejectReason, IntegrationType, ReportReasonFlag
+from barricade.enums import Platform, ReportMessageType, ReportRejectReason, IntegrationType, ReportReasonFlag
 
 # Simple config to be used for ORM objects
 class _ModelFromAttributes(BaseModel):
@@ -141,9 +141,10 @@ class _PlayerBanBase(BaseModel):
 
 class _ReportMessageBase(BaseModel):
     report_id: int
-    community_id: int
+    community_id: int | None
     channel_id: int
     message_id: int
+    message_type: ReportMessageType
     
     @field_serializer('message_id', when_used='json-unless-none')
     def convert_large_int_to_str(value: int): # type: ignore

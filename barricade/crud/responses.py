@@ -1,3 +1,4 @@
+from typing import Sequence
 from sqlalchemy import exists, not_, select, func, or_
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,7 +98,7 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef):
+async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef) -> schemas.ResponseStats:
     stmt = select(
         models.PlayerReportResponse.banned,
         models.PlayerReportResponse.reject_reason,
@@ -128,6 +129,12 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
                 data.reject_reasons[result.reject_reason] += result.amount
 
     return data
+
+async def bulk_get_response_stats(db: AsyncSession, players: Sequence[schemas.PlayerReportRef]) -> dict[int, schemas.ResponseStats]:
+    stats: dict[int, schemas.ResponseStats] = {}
+    for player in players:
+        stats[player.id] = await get_response_stats(db, player)
+    return stats
 
 async def get_pending_responses(
         db: AsyncSession,
@@ -164,13 +171,17 @@ async def get_pending_responses(
     
     return list(responses.values())
 
-async def get_reports_for_player_with_no_community_response(
+async def get_reports_for_player_with_no_community_review(
         db: AsyncSession,
         player_id: str,
         community_id: int,
         reasons_filter: ReportReasonFlag | None = None
 ):
-    """Get all reports of a specific player which the given community has not yet responded to.
+    """Get all reports of a specific player which the given community has not yet reviewed.
+
+    "Reviewed" in this particular context means one of two things:
+    - The community has not yet responded to the report
+    - The community has responded with "Lacks evidence" (`ReportRejectReason.INCONCLUSIVE`)
 
     Parameters
     ----------
@@ -190,20 +201,24 @@ async def get_reports_for_player_with_no_community_response(
         A sequence of report models
     """
     options = (selectinload(models.Report.players), selectinload(models.Report.token))
-    
     stmt = select(models.Report) \
         .join(models.Report.players) \
         .join(models.Report.token) \
         .where(
             models.PlayerReport.player_id == player_id,
             models.ReportToken.community_id != community_id,
-            not_(
-                select(models.PlayerReportResponse)
-                    .where(
+            or_(
+                not_(
+                    exists().where(
                         models.PlayerReportResponse.community_id == community_id,
                         models.PlayerReportResponse.pr_id == models.PlayerReport.id
                     )
-                    .exists()
+                ),
+                exists().where(
+                    models.PlayerReportResponse.community_id == community_id,
+                    models.PlayerReportResponse.pr_id == models.PlayerReport.id,
+                    models.PlayerReportResponse.reject_reason == ReportRejectReason.INCONCLUSIVE,
+                )
             )
         ) \
         .options(*options)

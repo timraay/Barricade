@@ -5,9 +5,8 @@ from discord import Embed, Interaction
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.crud.responses import get_community_responses_to_report, get_response_stats
+from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report
 from barricade.db import session_factory
-from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import View, CallableButton
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.discord.views.player_review import PlayerReviewView
@@ -131,9 +130,8 @@ class ReportPaginator(View):
             raise
 
     async def fetch_response_stats(self, db: AsyncSession, *player_reports: schemas.PlayerReportRef):
-        for pr in player_reports:
-            stats = await get_response_stats(db, pr)
-            self.stats[pr.id] = stats
+        stats = await bulk_get_response_stats(db, player_reports)
+        self.stats.update(stats)
 
     def get_pending_responses(self, responses: list[schemas.Response]):
         pending = {

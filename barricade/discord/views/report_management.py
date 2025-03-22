@@ -8,7 +8,7 @@ from discord import ButtonStyle, Interaction
 from barricade import schemas
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.crud.reports import delete_report, get_report_by_id
-from barricade.crud.responses import get_response_stats
+from barricade.crud.responses import bulk_get_response_stats
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
@@ -59,10 +59,7 @@ class ReportManagementButton(
 
             match self.command:
                 case "refresh":
-                    stats: dict[int, schemas.ResponseStats] = {}
-                    for player in report.players:
-                        stats[player.id] = await get_response_stats(db, player)
-
+                    stats = await bulk_get_response_stats(db, report.players)
                     view = ReportManagementView(report)
                     embed = await view.get_embed(report, stats=stats)
                     await interaction.edit_original_response(embed=embed, view=view)

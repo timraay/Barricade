@@ -408,3 +408,29 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
         created = True
     
     return db_player, created
+
+async def get_report_message_by_community_id(db: AsyncSession, report_id: int, community_id: int | None):
+    """Look up a report by its ID.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    report_id : int
+        The ID of the report
+    load_token : bool, optional
+        Whether to also load the token relational property, ignored if `load_relations`
+        is True, by default False
+    load_relations : bool, optional
+        Whether to also load relational properties, by default False
+
+    Returns
+    -------
+    Report | None
+        The report model, or None if it does not exist
+    """
+    stmt = select(models.ReportMessage).where(
+        models.ReportMessage.report_id == report_id,
+        models.ReportMessage.community_id == community_id,
+    )
+    return await db.scalar(stmt)

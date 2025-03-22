@@ -50,6 +50,7 @@ class Bot(commands.Bot):
         from barricade.discord.views.submit_report import GetSubmissionURLView
         from barricade.discord.views.player_review import PlayerReportResponseButton, PlayerReportSelect
         from barricade.discord.views.report_management import ReportManagementButton
+        from barricade.discord.views.t17_support_player_review import T17SupportPlayerReportResponseButton
         
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
@@ -59,6 +60,7 @@ class Bot(commands.Bot):
             PlayerReportResponseButton,
             PlayerReportSelect,
             ReportManagementButton,
+            T17SupportPlayerReportResponseButton,
         )
 
     @property
