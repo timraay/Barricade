@@ -421,10 +421,10 @@ async def send_or_edit_message(
                 channel.guild.id, channel.id, type(e).__name__, e
             )
     else:
-        logger.warning(
-            "Forward channel %s/%s could not be found",
-            (community.forward_guild_id, community.forward_channel_id) if community else (None, None)
-        )
+        if community:
+            logger.warning("Forward channel %s/%s could not be found", community.forward_guild_id, community.forward_channel_id)
+        else:
+            logger.warning("Forward channel could not be found")
 
     if admin and not message:
         # Could not send message to channel, try sending directly to admin instead
