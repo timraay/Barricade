@@ -8,6 +8,7 @@ class ServerRequestType(Enum):
     error = "error"
     SERVER_UPDATE = "SERVER_UPDATE"
     ACTIVITY = "ACTIVITY"
+    RESOURCE_UPDATED = "RESOURCE_UPDATED"
 
 class ClientRequestType(Enum):
     auth = "auth"
