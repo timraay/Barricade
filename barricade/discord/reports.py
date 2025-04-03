@@ -73,7 +73,7 @@ async def get_report_embed(
                 name = f"**`{i}.`**{Emojis.HIGHLIGHT_GREEN}{esc_md(player.player_name)}"
 
         if report.token.platform == Platform.PC:
-            value = f"{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
+            value = f"{Emojis.STEAM if is_steam else Emojis.EPIC_XBOX} *`{player.player_id}`*"
         else:
             value = f"*`{player.player_id}`*"
 
@@ -132,7 +132,7 @@ def get_alert_embed(
     player_id_type = get_player_id_type(player.player_id)
     is_steam = player_id_type == PlayerIDType.STEAM_64_ID
 
-    title = f"{player.player_name}\n{Emojis.STEAM if is_steam else Emojis.XBOX} *`{player.player_id}`*"
+    title = f"{player.player_name}\n{Emojis.STEAM if is_steam else Emojis.EPIC_XBOX} *`{player.player_id}`*"
     description = []
 
     if player_id_type == PlayerIDType.STEAM_64_ID:

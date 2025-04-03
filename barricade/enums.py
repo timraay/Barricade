@@ -107,6 +107,7 @@ class ReportReasonFlag(IntFlag):
 class Emojis(StrEnum):
     STEAM = "<:steam:1275098550182740101>"
     XBOX = "<:xbox:1275098583590240256>"
+    EPIC_XBOX = "<:epic_xbox:1357314108415807528>"
     TICK_YES = "<:tick_yes:1275098575356952689>"
     TICK_MAYBE = "<:tick_maybe:1275098558567022633>"
     TICK_NO = "<:tick_no:1275098566515363911>"
