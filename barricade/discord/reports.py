@@ -101,7 +101,7 @@ async def get_report_embed(
 
                 for reject_reason, amount in sorted(reject_reasons, key=lambda x: x[1], reverse=True):
                     if amount > 0:
-                        value += f"\n-# **   **↳ {Emojis.TICK_NO} {amount}x **{reject_reason}**"
+                        value += f"\n-# {Emojis.ARROW_DOWN_RIGHT}{Emojis.TICK_NO} {amount}x **{reject_reason}**"
         
         if response and response.responded_by:
             value += f"\n-# Responded by **{esc_md(response.responded_by)}** {Emojis.BANNED if response.banned else Emojis.UNBANNED}"

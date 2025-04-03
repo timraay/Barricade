@@ -122,6 +122,7 @@ class Emojis(StrEnum):
     UNBANNED = "<:unbanned:1283018344051511316>"
     SILHOUETTE = "<:silhouette:1283389193724366960>"
     REFRESH = "<:refresh:1283790096461594655>"
+    ARROW_DOWN_RIGHT = "<:arrow_down_right:1357406683801849996>"
 
 class ReportMessageType(Enum):
     # Careful when renaming, used by PSQL
