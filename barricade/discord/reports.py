@@ -91,6 +91,17 @@ async def get_report_embed(
                     emoji = "💀"
 
                 value += f"\n{emoji} Banned by **{rate:.0%}** ({stat.num_banned}/{num_responses})"
+
+                reject_reasons = [
+                    (reject_reason.value, amount)
+                    for reject_reason, amount
+                    in stat.reject_reasons.items()
+                ]
+                reject_reasons.append(("Unbanned", stat.num_rejected - sum(stat.reject_reasons.values())))
+
+                for reject_reason, amount in sorted(reject_reasons, key=lambda x: x[1], reverse=True):
+                    if amount > 0:
+                        value += f"\n-# **   **↳ {Emojis.TICK_NO} {amount}x **{reject_reason}**"
         
         if response and response.responded_by:
             value += f"\n-# Responded by **{esc_md(response.responded_by)}** {Emojis.BANNED if response.banned else Emojis.UNBANNED}"

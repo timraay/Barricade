@@ -356,10 +356,7 @@ class PlayerReviewView(View):
             )
 
 
-        for reason, label in (
-            (ReportRejectReason.INCONCLUSIVE, "Lacks evidence"),
-            (ReportRejectReason.INSUFFICIENT, "Not severe enough"),
-        ):
+        for reason in ReportRejectReason:
             if response.banned is None:
                 button_style = ButtonStyle.blurple
             elif response.reject_reason == reason:
@@ -375,7 +372,7 @@ class PlayerReviewView(View):
             self.add_item(
                 PlayerReportResponseButton(
                     button=discord.ui.Button(
-                        label=label,
+                        label=reason.value,
                         style=button_style,
                         disabled=disabled,
                         row=1

@@ -13,8 +13,8 @@ class Platform(str, Enum):
 
 class ReportRejectReason(StrEnum):
     # Careful when renaming, used by PSQL
-    INSUFFICIENT = "Insufficient"
-    INCONCLUSIVE = "Inconclusive"
+    INSUFFICIENT = "Lacks evidence"
+    INCONCLUSIVE = "Not severe enough"
 
 class IntegrationType(StrEnum):
     BATTLEMETRICS = "battlemetrics"
