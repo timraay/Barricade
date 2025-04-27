@@ -1,22 +1,26 @@
+import copy
 import functools
 import random
 import re
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import TYPE_CHECKING, Any, Callable, Concatenate, Coroutine, Optional
 
 import discord
-from discord import ButtonStyle, Interaction
+from discord import ui, ButtonStyle, Interaction
 
 from barricade import schemas
 from barricade.constants import T17_SUPPORT_CONFIRMATION_PROMPT_CHANCE, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import bulk_get_response_stats, get_pending_responses, set_report_response
+from barricade.crud.watchlists import create_watchlist, filter_watchlisted_player_ids, get_watchlist_by_player_and_community
 from barricade.db import models, session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.utils import CallableButton, CustomException, View, get_command_mention, handle_error_wrap
 from barricade.discord.reports import get_report_embed
 from barricade.enums import Emojis, ReportRejectReason
+from barricade.exceptions import AlreadyExistsError
 from barricade.logger import get_logger
 
 def random_ask_confirmation(func: Callable[Concatenate['PlayerReportResponseButton', Interaction, bool, ...], Coroutine[Any, Any, None]]
@@ -98,6 +102,9 @@ class PlayerReportResponseButton(
                 await self.set_response(interaction, banned=True)
 
             case "unban":
+                await self.set_response(interaction, banned=False)
+
+            case "watchlist":
                 await self.set_response(interaction, banned=False)
 
             case _:
@@ -203,9 +210,19 @@ class PlayerReportResponseButton(
                 report = schemas.ReportWithToken.model_validate(db_report)
                 stats = await bulk_get_response_stats(db, report.players)
 
+                watchlisted_player_ids = await filter_watchlisted_player_ids(
+                    db,
+                    player_ids=[player.player_id for player in report.players],
+                    community_id=self.community_id,
+                )
+
             selected = list(responses.keys()).index(prr.pr_id)
             responses = list(responses.values())
-            view = PlayerReviewView(responses=responses, selected=selected)
+            view = PlayerReviewView(
+                responses=responses,
+                watchlisted_player_ids=watchlisted_player_ids,
+                selected=selected,
+            )
             embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
 
             if _original_interaction:
@@ -227,15 +244,120 @@ class PlayerReportResponseButton(
             community = schemas.Community.model_validate(db_community)
             stats = await bulk_get_response_stats(db, report.players)
             responses = await get_pending_responses(db, community, report.players)
+            
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=self.community_id,
+            )
         
         # try:
         #     selected = [response.pr_id for response in responses].index(self.pr_id)
         # except ValueError:
         #     selected = 0
 
-        view = PlayerReviewView(responses=responses)
+        view = PlayerReviewView(responses, watchlisted_player_ids)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
+
+class PlayerToggleWatchlistButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"prr:watchlist:(?P<community_id>\d+):(?P<player_id>.+):(?P<is_watchlisted>0|1)"
+):
+    def __init__(
+        self,
+        button: discord.ui.Button,
+        community_id: int,
+        player_id: str,
+        is_watchlisted: bool,
+    ):
+        self.community_id = community_id
+        self.player_id = player_id
+        self.is_watchlisted = is_watchlisted
+
+        button.custom_id = f"prr:watchlist:{self.community_id}:{self.player_id}:{int(self.is_watchlisted)}"
+        
+        super().__init__(button)
+    
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /): # type: ignore
+        return cls(
+            button=item,
+            community_id=int(match["community_id"]),
+            player_id=match["player_id"],
+            is_watchlisted=match["is_watchlisted"] == "1",
+        )
+    
+    @classmethod
+    def create(cls, community_id: int, player_id: str, is_watchlisted: bool, row: int | None = None):
+        button = discord.ui.Button(
+            label="Remove from watchlist" if is_watchlisted else "Add to watchlist",
+            emoji="👁️",
+            style=ButtonStyle.blurple if is_watchlisted else ButtonStyle.gray,
+            row=row,
+        )
+        return cls(
+            button=button,
+            community_id=community_id,
+            player_id=player_id,
+            is_watchlisted=is_watchlisted,
+        )
+    
+    @handle_error_wrap
+    async def callback(self, interaction: Interaction):
+        async with session_factory.begin() as db:
+            db_community = await get_community_by_id(db, self.community_id)
+            if not db_community:
+                raise CustomException("Community not found")
+            
+            await assert_has_admin_role(
+                interaction.user, # type: ignore
+                schemas.CommunityRef.model_validate(db_community),
+            )
+
+            assert interaction.message is not None
+
+            if self.is_watchlisted:
+                await self.remove_watchlist(db)
+            else:
+                await self.add_watchlist(db)
+            
+            # Create copy of button
+            new_button = self.create(
+                community_id=self.community_id,
+                player_id=self.player_id,
+                is_watchlisted=not self.is_watchlisted,
+                row=self.item.row,
+            )
+
+            # Replace button in view
+            view = View.from_message(interaction.message)
+            for item in view.children:
+                if isinstance(item, ui.Button) and item.custom_id == self.custom_id:
+                    view.remove_item(item)
+                    view.add_item(new_button)
+                    break
+            else:
+                raise RuntimeError("Expected to find button with custom ID %s" % self.custom_id)
+
+            # Edit message
+            await interaction.response.edit_message(view=view)
+
+    async def add_watchlist(self, db: AsyncSession):
+        params = schemas.PlayerWatchlistCreateParams(
+            player_id=self.player_id,
+            community_id=self.community_id,
+        )
+        try:
+            await create_watchlist(db, params)
+        except AlreadyExistsError:
+            pass
+
+    async def remove_watchlist(self, db: AsyncSession):
+        db_watchlist = await get_watchlist_by_player_and_community(db, self.player_id, self.community_id)
+        if db_watchlist:
+            await db.delete(db_watchlist)
+            await db.flush()
 
 class PlayerReportSelect(
     discord.ui.DynamicItem[discord.ui.Select],
@@ -277,20 +399,33 @@ class PlayerReportSelect(
             if not db_report:
                 raise CustomException("Report with ID %s no longer exists!" % self.report_id)
             report = schemas.ReportWithToken.model_validate(db_report)
+
             stats = await bulk_get_response_stats(db, report.players)
             responses = await get_pending_responses(db, community, report.players)
+
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=self.community_id,
+            )
+
         selected = int(self.select.values[0])
         if selected >= len(responses):
             get_logger(self.community_id).warning(
                 "Selected index %s but there are only %s responses. Defaulting to 0.",
                 selected, len(responses),
             )
-        view = PlayerReviewView(responses, selected)
+        view = PlayerReviewView(responses, watchlisted_player_ids, selected)
         embed = await view.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
 class PlayerReviewView(View):
-    def __init__(self, responses: list[schemas.PendingResponse], selected: int = 0):
+    def __init__(
+        self,
+        responses: list[schemas.PendingResponse],
+        watchlisted_player_ids: set[str],
+        selected: int = 0,
+    ):
         if not responses:
             raise ValueError("Must have at least one response")
         
@@ -385,20 +520,31 @@ class PlayerReviewView(View):
                 )
             )
 
-        if not is_multi:
+        self.add_item(
+            PlayerReportResponseButton(
+                button=discord.ui.Button(
+                    emoji=Emojis.REFRESH,
+                    style=ButtonStyle.gray,
+                    row=1
+                ),
+                command="refresh",
+                community_id=response.community_id,
+                report_id=response.player_report.report_id,
+                pr_id=response.pr_id,
+            )
+        )
+
+        if response.banned is False:
+            is_watchlisted = response.player_report.player_id in watchlisted_player_ids
             self.add_item(
-                PlayerReportResponseButton(
-                    button=discord.ui.Button(
-                        emoji=Emojis.REFRESH,
-                        style=ButtonStyle.gray,
-                        row=1
-                    ),
-                    command="refresh",
+                PlayerToggleWatchlistButton.create(
                     community_id=response.community_id,
-                    report_id=response.player_report.report_id,
-                    pr_id=response.pr_id,
+                    player_id=response.player_report.player_id,
+                    is_watchlisted=is_watchlisted,
+                    row=2,
                 )
             )
+
 
     @staticmethod
     async def get_embed(

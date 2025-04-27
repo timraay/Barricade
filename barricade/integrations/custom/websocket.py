@@ -6,7 +6,7 @@ import pydantic
 from typing import TYPE_CHECKING
 
 from barricade.exceptions import IntegrationCommandError
-from barricade.forwarding import send_alert_to_community_for_unreviewed_players
+from barricade.forwarding import send_optional_player_alert_to_community
 from barricade.integrations.custom.models import RequestBody, ResponseBody, ClientRequestType, ServerRequestType
 from barricade.integrations.websocket import Websocket, WebsocketRequestException
 
@@ -162,6 +162,6 @@ class CustomWebsocket(Websocket):
         if not player_ids:
             raise WebsocketRequestException("Missing player_ids")
         
-        await send_alert_to_community_for_unreviewed_players(
+        await send_optional_player_alert_to_community(
             self.integration.config.community_id, player_ids
         )

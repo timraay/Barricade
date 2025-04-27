@@ -8,6 +8,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .player_report import PlayerReport
     from .player_ban import PlayerBan
+    from .player_watchlist import PlayerWatchlist
 
 class Player(ModelBase):
     __tablename__ = "players"
@@ -17,3 +18,4 @@ class Player(ModelBase):
 
     reports: Mapped[list['PlayerReport']] = relationship(back_populates="player")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="player")
+    watchlists: Mapped[list['PlayerWatchlist']] = relationship(back_populates="player")

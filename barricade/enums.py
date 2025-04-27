@@ -11,6 +11,10 @@ class Platform(str, Enum):
     PC = "pc"
     CONSOLE = "console"
 
+class PlayerAlertType(StrEnum):
+    WATCHLISTED = "watchlisted"
+    UNREVIEWED = "unreviewed"
+
 class ReportRejectReason(StrEnum):
     # Careful when renaming, used by PSQL
     INSUFFICIENT = "Lacks evidence"

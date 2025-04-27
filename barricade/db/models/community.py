@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .report_token import ReportToken
     from .report_message import ReportMessage
     from .player_report_response import PlayerReportResponse
+    from .player_watchlist import PlayerWatchlist
     from .integration import Integration
     from .web_token import WebToken
 
@@ -38,6 +39,7 @@ class Community(ModelBase):
     tokens: Mapped[list['ReportToken']] = relationship(back_populates="community")
     messages: Mapped[list['ReportMessage']] = relationship(back_populates="community")
     responses: Mapped[list['PlayerReportResponse']] = relationship(back_populates="community")
+    watchlists: Mapped[list['PlayerWatchlist']] = relationship(back_populates="community")
     integrations: Mapped[list['Integration']] = relationship(back_populates="community", order_by="Integration.id")
     api_keys: Mapped[list['WebToken']] = relationship(back_populates="community")
 
