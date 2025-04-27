@@ -7,6 +7,7 @@ from discord import Embed
 from barricade import schemas
 from barricade.crud.bans import get_player_bans_for_community, get_player_bans_without_responses
 from barricade.crud.communities import get_community_by_id
+from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_forward_channel
@@ -208,3 +209,14 @@ async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
             )
             coros.append(coro)
     await asyncio.gather(*coros)
+
+@add_hook(EventHooks.player_ban)
+async def remove_banned_players_from_watchlist(response: schemas.ResponseWithToken):
+    async with session_factory.begin() as db:
+        db_watchlist = await get_watchlist_by_player_and_community(
+            db,
+            player_id=response.player_report.player_id,
+            community_id=response.community_id,
+        )
+        if db_watchlist:
+            await db.delete(db_watchlist)

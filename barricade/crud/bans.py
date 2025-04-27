@@ -9,7 +9,7 @@ from sqlalchemy.orm import Load, selectinload, joinedload
 from barricade import schemas
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_community_responses_to_report
-from barricade.crud.watchlists import bulk_get_watchlists_by_player_and_community, filter_watchlisted_player_ids
+from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models
 from barricade.discord import bot
 from barricade.discord.views.player_review import PlayerReviewView

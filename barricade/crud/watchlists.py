@@ -1,4 +1,4 @@
-from sqlalchemy import select, delete
+from sqlalchemy import exists, select, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,14 @@ async def get_watchlist_by_player_and_community(db: AsyncSession, player_id: str
     if load_relations:
         stmt = stmt.options(Load(models.PlayerWatchlist).selectinload("*"))
     return await db.scalar(stmt)
+
+async def is_player_watchlisted(db: AsyncSession, player_id: str, community_id: int):
+    stmt = select(exists().where(
+        models.PlayerWatchlist.player_id == player_id,
+        models.PlayerWatchlist.community_id == community_id,
+    ))
+    result = await db.scalar(stmt)
+    return bool(result)
 
 async def bulk_get_watchlists_by_player_and_community(db: AsyncSession, player_ids: Iterable[str], community_id: int, load_relations: bool = False):
     stmt = select(models.PlayerWatchlist).where(

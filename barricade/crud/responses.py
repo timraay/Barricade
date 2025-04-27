@@ -1,11 +1,10 @@
 from typing import Sequence
-from sqlalchemy import exists, not_, select, func, or_
+from sqlalchemy import exists, not_, select, func
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from barricade import schemas
-from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import models
 from barricade.enums import ReportReasonFlag, ReportRejectReason
 from barricade.exceptions import NotFoundError
