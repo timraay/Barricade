@@ -131,12 +131,26 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                 if message_data.message_type == ReportMessageType.REVIEW and message_data.community_id:
                     db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
                     if any(db_response.banned for db_response in db_responses):
+                        view = View()
+                        if len(report.players) == 1:
+                            player_report = report.players[0]
+                            is_watchlisted = await is_player_watchlisted(db, player_report.player_id, message_data.community_id)
+                            view.add_item(PlayerToggleWatchlistButton.create(
+                                community_id=message_data.community_id,
+                                player_id=player_report.player_id,
+                                is_watchlisted=is_watchlisted,
+                            ))
+                        else:
+                            # TODO
+                            pass
+
                         await message.edit(view=None)
                         await message.reply(
                             embed=discord.Embed(
                                 description="-# **This report was deleted!** One or more bans have been revoked as a result.",
-                                color=discord.Colour.red()
-                            )
+                                color=discord.Colour.red(),
+                            ),
+                            view=view,
                         )
                         continue
                 
