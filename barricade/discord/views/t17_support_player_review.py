@@ -9,7 +9,7 @@ from barricade.crud.responses import bulk_get_response_stats
 from barricade.db import session_factory
 from barricade.discord.utils import CustomException, View, handle_error_wrap
 from barricade.discord.reports import get_report_embed
-from barricade.enums import Emojis, ReportRejectReason
+from barricade.enums import Emojis
 
 class T17SupportPlayerReportResponseButton(
     discord.ui.DynamicItem[discord.ui.Button],

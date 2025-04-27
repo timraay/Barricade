@@ -7,11 +7,11 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
+from barricade.constants import T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, get_reports_for_player, is_player_reported
 from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_review
-from barricade.crud.watchlists import filter_watchlisted_player_ids, get_watchlist_by_player_and_community, is_player_watchlisted
+from barricade.crud.watchlists import filter_watchlisted_player_ids, is_player_watchlisted
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel

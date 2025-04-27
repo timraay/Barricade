@@ -1,6 +1,5 @@
 
 import logging
-import logging.config
 
 from barricade.constants import LOGS_FOLDER
 

@@ -1,4 +1,3 @@
-import copy
 import functools
 import random
 import re

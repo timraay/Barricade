@@ -9,7 +9,6 @@ from barricade.crud.bans import get_player_bans_for_community, get_player_bans_w
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import session_factory
-from barricade.discord import bot
 from barricade.discord.communities import get_forward_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView

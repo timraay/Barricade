@@ -43,7 +43,7 @@ async def create_tables():
     yet exist. Existing tables are never altered.
     """
     # Load all models
-    import barricade.db.models
+    import barricade.db.models # type: ignore
     # Create the tables
     async with engine.begin() as db:
         await db.run_sync(ModelBase.metadata.create_all)

@@ -4,7 +4,6 @@ from discord import ButtonStyle, Interaction
 
 from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
-from barricade.crud.reports import create_token
 from barricade.db import session_factory
 from barricade.discord.utils import View, CallableButton, CustomException
 from barricade.enums import Platform

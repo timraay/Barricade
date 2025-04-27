@@ -1,6 +1,5 @@
 import asyncio
 
-import discord
 from barricade import schemas
 from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud.communities import get_admin_by_id

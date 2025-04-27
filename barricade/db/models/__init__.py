@@ -1,3 +1,4 @@
+# type: ignore
 from barricade.db.models.admin import Admin
 from barricade.db.models.community import Community
 from barricade.db.models.player_ban import PlayerBan
