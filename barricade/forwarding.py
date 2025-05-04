@@ -17,7 +17,8 @@ from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
 from barricade.discord.reports import get_alert_embed, get_report_channel, get_report_embed, get_t17_support_forward_channel
 from barricade.discord.utils import View
-from barricade.discord.views.player_review import PlayerToggleWatchlistButton, PlayerReviewView
+from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
+from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
 from barricade.enums import Platform, PlayerAlertType, ReportMessageType
@@ -272,7 +273,7 @@ class PlayerAlert:
                 if mention:
                     content = f"{mention} a player you watchlisted has joined your server!"
                 else:
-                    content = f"A player you watchlisted has joined your server!"
+                    content = "A player you watchlisted has joined your server!"
                 view.add_item(PlayerToggleWatchlistButton.create(
                     community_id=self.community.id,
                     player_id=self.player_id,
@@ -284,7 +285,8 @@ class PlayerAlert:
         reports_urls = list(zip(self.reports, (message.jump_url for message in messages)))
         embed = get_alert_embed(
             reports_urls=list(reversed(reports_urls)),
-            player=player
+            player=player,
+            alert_type=self.alert_type,
         )
 
         await channel.send(
