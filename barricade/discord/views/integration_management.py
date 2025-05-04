@@ -59,7 +59,7 @@ async def get_name(integration: Integration):
         return esc_md(
             await asyncio.wait_for(integration.get_instance_name(), timeout=5)
         )
-    except:
+    except Exception:
         return "*Name unknown*"
 
 class IntegrationManagementView(View):

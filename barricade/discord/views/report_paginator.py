@@ -132,7 +132,7 @@ class ReportPaginator(View):
 
             return embed, self
 
-        except:
+        except Exception:
             self.page = old_page
             raise
 

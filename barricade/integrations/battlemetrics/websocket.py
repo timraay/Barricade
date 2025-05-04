@@ -64,7 +64,7 @@ class BattlemetricsWebsocket(Websocket):
                     self.logger.warning("No implementation for request %s", request.t)
                     return
 
-        except:
+        except Exception:
             self.logger.exception("Unexpected error while handling %r", request)
 
     async def handle_response(self, response: Packet):

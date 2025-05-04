@@ -152,7 +152,7 @@ class Websocket:
                         async for message in ws:
                             try:
                                 await self.handle_message(message)
-                            except:
+                            except Exception:
                                 self.logger.exception("Failed to handle incoming message: %s", message)
                     except websockets.ConnectionClosed as e:
                         # If the websocket was closed, try reconnecting
@@ -180,7 +180,7 @@ class Websocket:
     async def _invoke_setup_hook(self, ws: websockets.WebSocketClientProtocol):
         try:
             await self.setup_hook()
-        except:
+        except Exception:
             self.logger.exception("Failed to invoke setup hook")
             await ws.close(code=4000)
 

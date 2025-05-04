@@ -51,7 +51,7 @@ class GetSubmissionURLView(View):
         await asyncio.sleep(60)
         try:
             await interaction.delete_original_response()
-        except:
+        except Exception:
             # Don't really care about this
             pass
 

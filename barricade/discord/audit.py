@@ -96,7 +96,7 @@ async def _audit(*embeds: discord.Embed):
 
     try:
         await channel.send(embeds=embeds)
-    except:
+    except Exception:
         logging.exception("Failed to audit message")
 
 

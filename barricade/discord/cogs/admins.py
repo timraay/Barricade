@@ -56,7 +56,7 @@ class AdminsCog(commands.Cog):
 
                 # Grant roles
                 await update_user_roles(member.id, community=admin.community)
-        except:
+        except Exception:
             # discord.py would have silently eaten the exception
             logger.exception("Failed to invoke \"on_member_join\" event")
 
@@ -132,7 +132,7 @@ class AdminsCog(commands.Cog):
                         db, db_admin,
                         by=payload.user, # type: ignore
                     )
-        except:
+        except Exception:
             # discord.py would have silently eaten the exception
             logger.exception("Failed to invoke \"on_raw_member_remove\" event")
     

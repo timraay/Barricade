@@ -19,7 +19,7 @@ async def main():
             try:
                 config = schemas.CRCONIntegrationConfig.model_validate(db_config)
                 integration = CRCONIntegration(config)
-            except:
+            except Exception:
                 logger.exception("Failed to load integration %r", db_config)
                 continue
 

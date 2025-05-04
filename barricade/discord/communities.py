@@ -25,7 +25,7 @@ async def get_admin_name(admin: schemas.AdminRef):
     try:
         user = await bot.get_or_fetch_member(admin.discord_id)
         return user.nick or user.display_name
-    except:
+    except Exception:
         return admin.name
 
 

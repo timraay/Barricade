@@ -122,7 +122,7 @@ class Integration(ABC):
                 
             self.logger.info("Enabled integration %r", self)    
             return db_config
-        except:
+        except Exception:
             # Reset state
             self.config.enabled = False
             self.stop_connection()
@@ -164,7 +164,7 @@ class Integration(ABC):
 
             self.logger.info("Disabled integration %r", self)    
             return db_config
-        except:
+        except Exception:
             # Reset state
             self.config.enabled = True
             self.start_connection()
@@ -223,7 +223,7 @@ class Integration(ABC):
 
             try:
                 await self.synchronize()
-            except:
+            except Exception:
                 self.logger.exception("Failed to synchronize ban lists for %r", self)
 
     # --- Connection hooks

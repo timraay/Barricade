@@ -22,7 +22,7 @@ async def load_all_cogs():
             try:
                 cog_path = cog_path_template.format(os.path.splitext(cog_name)[0])
                 await bot.load_extension(cog_path)
-            except:
+            except Exception:
                 logging.exception(f"Cog {cog_name} cannot be loaded")
                 pass
     logging.info('Loaded all cogs')

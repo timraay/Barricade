@@ -64,7 +64,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
 
                 await send_or_edit_report_review_message(report, responses, community)
 
-            except:
+            except Exception:
                 logger = get_logger(db_community.id)
                 logger.exception("Failed to forward %r to %r", report, db_community)
 
@@ -108,7 +108,7 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
                     await send_or_edit_t17_support_report_review_message(report)
                 else:
                     raise ValueError("Unknown message type \"%s\"" % message_data.message_type)
-            except:
+            except Exception:
                 logger = get_logger(message_data.community_id) if message_data.community_id else logging
                 logger.exception("Unexpected error occurred while attempting to edit %r", message_data)
 
@@ -170,7 +170,7 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                 await message.delete()
             except discord.HTTPException:
                 pass
-            except:
+            except Exception:
                 logger = get_logger(message_data.community_id) if message_data.community_id else logging
                 logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 

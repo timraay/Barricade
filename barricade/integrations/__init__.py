@@ -33,6 +33,6 @@ async def load_all():
                 config = integration_cls.meta.config_cls.model_validate(db_config)
                 integration = integration_cls(config)
                 manager.add(integration)
-            except:
+            except Exception:
                 logger = get_logger(db_config.community_id)
                 logger.exception("Failed to load integration %r", db_config)
