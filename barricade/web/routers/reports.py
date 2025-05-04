@@ -1,16 +1,22 @@
-from typing import Annotated
+from contextlib import asynccontextmanager
+import discord
 from fastapi import Depends, FastAPI, APIRouter, HTTPException, Security, status
+from io import BytesIO
 import logging
+from typing import Annotated
 
 from barricade import schemas
 from barricade.crud import communities, reports
 from barricade.db import DatabaseDep, models
-from barricade.enums import ReportReasonFlag
+from barricade.discord.bot import bot
+from barricade.enums import Emojis, ReportReasonFlag
 from barricade.exceptions import NotFoundError
 from barricade.web import schemas as web_schemas
 from barricade.web.paginator import PaginatedResponse, PaginatorDep
 from barricade.web.scopes import Scopes
 from barricade.web.security import get_active_token, get_active_token_of_community
+
+logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="", tags=["Reports"])
 
@@ -93,14 +99,44 @@ async def validate_submission_token(
         detail="Invalid token"
     )
     if not token:
-        logging.warning("Token %s not found. Response ID: %s", submission.data.token, submission.id)
+        logger.warning("Token %s not found. Response ID: %s", submission.data.token, submission.id)
         raise invalid_token_error
     
     if token.is_expired():
-        logging.warning("Token %s has expired. Response ID: %s", submission.data.token, submission.id)
+        logger.warning("Token %s has expired. Response ID: %s", submission.data.token, submission.id)
         raise invalid_token_error
     
     return token
+
+@asynccontextmanager
+async def notify_of_errors_in_dms(token: models.ReportToken, submission: schemas.ReportSubmission):
+    try:
+        yield
+    except Exception as e:
+        try:
+            user = await bot.get_or_fetch_user(token.admin_id)
+
+            file = discord.File(
+                BytesIO(submission.model_dump_json(indent=2).encode(encoding="utf-8")),
+                filename=f"submission-{submission.id}.json"
+            )
+
+            content = (
+                "### **Your report couldn't be submitted!**"
+                "\nAn unexpected error happened while submitting your report. Please try again or reach out to support."
+                "\n"
+                f"\n{Emojis.TICK_NO} `Exception: Boom! Boom! Boom!`"
+                "\n"
+                "\n-# Details of your submission are attached below)"
+            )
+
+            await user.send(content=content, file=file)
+        
+        except Exception:
+            logger.exception("Failed to notify %s of submission failure", token.admin_id)
+            pass
+
+        raise e
 
 @router.post("/reports/submit", response_model=schemas.SafeReportWithToken)
 async def submit_report(
@@ -108,26 +144,27 @@ async def submit_report(
         submission: schemas.ReportSubmission,
         db: DatabaseDep,
 ):
-    if token.report:
-        logging.warning("Token %s has already been used. Response ID: %s", submission.data.token, submission.id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+    async with notify_of_errors_in_dms(token, submission):
+        if token.report:
+            logger.warning("Token %s has already been used. Response ID: %s", submission.data.token, submission.id)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
+
+        # Create the report
+        report = schemas.ReportCreateParams(
+            **submission.data.model_dump(exclude={"token", "reasons"}),
+            token_id=token.id,
+            reasons_bitflag=reasons_bitflag,
+            reasons_custom=reasons_custom,
         )
-    
-    reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
 
-    # Create the report
-    report = schemas.ReportCreateParams(
-        **submission.data.model_dump(exclude={"token", "reasons"}),
-        token_id=token.id,
-        reasons_bitflag=reasons_bitflag,
-        reasons_custom=reasons_custom,
-    )
+        db_report = await reports.create_report(db, report)
 
-    db_report = await reports.create_report(db, report)
-
-    return db_report
+        return db_report
 
 @router.put("/reports/submit", response_model=schemas.SafeReportWithToken)
 async def submit_report_edit(
@@ -136,27 +173,28 @@ async def submit_report_edit(
         db: DatabaseDep,
 ):
     if not token.report:
-        logging.warning("Token %s has not been used yet. Response ID: %s", submission.data.token, submission.id)
+        logger.warning("Token %s has not been used yet. Response ID: %s", submission.data.token, submission.id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
-    
-    reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
+        
+    async with notify_of_errors_in_dms(token, submission):
+        reasons_bitflag, reasons_custom = ReportReasonFlag.from_list(submission.data.reasons)
 
-    # Create the report
-    report = schemas.ReportCreateParams(
-        **submission.data.model_dump(exclude={"token", "reasons"}),
-        token_id=token.id,
-        reasons_bitflag=reasons_bitflag,
-        reasons_custom=reasons_custom,
-    )
-    
-    db.expire_all()
-    db_report = await reports.edit_report(db, report)
-    await db.commit()
+        # Create the report
+        report = schemas.ReportCreateParams(
+            **submission.data.model_dump(exclude={"token", "reasons"}),
+            token_id=token.id,
+            reasons_bitflag=reasons_bitflag,
+            reasons_custom=reasons_custom,
+        )
+        
+        db.expire_all()
+        db_report = await reports.edit_report(db, report)
+        await db.commit()
 
-    return db_report
+        return db_report
         
 @router.get("/reports/{report_id}", response_model=schemas.SafeReportWithToken)
 async def get_report(
