@@ -7,7 +7,7 @@ from barricade.constants import DISCORD_CONSOLE_REPORTS_CHANNEL_ID, DISCORD_PC_R
 from barricade.discord.bot import bot
 from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
-from barricade.enums import Emojis, Platform, ReportReasonFlag
+from barricade.enums import Emojis, Platform, PlayerAlertType, ReportReasonFlag
 from barricade.utils import get_player_id_type, PlayerIDType
 
 def get_report_channel(platform: Platform) -> discord.TextChannel:
@@ -138,7 +138,8 @@ async def get_report_embed(
 
 def get_alert_embed(
         reports_urls: list[tuple[schemas.Report, str]],
-        player: schemas.PlayerReportRef
+        player: schemas.PlayerReportRef,
+        alert_type: PlayerAlertType,
 ):
     player_id_type = get_player_id_type(player.player_id)
     is_steam = player_id_type == PlayerIDType.STEAM_64_ID
@@ -159,14 +160,15 @@ def get_alert_embed(
     if description:
         description.append("")
     
-    if len(reports_urls) == 1:
-        description.append(
-            "There is a report against this player that has not yet been reviewed."
+    if alert_type == PlayerAlertType.UNREVIEWED:
+        if len(reports_urls) == 1:
+            description.append(
+                "There is a report against this player that has not yet been reviewed."
+                )
+        else:
+            description.append(
+                f"There are {len(reports_urls)} reports against this player that have not yet been reviewed."
             )
-    else:
-        description.append(
-            f"There are {len(reports_urls)} reports against this player that have not yet been reviewed."
-        )
 
     embed = discord.Embed(
         title=title,

@@ -10,7 +10,7 @@ from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
 from barricade.constants import MAX_INTEGRATION_LIMIT
-from barricade.crud.communities import get_admin_by_id, get_community_by_id, get_community_by_owner_id
+from barricade.crud.communities import get_admin_by_id, get_community_by_id
 from barricade.db import models, session_factory
 from barricade.discord.utils import CallableSelect, View, Modal, CallableButton, CustomException, format_url, get_danger_embed, get_success_embed, get_question_embed
 from barricade.enums import IntegrationType
@@ -19,7 +19,6 @@ from barricade.integrations import Integration, BattlemetricsIntegration, CRCONI
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
-from barricade.utils import async_ttl_cache
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$")

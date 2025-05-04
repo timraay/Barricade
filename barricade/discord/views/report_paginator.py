@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report
+from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import session_factory
 from barricade.discord.utils import View, CallableButton
 from barricade.discord.views.report_management import ReportManagementView
@@ -68,7 +69,13 @@ class ReportPaginator(View):
                         for db_response in db_responses
                     ])
                     await self.fetch_response_stats(db, *missing_stats)
-                view = PlayerReviewView(responses)
+                    
+                    watchlisted_player_ids = await filter_watchlisted_player_ids(
+                        db,
+                        player_ids=[player.player_id for player in report.players],
+                        community_id=self.community.id,
+                    )
+                view = PlayerReviewView(responses, watchlisted_player_ids)
                 embed = await view.get_embed(self.reports[self.page], responses=responses, stats=self.stats)
 
             # If we have only one report, we do not need to add pagination.

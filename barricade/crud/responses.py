@@ -1,5 +1,5 @@
 from typing import Sequence
-from sqlalchemy import exists, not_, select, func, or_
+from sqlalchemy import exists, not_, select, func
 import sqlalchemy.exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -142,12 +142,12 @@ async def get_pending_responses(
         player_reports: list[schemas.PlayerReportRef],
 ):
     responses = {
-        player.id: schemas.PendingResponse(
-            pr_id=player.id,
-            player_report=player,
+        pr.id: schemas.PendingResponse(
+            pr_id=pr.id,
+            player_report=pr,
             community_id=community.id,
             community=community,
-        ) for player in player_reports
+        ) for pr in player_reports
     }
     
     stmt = select(
@@ -160,14 +160,16 @@ async def get_pending_responses(
     ).where(
         models.PlayerReportResponse.community_id == community.id,
         models.PlayerReport.id.in_(
-            [player.id for player in player_reports]
+            [pr.id for pr in player_reports]
         )
     ).limit(len(player_reports))
     result = await db.execute(stmt)
     for row in result:
-        responses[row.pr_id].banned = row.banned
-        responses[row.pr_id].reject_reason = row.reject_reason
-        responses[row.pr_id].responded_by = row.responded_by
+        response = responses[row.pr_id]
+
+        response.banned = row.banned
+        response.reject_reason = row.reject_reason
+        response.responded_by = row.responded_by
     
     return list(responses.values())
 
@@ -177,11 +179,7 @@ async def get_reports_for_player_with_no_community_review(
         community_id: int,
         reasons_filter: ReportReasonFlag | None = None
 ):
-    """Get all reports of a specific player which the given community has not yet reviewed.
-
-    "Reviewed" in this particular context means one of two things:
-    - The community has not yet responded to the report
-    - The community has responded with "Lacks evidence" (`ReportRejectReason.INCONCLUSIVE`)
+    """Get all reports of a specific player which the given community has not yet responded to.
 
     Parameters
     ----------
@@ -207,17 +205,10 @@ async def get_reports_for_player_with_no_community_review(
         .where(
             models.PlayerReport.player_id == player_id,
             models.ReportToken.community_id != community_id,
-            or_(
-                not_(
-                    exists().where(
-                        models.PlayerReportResponse.community_id == community_id,
-                        models.PlayerReportResponse.pr_id == models.PlayerReport.id
-                    )
-                ),
+            not_(
                 exists().where(
                     models.PlayerReportResponse.community_id == community_id,
-                    models.PlayerReportResponse.pr_id == models.PlayerReport.id,
-                    models.PlayerReportResponse.reject_reason == ReportRejectReason.INCONCLUSIVE,
+                    models.PlayerReportResponse.pr_id == models.PlayerReport.id
                 )
             )
         ) \

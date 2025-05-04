@@ -1,24 +1,27 @@
 import asyncio
 import logging
-from typing import Sequence
+from typing import Iterable, Sequence
 from cachetools import TTLCache
 import discord
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.constants import DISCORD_PC_REPORTS_CHANNEL_ID, T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
+from barricade.constants import T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, is_player_reported
+from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, get_reports_for_player, is_player_reported
 from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_review
+from barricade.crud.watchlists import filter_watchlisted_player_ids, is_player_watchlisted
 from barricade.db import models, session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_alerts_channel, get_alerts_role_mention, get_confirmations_channel, get_forward_channel
 from barricade.discord.reports import get_alert_embed, get_report_channel, get_report_embed, get_t17_support_forward_channel
+from barricade.discord.utils import View
+from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
-from barricade.enums import Platform, ReportMessageType
+from barricade.enums import Platform, PlayerAlertType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -129,12 +132,26 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                 if message_data.message_type == ReportMessageType.REVIEW and message_data.community_id:
                     db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
                     if any(db_response.banned for db_response in db_responses):
+                        view = View()
+                        if len(report.players) == 1:
+                            player_report = report.players[0]
+                            is_watchlisted = await is_player_watchlisted(db, player_report.player_id, message_data.community_id)
+                            view.add_item(PlayerToggleWatchlistButton.create(
+                                community_id=message_data.community_id,
+                                player_id=player_report.player_id,
+                                is_watchlisted=is_watchlisted,
+                            ))
+                        else:
+                            # TODO
+                            pass
+
                         await message.edit(view=None)
                         await message.reply(
                             embed=discord.Embed(
                                 description="-# **This report was deleted!** One or more bans have been revoked as a result.",
-                                color=discord.Colour.red()
-                            )
+                                color=discord.Colour.red(),
+                            ),
+                            view=view,
                         )
                         continue
                 
@@ -186,94 +203,160 @@ async def remove_token_url_from_cache(report: schemas.ReportWithToken):
 
 # Player Alerts
 
-__is_player_reported = TTLCache[str, bool](maxsize=9999, ttl=60*10)
-
-async def send_alert_to_community_for_unreviewed_players(community_id: int, player_ids: Sequence[str]) -> dict | None:
-    reported_player_ids: list[str] = []
+class PlayerAlert:
+    def __init__(
+        self,
+        player_id: str,
+        community: schemas.CommunityRef,
+        reports: Iterable[schemas.ReportWithToken],
+        alert_type: PlayerAlertType,
+    ) -> None:
+        self.player_id=player_id
+        self.community=community
+        self.reports=sorted(reports, key=lambda x: x.created_at)
+        self.alert_type=alert_type
     
-    async with session_factory() as db:
-        # Go over all players to check whether they have been reported
-        for player_id in player_ids:
-            # First look for a cached response, otherwise fetch from DB
-            cache_hit = __is_player_reported.get(player_id)
-            if cache_hit is not None:
-                if cache_hit:
-                    reported_player_ids.append(player_id)
-            else:
-                is_reported = await is_player_reported(db, player_id)
-                __is_player_reported[player_id] = is_reported
-                if is_reported:
-                    reported_player_ids.append(player_id)
+    async def send(self, db: AsyncSession, channel: discord.TextChannel):
+        # Locate all the messages, resending as necessary, and updating them with the most
+        # up-to-date details.
+        messages: list[discord.Message] = []
 
-        if reported_player_ids:
-            # There are one or more players that have reports
-            db_community = await get_community_by_id(db, community_id)
-            community = schemas.CommunityRef.model_validate(db_community)
+        for report in self.reports:
+            responses = await get_pending_responses(db, self.community, report.players)
+            stats = await bulk_get_response_stats(db, report.players)
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=(player.player_id for player in report.players),
+                community_id=self.community.id,
+            )
 
-            channel = get_alerts_channel(community)
-            if not channel:
-                # We have nowhere to send the alert, so we just ignore
-                return
-
-            for player_id in reported_player_ids:
-                # For each player, get all reports that this community has not yet responded to
-                db_reports = await get_reports_for_player_with_no_community_review(
-                    db, player_id, community_id, community.reasons_filter
+            message = await send_or_edit_report_review_message(
+                report,
+                responses,
+                self.community,
+                stats=stats,
+                watchlisted_player_ids=watchlisted_player_ids,
+            )
+            if not message:
+                # Message doesn't exist and couldn't be sent to forward channel either.
+                # Try sending to alerts channel instead.
+                view = PlayerReviewView(
+                    responses=responses,
+                    watchlisted_player_ids=watchlisted_player_ids,
                 )
+                embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
+                message = await channel.send(embed=embed, view=view)
+            
+            if message:
+                # Remember the message
+                messages.append(message)
 
-                messages: list[discord.Message] = []
-                sorted_reports = sorted(
-                    (schemas.ReportWithToken.model_validate(db_report) for db_report in db_reports),
-                    key=lambda x: x.created_at
-                )
+        if not messages and self.alert_type == PlayerAlertType.UNREVIEWED:
+            # No messages were located, so we don't have any reports to point the user at.
+            return False
 
-                # Locate all the messages, resending as necessary, and updating them with the most
-                # up-to-date details.
-                for report in sorted_reports:
-                    db_community = await get_community_by_id(db, community.id)
-                    responses = await get_pending_responses(db, community, report.players)
+        # Get the most recent PlayerReport for the most up-to-date name
+        player = next(
+            pr for pr in self.reports[-1].players
+            if pr.player_id == self.player_id
+        )
 
-                    stats = await bulk_get_response_stats(db, report.players)
-
-                    if get_forward_channel(community):
-                        message = await send_or_edit_report_review_message(report, responses, community, stats=stats)
-
-                    else:
-                        view = PlayerReviewView(responses=responses)
-                        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
-                        message = await channel.send(embed=embed, view=view)
-                    
-                    if message:
-                        # Remember the message
-                        messages.append(message)
-
-                if not messages:
-                    # No messages were located, so we don't have any reports to point the user at.
-                    continue
-
-                # Get the most recent PlayerReport for the most up-to-date name
-                player = next(
-                    pr for pr in sorted_reports[-1].players
-                    if pr.player_id == player_id
-                )
-
-                mention = await get_alerts_role_mention(community)
+        view = View()
+        mention = await get_alerts_role_mention(self.community)
+        match self.alert_type:
+            case PlayerAlertType.UNREVIEWED:
                 if mention:
                     content = f"{mention} a potentially dangerous player has joined your server!"
                 else:
                     content = "A potentially dangerous player has joined your server!"
+            case PlayerAlertType.WATCHLISTED:
+                if mention:
+                    content = f"{mention} a player you watchlisted has joined your server!"
+                else:
+                    content = "A player you watchlisted has joined your server!"
+                view.add_item(PlayerToggleWatchlistButton.create(
+                    community_id=self.community.id,
+                    player_id=self.player_id,
+                    is_watchlisted=True
+                ))
+            case _:
+                raise Exception("Unknown alert type \"%s\"" % self.alert_type)
 
-                reports_urls = list(zip(sorted_reports, (message.jump_url for message in messages)))
-                embed = get_alert_embed(
-                    reports_urls=list(reversed(reports_urls)),
-                    player=player
-                )
+        reports_urls = list(zip(self.reports, (message.jump_url for message in messages)))
+        embed = get_alert_embed(
+            reports_urls=list(reversed(reports_urls)),
+            player=player,
+            alert_type=self.alert_type,
+        )
 
-                await channel.send(
-                    content=content,
-                    embed=embed,
-                    allowed_mentions=discord.AllowedMentions(roles=True),
+        await channel.send(
+            content=content,
+            embed=embed,
+            allowed_mentions=discord.AllowedMentions(roles=True),
+            view=view,
+        )
+
+__community_alerts_enabled = TTLCache[int, bool](maxsize=9999, ttl=60*10)
+
+async def send_optional_player_alert_to_community(community_id: int, player_ids: Sequence[str]):
+    if __community_alerts_enabled.get(community_id) is False:
+        return
+
+    alerts: list[PlayerAlert] = []
+    community: schemas.CommunityRef | None = None
+
+    async with session_factory() as db:
+        for player_id in player_ids:
+            is_watchlisted = await is_player_watchlisted(db, player_id, community_id)
+            if is_watchlisted:
+                db_reports = await get_reports_for_player(db, player_id, load_token=True)
+                reports = [
+                    schemas.ReportWithToken.model_validate(db_report)
+                    for db_report in db_reports
+                ]
+
+                if not community:
+                    db_community = await get_community_by_id(db, community_id)
+                    community = schemas.CommunityRef.model_validate(db_community)
+                
+                alert = PlayerAlert(
+                    player_id=player_id,
+                    community=community,
+                    reports=reports,
+                    alert_type=PlayerAlertType.WATCHLISTED,
                 )
+                alerts.append(alert)
+            
+            elif await is_player_reported(db, player_id):
+                if not community:
+                    db_community = await get_community_by_id(db, community_id)
+                    community = schemas.CommunityRef.model_validate(db_community)
+
+                db_reports = await get_reports_for_player_with_no_community_review(
+                    db, player_id, community_id, community.reasons_filter
+                )
+                reports = [
+                    schemas.ReportWithToken.model_validate(db_report)
+                    for db_report in db_reports
+                ]
+
+                alert = PlayerAlert(
+                    player_id=player_id,
+                    community=community,
+                    reports=reports,
+                    alert_type=PlayerAlertType.UNREVIEWED,
+                )
+                alerts.append(alert)
+        
+        if alerts:
+            assert community is not None
+            channel = get_alerts_channel(community)
+            if not channel:
+                # We have nowhere to send the alert, so we just ignore
+                return
+            
+            for alert in alerts:
+                await alert.send(db, channel)
 
 # Forward to T17 Support
 
@@ -318,6 +401,7 @@ async def send_or_edit_report_review_message(
     responses: list[schemas.PendingResponse],
     community: schemas.CommunityRef,
     stats: dict[int, schemas.ResponseStats] | None = None,
+    watchlisted_player_ids: set[str] | None = None,
 ):
     if report.token.community_id == community.id:
         # Since the community created the report, they should not
@@ -325,7 +409,10 @@ async def send_or_edit_report_review_message(
         raise ValueError("Report owner should not be able to review their own report")
     
     async with session_factory.begin() as db:
-        view = PlayerReviewView(responses=responses)
+        view = PlayerReviewView(
+            responses=responses,
+            watchlisted_player_ids=watchlisted_player_ids or set(),
+        )
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         return await send_or_edit_message(
             db,

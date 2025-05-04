@@ -139,6 +139,10 @@ class _PlayerBanBase(BaseModel):
     integration_id: int
     remote_id: str
 
+class _PlayerWatchlistBase(BaseModel):
+    player_id: str
+    community_id: int
+
 class _ReportMessageBase(BaseModel):
     report_id: int
     community_id: int | None
@@ -213,6 +217,12 @@ class PlayerBanRef(_PlayerBanBase, _ModelFromAttributes):
     def __repr__(self) -> str:
         return f"PlayerBan[id={self.id}, integration_id={self.integration_id}, player_id={self.player_id}]"
 
+class PlayerWatchlistRef(_PlayerWatchlistBase, _ModelFromAttributes):
+    id: int
+
+    def __repr__(self) -> str:
+        return f"PlayerWatchlist[id={self.id}, community_id={self.community_id}, player_id={self.player_id}]"
+
 class ReportMessageRef(_ReportMessageBase, _ModelFromAttributes):
     def __repr__(self) -> str:
         return f"ReportMessage[community_id={self.community_id}, report_id={self.report_id}, message_id={self.message_id}]"
@@ -273,13 +283,15 @@ class ResponseWithToken(Response):
 class SafeCommunityWithRelations(SafeCommunity):
     tokens: list[ReportTokenRef]
     responses: list[Response]
+    watchlists: list[PlayerWatchlistRef]
 
 class CommunityWithRelations(Community, SafeCommunityWithRelations): # type: ignore
     pass
 
 class Player(PlayerRef):
     reports: list[PlayerReport]
-    
+    watchlists: list[PlayerWatchlistRef]
+
 class PlayerBan(PlayerBanRef):
     player: PlayerRef
     integration: IntegrationConfig
@@ -357,6 +369,9 @@ class PendingResponse(_ResponseBase, _ModelFromAttributes):
     responded_by: Optional[str] = None
 
 class PlayerBanCreateParams(_PlayerBanBase):
+    pass
+
+class PlayerWatchlistCreateParams(_PlayerWatchlistBase):
     pass
 
 

@@ -24,7 +24,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-import barricade.db.models
+import barricade.db.models # type: ignore
 from barricade.db import ModelBase
 target_metadata = ModelBase.metadata
 

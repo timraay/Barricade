@@ -12,10 +12,12 @@ from barricade.constants import T17_SUPPORT_CONFIRMATION_PROMPT_CHANCE, T17_SUPP
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import bulk_get_response_stats, get_pending_responses, set_report_response
+from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models, session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.utils import CallableButton, CustomException, View, get_command_mention, handle_error_wrap
 from barricade.discord.reports import get_report_embed
+from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
 from barricade.enums import Emojis, ReportRejectReason
 from barricade.logger import get_logger
 
@@ -98,6 +100,9 @@ class PlayerReportResponseButton(
                 await self.set_response(interaction, banned=True)
 
             case "unban":
+                await self.set_response(interaction, banned=False)
+
+            case "watchlist":
                 await self.set_response(interaction, banned=False)
 
             case _:
@@ -203,9 +208,19 @@ class PlayerReportResponseButton(
                 report = schemas.ReportWithToken.model_validate(db_report)
                 stats = await bulk_get_response_stats(db, report.players)
 
+                watchlisted_player_ids = await filter_watchlisted_player_ids(
+                    db,
+                    player_ids=[player.player_id for player in report.players],
+                    community_id=self.community_id,
+                )
+
             selected = list(responses.keys()).index(prr.pr_id)
             responses = list(responses.values())
-            view = PlayerReviewView(responses=responses, selected=selected)
+            view = PlayerReviewView(
+                responses=responses,
+                watchlisted_player_ids=watchlisted_player_ids,
+                selected=selected,
+            )
             embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
 
             if _original_interaction:
@@ -227,13 +242,19 @@ class PlayerReportResponseButton(
             community = schemas.Community.model_validate(db_community)
             stats = await bulk_get_response_stats(db, report.players)
             responses = await get_pending_responses(db, community, report.players)
+            
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=self.community_id,
+            )
         
         # try:
         #     selected = [response.pr_id for response in responses].index(self.pr_id)
         # except ValueError:
         #     selected = 0
 
-        view = PlayerReviewView(responses=responses)
+        view = PlayerReviewView(responses, watchlisted_player_ids)
         embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
@@ -277,20 +298,33 @@ class PlayerReportSelect(
             if not db_report:
                 raise CustomException("Report with ID %s no longer exists!" % self.report_id)
             report = schemas.ReportWithToken.model_validate(db_report)
+
             stats = await bulk_get_response_stats(db, report.players)
             responses = await get_pending_responses(db, community, report.players)
+
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=self.community_id,
+            )
+
         selected = int(self.select.values[0])
         if selected >= len(responses):
             get_logger(self.community_id).warning(
                 "Selected index %s but there are only %s responses. Defaulting to 0.",
                 selected, len(responses),
             )
-        view = PlayerReviewView(responses, selected)
+        view = PlayerReviewView(responses, watchlisted_player_ids, selected)
         embed = await view.get_embed(report, responses, stats=stats)
         await interaction.response.edit_message(embed=embed, view=view)
 
 class PlayerReviewView(View):
-    def __init__(self, responses: list[schemas.PendingResponse], selected: int = 0):
+    def __init__(
+        self,
+        responses: list[schemas.PendingResponse],
+        watchlisted_player_ids: set[str],
+        selected: int = 0,
+    ):
         if not responses:
             raise ValueError("Must have at least one response")
         
@@ -385,20 +419,31 @@ class PlayerReviewView(View):
                 )
             )
 
-        if not is_multi:
+        self.add_item(
+            PlayerReportResponseButton(
+                button=discord.ui.Button(
+                    emoji=Emojis.REFRESH,
+                    style=ButtonStyle.gray,
+                    row=1
+                ),
+                command="refresh",
+                community_id=response.community_id,
+                report_id=response.player_report.report_id,
+                pr_id=response.pr_id,
+            )
+        )
+
+        if response.banned is False:
+            is_watchlisted = response.player_report.player_id in watchlisted_player_ids
             self.add_item(
-                PlayerReportResponseButton(
-                    button=discord.ui.Button(
-                        emoji=Emojis.REFRESH,
-                        style=ButtonStyle.gray,
-                        row=1
-                    ),
-                    command="refresh",
+                PlayerToggleWatchlistButton.create(
                     community_id=response.community_id,
-                    report_id=response.player_report.report_id,
-                    pr_id=response.pr_id,
+                    player_id=response.player_report.player_id,
+                    is_watchlisted=is_watchlisted,
+                    row=2,
                 )
             )
+
 
     @staticmethod
     async def get_embed(

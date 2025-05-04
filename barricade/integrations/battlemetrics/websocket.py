@@ -6,7 +6,7 @@ from uuid import UUID
 import pydantic
 
 from barricade.exceptions import IntegrationCommandError
-from barricade.forwarding import send_alert_to_community_for_unreviewed_players
+from barricade.forwarding import send_optional_player_alert_to_community
 from barricade.integrations.battlemetrics.models import Packet, ClientRequestType, ServerRequestType
 from barricade.integrations.battlemetrics.utils import find_player_id_in_attributes
 from barricade.integrations.websocket import Websocket, WebsocketRequestException
@@ -158,7 +158,7 @@ class BattlemetricsWebsocket(Websocket):
         if not player_ids:
             return
 
-        await send_alert_to_community_for_unreviewed_players(
+        await send_optional_player_alert_to_community(
             self.integration.config.community_id, player_ids
         )
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Load, selectinload, joinedload
 from barricade import schemas
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import get_community_responses_to_report
+from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models
 from barricade.discord import bot
 from barricade.discord.views.player_review import PlayerReviewView
@@ -176,7 +177,13 @@ async def expire_bans_of_player(db: AsyncSession, player_id: str, community_id: 
                 for db_response in db_responses
             ]
 
-            view = PlayerReviewView(responses)
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=community_id,
+            )
+
+            view = PlayerReviewView(responses, watchlisted_player_ids)
             embed = await view.get_embed(report, responses)
 
             try:

@@ -1,6 +1,5 @@
 from discord import ButtonStyle, Color, Embed, HTTPException, Interaction, Member
 from discord.ui import TextInput
-from sqlalchemy.exc import IntegrityError
 
 from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT

@@ -1,2 +1,2 @@
 # Load hooks
-from . import bans, forwarding
+from . import bans, forwarding # type: ignore

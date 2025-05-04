@@ -14,7 +14,6 @@ from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import CallableButton, CustomException, View, format_url, get_danger_embed, get_success_embed, handle_error_wrap
 from barricade.enums import Emojis
-from barricade.exceptions import NotFoundError
 from barricade.urls import get_report_edit_url
 
 class ReportManagementButton(
