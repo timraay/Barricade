@@ -125,7 +125,7 @@ async def notify_of_errors_in_dms(token: models.ReportToken, submission: schemas
                 "### **Your report couldn't be submitted!**"
                 "\nAn unexpected error happened while submitting your report. Please try again or reach out to support."
                 "\n"
-                f"\n{Emojis.TICK_NO} `Exception: Boom! Boom! Boom!`"
+                f"\n{Emojis.TICK_NO} {type(e).__name__}: {e}"
                 "\n"
                 "\n-# Details of your submission are attached below)"
             )
