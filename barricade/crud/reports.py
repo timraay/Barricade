@@ -314,7 +314,7 @@ async def edit_report(
     
     # Iterate over all remaining previous players and remove them
     for db_pr in db_prs.values():
-        db_report.players.remove(db_pr)
+        # db_report.players.remove(db_pr)
         await db.delete(db_pr)
 
     db_report.body = report.body
