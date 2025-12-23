@@ -392,6 +392,14 @@ class ReportSubmissionData(BaseModel):
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
 
+    @field_validator("reasons")
+    @classmethod
+    def drop_empty_reasons(cls, reasons: list[str]) -> list[str]:
+        """
+        Filter out empty/whitespace-only reasons so we don't treat them as custom reasons.
+        """
+        return [reason.strip() for reason in reasons if reason and reason.strip()]
+
 class ReportSubmission(BaseModel):
     id: str
     timestamp: datetime
