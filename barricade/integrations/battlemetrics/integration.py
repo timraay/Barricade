@@ -138,6 +138,8 @@ class BattlemetricsIntegration(Integration):
     @is_enabled
     async def ban_player(self, response: schemas.ResponseWithToken):
         player_id = response.player_report.player_id
+        self.logger.info("%r: Banning player %s", self, player_id)
+
         report = response.player_report.report
         report_channel = get_report_channel(report.token.platform)
 
@@ -168,6 +170,7 @@ class BattlemetricsIntegration(Integration):
 
     @is_enabled
     async def unban_player(self, player_id: str):
+        self.logger.info("%r: Unbanning player %s", self, player_id)
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
             if db_ban is None:
@@ -189,6 +192,10 @@ class BattlemetricsIntegration(Integration):
 
     @is_enabled
     async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
+        self.logger.info(
+            "%r: Bulk banning players %s",
+            self, [response.player_report.player_id for response in responses]
+        )
         ban_ids = []
         failed = []
         async with session_factory() as db:
@@ -233,6 +240,7 @@ class BattlemetricsIntegration(Integration):
 
     @is_enabled
     async def bulk_unban_players(self, player_ids: Sequence[str]):
+        self.logger.info("%r: Bulk unbanning players %s", self, player_ids)
         failed = []
         i = 0
         async with session_factory() as db:
@@ -639,7 +647,7 @@ class BattlemetricsIntegration(Integration):
         Returns:
             dict: The tokens data.
         """
-        url = f"https://www.battlemetrics.com/oauth/introspect"
+        url = "https://www.battlemetrics.com/oauth/introspect"
         data = {
             "token": self.config.api_key
         }

@@ -94,7 +94,7 @@ async def bulk_delete_bans(db: AsyncSession, *where_clauses):
     await db.execute(stmt)
     await db.flush()
 
-async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequence[str], community_id: int | None = None):
+async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequence[str] | None = None, community_id: int | None = None):
     """Get a list of player bans whose community has not responded to any reports
     or has not chosen to ban them.
 
@@ -104,8 +104,8 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequen
     ----------
     db : AsyncSession
         An asynchronous database session
-    player_ids : Sequence[str]
-        A list of player IDs
+    player_ids : Sequence[str] | None
+        A list of player IDs to filter by, by default None
     community_id : int | None, optional
         The ID of a community to filter results by, by default None
 
@@ -117,7 +117,6 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequen
     stmt = select(models.PlayerBan) \
         .join(models.PlayerBan.integration) \
         .where(
-            models.PlayerBan.player_id.in_(player_ids),
             not_(exists(
                 select(models.PlayerReportResponse)
                     .join(models.PlayerReport)
@@ -129,7 +128,10 @@ async def get_player_bans_without_responses(db: AsyncSession, player_ids: Sequen
             ))
         ) \
         .options(selectinload(models.PlayerBan.integration))
-    
+
+    if player_ids is not None:
+        stmt = stmt.where(models.PlayerBan.player_id.in_(player_ids))
+
     if community_id is not None:
         stmt = stmt.where(models.Integration.community_id == community_id)
     
