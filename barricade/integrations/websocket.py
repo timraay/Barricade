@@ -104,6 +104,8 @@ class Websocket:
             return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
         except asyncio.CancelledError:
             raise RuntimeError("Websocket is stopped")
+        except TimeoutError:
+            raise TimeoutError("Websocket is not connected")
 
     def start(self):
         if self.is_started():

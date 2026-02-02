@@ -63,6 +63,18 @@ class IntegrationBanError(IntegrationFailureError):
     def __init__(self, player_id: str, *args: object) -> None:
         self.player_id = player_id
         super().__init__(*args)
+    
+    def __str__(self) -> str:
+        result = f"{super().__str__()} ({self.player_id})"
+
+        if self.__cause__:
+            extra = str(self.__cause__)
+            if extra:
+                result += f"\n{extra}"
+            else:
+                result += f"\n{type(self.__cause__).__name__}"
+        
+        return result
 
 class IntegrationBulkBanError(IntegrationFailureError):
     """Exception raised when an integration fails to ban or
