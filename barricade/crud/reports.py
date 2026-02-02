@@ -339,6 +339,23 @@ async def delete_report(
         report_id: int,
         by: str | None = None,
 ):
+    """Delete a report.
+
+    This method will automatically commit after successfully creating
+    a report!
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    report_id : int
+        The ID of the report to delete
+
+    Raises
+    ------
+    NotFoundError
+        No report exists with the given ID
+    """
     # Retrieve report
     db_report = await get_report_by_id(db, report_id, load_relations=True)
     if not db_report:
@@ -352,7 +369,7 @@ async def delete_report(
 
     # Delete it
     await db.delete(db_report)
-    await db.flush()
+    await db.commit()
 
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
