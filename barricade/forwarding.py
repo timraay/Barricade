@@ -125,13 +125,20 @@ async def delete_public_report_message(report: schemas.ReportWithRelations):
 async def delete_private_report_messages(report: schemas.ReportWithRelations):
     async with session_factory() as db:
         for message_data in report.messages:
+            logger = get_logger(message_data.community_id) if message_data.community_id else logging
             try:
                 message = bot.get_partial_message(message_data.channel_id, message_data.message_id)
 
                 # Send warning if community had banned this player
                 if message_data.message_type == ReportMessageType.REVIEW and message_data.community_id:
                     db_responses = await get_community_responses_to_report(db, report, message_data.community_id)
-                    if any(db_response.banned for db_response in db_responses):
+                    banned_ids = [
+                        db_response.player_report.player_id
+                        for db_response in db_responses
+                        if db_response.banned
+                    ]
+
+                    if banned_ids:
                         view = View()
                         if len(report.players) == 1:
                             player_report = report.players[0]
@@ -145,10 +152,17 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                             # TODO
                             pass
 
+                        logger.info(
+                            "Notifying community %s about revoked bans on deleted report %s for players %s",
+                            message_data.community_id, report.id, banned_ids
+                        )
                         await message.edit(view=None)
                         await message.reply(
                             embed=discord.Embed(
-                                description="-# **This report was deleted!** One or more bans have been revoked as a result.",
+                                description=(
+                                    "-# **This report was deleted!** One or more bans have been revoked as a result."
+                                    f"\n-# `{'`, `'.join(banned_ids)}`"
+                                ),
                                 color=discord.Colour.red(),
                             ),
                             view=view,
@@ -167,11 +181,18 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                     continue
                 
                 # Otherwise: Simply delete the report
+                logger.info(
+                    "Deleting report message %s/%s (%s)",
+                    message_data.channel_id, message_data.message_id, message_data.message_type
+                )
                 await message.delete()
             except discord.HTTPException:
+                logger.warning(
+                    "Failed to update message %s/%s (%s) on report delete",
+                    message_data.channel_id, message_data.message_id, message_data.message_type
+                )
                 pass
             except Exception:
-                logger = get_logger(message_data.community_id) if message_data.community_id else logging
                 logger.exception("Unexpected error occurred while attempting to delete %r", message_data)
 
 
