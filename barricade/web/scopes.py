@@ -14,6 +14,10 @@ class Scopes(IntFlag):
     REPORT_ME_MANAGE = auto()
     REPORT_READ = auto()
     REPORT_MANAGE = auto()
+    BAN_ME_READ = auto()
+    BAN_ME_MANAGE = auto()
+    BAN_READ = auto()
+    BAN_MANAGE = auto()
 
     @classmethod
     def all(cls):
@@ -49,4 +53,8 @@ SCOPE_DESCRIPTIONS = {
     Scopes.REPORT_ME_MANAGE: "Edit and delete reports made by your community",
     Scopes.REPORT_READ: "Retrieve all reports",
     Scopes.REPORT_MANAGE: "Manage all reports",
+    Scopes.BAN_ME_READ: "Retrieve all bans made by your community",
+    Scopes.BAN_ME_MANAGE: "Create and revoke bans for your community",
+    Scopes.BAN_READ: "Retrieve all bans",
+    Scopes.BAN_MANAGE: "Manage all bans",
 }

@@ -16,6 +16,33 @@ from barricade.discord.views.player_review import PlayerReviewView
 from barricade.exceptions import AlreadyExistsError
 from barricade.logger import get_logger
 
+async def get_all_bans(
+    db: AsyncSession,
+    player_id: str | None = None,
+    community_id: int | None = None,
+    integration_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    load_relations: bool = False,
+):
+    if load_relations:
+        options = (Load(models.PlayerBan).selectinload("*"),)
+    else:
+        options = ()
+
+    stmt = select(models.PlayerBan).limit(limit).offset(offset).options(*options)
+    if player_id is not None:
+        stmt = stmt.where(models.PlayerBan.player_id == player_id)
+    if integration_id is not None:
+        stmt = stmt.where(models.PlayerBan.integration_id == integration_id)
+    if community_id is not None:
+        stmt = stmt.join(models.PlayerBan.integration).where(
+            models.Integration.community_id == community_id
+        )
+
+    result = await db.scalars(stmt)
+    return result.all()
+
 async def get_ban_by_id(db: AsyncSession, ban_id: int, load_relations: bool = False):
     """Look up a ban by its ID.
 
@@ -49,10 +76,18 @@ async def get_ban_by_player_and_integration(db: AsyncSession, player_id: str, in
         stmt = stmt.options(Load(models.PlayerBan).selectinload("*"))
     return await db.scalar(stmt)
 
-async def get_bans_by_integration(db: AsyncSession, integration_id: int):
+async def get_bans_by_integration(
+    db: AsyncSession,
+    integration_id: int,
+    limit: int | None = None,
+    offset: int = 0,
+):
     stmt = select(models.PlayerBan).where(
         models.PlayerBan.integration_id == integration_id
     )
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
+
     result = await db.stream_scalars(stmt)
     async for db_ban in result:
         yield db_ban

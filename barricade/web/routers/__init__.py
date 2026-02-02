@@ -2,7 +2,9 @@ from fastapi import FastAPI
 
 from . import admins
 from . import auth
+from . import bans
 from . import communities
+from . import integrations
 from . import reports
 from . import web_users
 
@@ -15,6 +17,8 @@ def setup_all(app: FastAPI):
     auth.setup(app)
 
     admins.setup(app)
+    bans.setup(app)
     communities.setup(app)
+    integrations.setup(app)
     reports.setup(app)
     web_users.setup(app)

@@ -3,7 +3,7 @@ import discord
 from fastapi import Depends, FastAPI, APIRouter, HTTPException, Security, status
 from io import BytesIO
 import logging
-from typing import Annotated
+from typing import Annotated, Literal
 
 from barricade import schemas
 from barricade.crud import communities, reports
@@ -239,7 +239,7 @@ async def delete_report(
             web_schemas.TokenWithHash,
             Security(get_active_token, scopes=Scopes.REPORT_MANAGE.to_list())
         ],
-):
+) -> Literal[True]:
     try:
         return await reports.delete_report(db,
             report_id=report_id,
