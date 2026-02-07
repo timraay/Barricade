@@ -15,6 +15,7 @@ class Player(ModelBase):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     bm_rcon_url: Mapped[Optional[str]]
+    eos_id: Mapped[Optional[str]]
 
     reports: Mapped[list['PlayerReport']] = relationship(back_populates="player")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="player")

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.constants import T17_SUPPORT_CUTOFF_DATE, T17_SUPPORT_DISCORD_CHANNEL_ID, T17_SUPPORT_NUM_ALLOWED_REJECTS, T17_SUPPORT_NUM_REQUIRED_RESPONSES, T17_SUPPORT_REASON_MASK
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.reports import get_report_by_id, get_report_message_by_community_id, get_reports_for_player, is_player_reported
+from barricade.crud.reports import get_or_create_player, get_player, get_report_by_id, get_report_message_by_community_id, get_reports_for_player, is_player_reported
 from barricade.crud.responses import bulk_get_response_stats, get_community_responses_to_report, get_pending_responses, get_reports_for_player_with_no_community_review
 from barricade.crud.watchlists import filter_watchlisted_player_ids, is_player_watchlisted
 from barricade.db import models, session_factory
@@ -21,11 +21,12 @@ from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
 from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
-from barricade.enums import Platform, PlayerAlertType, ReportMessageType
+from barricade.enums import Platform, PlayerAlertType, PlayerIDType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 from barricade.urls import URLFactory
+from barricade.utils import get_player_id_type
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
@@ -379,16 +380,89 @@ async def send_optional_player_alert_to_community(community_id: int, player_ids:
             for alert in alerts:
                 await alert.send(db, channel)
 
+# Collect EOS IDs
+
+def is_eos_id_necessary(report: schemas.ReportWithToken, player_id: str) -> bool:
+    if not might_forward_to_staff(report):
+        return False
+    if get_player_id_type(player_id) == PlayerIDType.STEAM_64_ID:
+        return False
+    return True
+
+async def update_player_eos_id(db: AsyncSession, player_id: str, community_id: int) -> bool:
+    logger = get_logger(community_id)
+    integration_manager = IntegrationManager()
+
+    db_player = await get_player(db, player_id)
+
+    from barricade.integrations.crcon.integration import CRCONIntegration
+
+    for integration in integration_manager.get_all():
+        if (
+            integration.config.community_id == community_id
+            and integration.config.enabled
+            and isinstance(integration, CRCONIntegration)
+        ):
+            try:
+                eos_id = await integration.get_player_eos_id(player_id)
+                if eos_id:
+                    await get_or_create_player(db, schemas.PlayerCreateParams(
+                        id=player_id,
+                        bm_rcon_url=None,
+                        eos_id=eos_id,
+                    ))
+                    return True
+            except Exception:
+                logger = get_logger(community_id)
+                logger.exception("Failed to fetch EOS ID for player %s using %r", player_id, integration)
+
+    return (
+        db_player is not None
+        and db_player.eos_id is not None
+    )
+
+async def update_player_eos_id_for_report(report: schemas.ReportWithToken) -> None:
+    async with session_factory.begin() as db:
+        for player_report in report.players:
+            eos_id_found = await update_player_eos_id(
+                db,
+                player_report.player_id,
+                report.token.community_id,
+            )
+
+            if not eos_id_found and is_eos_id_necessary(report, player_report.player_id):
+                logger = get_logger(report.token.community_id)
+                logger.info(
+                    "Failed to find EOS ID for player %s in report %s with T17 Support reason. Requesting EOS ID be manually provided.",
+                    player_report.player_id, report.id,
+                )
+
+                # TODO: Request EOS ID from user
+
+@add_hook(EventHooks.report_create)
+async def collect_eos_ids_on_report_create(report: schemas.ReportWithToken):
+    await update_player_eos_id_for_report(report)
+
+@add_hook(EventHooks.report_edit)
+async def collect_eos_ids_on_report_edit(report: schemas.ReportWithRelations, _):
+    await update_player_eos_id_for_report(report)
+
 # Forward to T17 Support
 
+def might_forward_to_staff(report: schemas.ReportWithToken) -> bool:
+    if not T17_SUPPORT_DISCORD_CHANNEL_ID:
+        return False
+    
+    if (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) == 0:
+        return False
+    
+    if T17_SUPPORT_CUTOFF_DATE and report.created_at < T17_SUPPORT_CUTOFF_DATE:
+        return False
+    
+    return True
+
 def should_forward_to_staff(report: schemas.ReportWithToken, stats: dict[int, schemas.ResponseStats]) -> bool:
-    if (
-        (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) != 0
-        and (
-            not T17_SUPPORT_CUTOFF_DATE
-            or report.created_at >= T17_SUPPORT_CUTOFF_DATE
-        )
-    ):
+    if might_forward_to_staff(report):
         for stat in stats.values():
             num_responses = stat.num_banned + stat.num_rejected
             if (
@@ -412,6 +486,7 @@ if T17_SUPPORT_DISCORD_CHANNEL_ID:
             stats = await bulk_get_response_stats(db, report.players)
 
             if should_forward_to_staff(report, stats):
+                # TODO: Do not send if EOS ID is required but missing. Wait until EOS is provided.
                 await send_or_edit_t17_support_report_review_message(report, stats=stats)
 
 

@@ -105,6 +105,7 @@ class _CommunityBase(BaseModel):
 class _PlayerBase(BaseModel):
     id: str
     bm_rcon_url: Optional[str]
+    eos_id: Optional[str]
 
 class _ReportTokenBase(BaseModel):
     community_id: int
@@ -337,6 +338,7 @@ class PlayerCreateParams(_PlayerBase):
 
 class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: Optional[str]
+    eos_id: Optional[str] = None
 
 class ReportEditParams(_ReportBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

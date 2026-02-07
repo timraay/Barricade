@@ -246,3 +246,10 @@ class CRCONIntegration(CustomIntegration):
                 expires_at=datetime.now(tz=timezone.utc).isoformat(),
             )
         )
+
+    async def get_player_eos_id(self, player_id: str) -> str | None:
+        resp = await self._make_request(
+            "GET", "/get_player_profile",
+            data=dict(player_id=player_id)
+        )
+        return resp["result"].get("soldier", {}).get("eos_id")
