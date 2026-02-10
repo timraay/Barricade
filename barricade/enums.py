@@ -127,6 +127,7 @@ class Emojis(StrEnum):
     SILHOUETTE = "<:silhouette:1283389193724366960>"
     REFRESH = "<:refresh:1283790096461594655>"
     ARROW_DOWN_RIGHT = "<:arrow_down_right:1357406683801849996>"
+    EASY_ANTI_CHEAT = "<:easy_anti_cheat:1470734064892772394>"
 
 class ReportMessageType(Enum):
     # Careful when renaming, used by PSQL
