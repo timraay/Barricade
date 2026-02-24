@@ -82,32 +82,34 @@ class CallableSelect(ui.Select):
         await self._callback(interaction, self.values, *self._args, **self._kwargs)
 
 
+def get_neutral_embed(title: str, description: str | None = None):
+    embed = discord.Embed()
+    embed.set_author(name=title)
+    embed.description = description
+    return embed
+
 def get_error_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color.from_rgb(221, 46, 68))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/emojis/808045512393621585.png')
-    if description:
-        embed.description = description
+    embed.description = description
     return embed
 
 def get_success_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(7844437))
     embed.set_author(name=title, icon_url="https://cdn.discordapp.com/emojis/809149148356018256.png")
-    if description:
-        embed.description = description
+    embed.description = description
     return embed
 
 def get_question_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(3315710))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/attachments/729998051288285256/924971834343059496/unknown.png')
-    if description:
-        embed.description = description
+    embed.description = description
     return embed
 
 def get_danger_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(0xffcc4d))
     embed.set_author(name=title, icon_url='https://cdn.discordapp.com/attachments/695232527123742745/1188991491150991470/warning.png')
-    if description:
-        embed.description = description
+    embed.description = description
     return embed
 
 

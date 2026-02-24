@@ -112,7 +112,7 @@ def get_alerts_channel(community: schemas.CommunityRef) -> discord.TextChannel |
         raise RuntimeError("Alerts channel %r is not a TextChannel" % channel)
     return channel
 
-async def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
+def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
     role_id = (
         community.admin_role_id
         if community.alerts_role_id is None
