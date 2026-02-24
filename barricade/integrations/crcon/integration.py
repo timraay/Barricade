@@ -24,6 +24,7 @@ REQUIRED_PERMISSIONS = {
     "can_add_blacklist_records",
     "can_change_blacklist_records",
     "can_delete_blacklist_records",
+    "can_view_player_profile",
 }
 
 class Blacklist(TypedDict):
