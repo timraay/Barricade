@@ -7,6 +7,7 @@ from . import communities
 from . import integrations
 from . import reports
 from . import web_users
+from . import admin_tools
 
 __all__ = (
     "setup_all",
@@ -22,3 +23,5 @@ def setup_all(app: FastAPI):
     integrations.setup(app)
     reports.setup(app)
     web_users.setup(app)
+
+    admin_tools.setup(app)

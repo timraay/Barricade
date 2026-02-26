@@ -283,7 +283,7 @@ class PlayerAlert:
         )
 
         view = View()
-        mention = await get_alerts_role_mention(self.community)
+        mention = get_alerts_role_mention(self.community)
         match self.alert_type:
             case PlayerAlertType.UNREVIEWED:
                 if mention:
