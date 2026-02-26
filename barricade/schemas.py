@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field, ConfigDict, field_serializer, field_validator
-from typing import Literal, Optional
+from pydantic import AfterValidator, BaseModel, Field, ConfigDict, field_serializer, field_validator
+from typing import Annotated, Literal, Optional
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import Platform, ReportMessageType, ReportRejectReason, IntegrationType, ReportReasonFlag
@@ -388,7 +388,12 @@ class ReportSubmissionData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     token: str
     players: list[ReportSubmissionPlayerData]
-    reasons: list[str]
+    reasons: Annotated[
+        list[str],
+        AfterValidator(
+            lambda v: [reason for reason in v if reason.strip()]
+        )
+    ]
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
 
