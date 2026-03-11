@@ -29,7 +29,7 @@ services:
 
     # Expose port for the FastAPI application
     ports:
-      - "${GW_API_PORT}:${GW_API_PORT}"
+      - "${WEB_PORT:-8080}:${WEB_PORT:-8080}"
 
     env_file:
       - ".env"
