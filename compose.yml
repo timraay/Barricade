@@ -35,6 +35,9 @@ services:
       - ".env"
 
     environment:
+      DB_HOST: postgres
+      DB_USER: ${DB_USER:-barricade}
+
       # Require certain environment variables to be set
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
 
