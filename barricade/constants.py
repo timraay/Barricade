@@ -40,9 +40,9 @@ WEB_PORT = get_env_int('WEB_PORT', 8080)
 WEB_DOCS_VISIBLE = os.getenv('WEB_DOCS_VISIBLE', '1').strip().lower() not in ('', '0', 'no', 'off', 'false')
 
 # Load DB parameters from env
-DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_HOST = os.getenv('DB_HOST', '0.0.0.0')
 DB_PORT = get_env_int('DB_PORT', 5432)
-DB_USER = os.getenv('DB_USER', 'postgres')
+DB_USER = os.getenv('DB_USER', 'barricade')
 DB_PASSWORD = os.getenv('DB_PASSWORD')
 # Create DB url
 DB_URL = URL.create(

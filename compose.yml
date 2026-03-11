@@ -4,7 +4,7 @@ services:
     environment:
       # If a password is not defined this container will fail to create
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_USER: ${DB_USER:-barricade}
       POSTGRES_DB: barricade
       PGDATA: /data
     restart: always
