@@ -38,5 +38,7 @@ services:
       # Require certain environment variables to be set
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
 
+    command: ["sh", "-c", "alembic upgrade head && python app.py"]
+
     volumes:
       - ./logs:/app/logs/
