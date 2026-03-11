@@ -1,8 +1,10 @@
+db_data/
+logs/
+
 # Temporary stuff
 dev.env
 tmp.py
 credentials.json
-logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

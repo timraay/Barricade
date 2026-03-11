@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:18-trixie
+    environment:
+      # If a password is not defined this container will fail to create
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_DB: barricade
+      PGDATA: /data
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 15s
+      timeout: 30s
+      retries: 5
+      start_period: 80s
+    volumes:
+      - ./db_data:/data
+
+  backend:
+    # Build the image from the Dockerfile in the current directory
+    build: .
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    # Expose port for the FastAPI application
+    ports:
+      - "${GW_API_PORT}:${GW_API_PORT}"
+
+    env_file:
+      - ".env"
+
+    environment:
+      # Require certain environment variables to be set
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?DISCORD_BOT_TOKEN is required}
+
+    volumes:
+      - ./logs:/app/logs/

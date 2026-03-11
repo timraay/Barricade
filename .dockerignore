@@ -1,0 +1,13 @@
+.git
+.env
+.venv
+.vscode
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+__pycache__
+
+db_data/
+logs/
+assets/
