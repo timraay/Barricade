@@ -433,11 +433,9 @@ async def update_player_eos_id_for_report(report: schemas.ReportWithToken) -> No
             if not eos_id_found and is_eos_id_necessary(report, player_report.player_id):
                 logger = get_logger(report.token.community_id)
                 logger.info(
-                    "Failed to find EOS ID for player %s in report %s with T17 Support reason. Requesting EOS ID be manually provided.",
+                    "Failed to find EOS ID for player %s in report %s with T17 Support reason.",
                     player_report.player_id, report.id,
                 )
-
-                # TODO: Request EOS ID from user
 
 @add_hook(EventHooks.report_create)
 async def collect_eos_ids_on_report_create(report: schemas.ReportWithToken):

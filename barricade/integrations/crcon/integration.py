@@ -253,4 +253,10 @@ class CRCONIntegration(CustomIntegration):
             "GET", "/get_player_profile",
             data=dict(player_id=player_id)
         )
-        return resp["result"].get("soldier", {}).get("eos_id")
+
+        result = resp["result"]
+        if result is None:
+            self.logger.warning("%r: No profile found for player_id %s", self, player_id)
+            return None
+        
+        return result.get("soldier", {}).get("eos_id")
