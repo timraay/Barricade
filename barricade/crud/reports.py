@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,7 +238,8 @@ async def create_report(
         # flushed, we do this first.
         db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
             id=player.player_id,
-            bm_rcon_url=player.bm_rcon_url
+            bm_rcon_url=player.bm_rcon_url,
+            eos_id=player.eos_id,
         ))
         db_players.append(db_player)
         # player.bm_rcon_url = db_player.bm_rcon_url
@@ -302,7 +304,8 @@ async def edit_report(
             # Player did not yet exist, add to report
             db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
                 id=player.player_id,
-                bm_rcon_url=player.bm_rcon_url
+                bm_rcon_url=player.bm_rcon_url,
+                eos_id=player.eos_id,
             ))
             db_pr = models.PlayerReport(
                 report=db_report,
@@ -415,8 +418,18 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
     db_player = await get_player(db, player.id)
     created = False
     if db_player:
+        dirty = False
         if player.bm_rcon_url and player.bm_rcon_url != db_player.bm_rcon_url:
+            if player.bm_rcon_url:
+                logging.warning("Updating bm_rcon_url for player %s from %s to %s", player.id, db_player.bm_rcon_url, player.bm_rcon_url)
             db_player.bm_rcon_url = player.bm_rcon_url
+            dirty = True
+        if player.eos_id and player.eos_id != db_player.eos_id:
+            if player.eos_id:
+                logging.warning("Updating eos_id for player %s from %s to %s", player.id, db_player.eos_id, player.eos_id)
+            db_player.eos_id = player.eos_id
+            dirty = True
+        if dirty:
             await db.flush()
     else:
         db_player = models.Player(**player.model_dump())

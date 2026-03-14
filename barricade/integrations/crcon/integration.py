@@ -24,6 +24,7 @@ REQUIRED_PERMISSIONS = {
     "can_add_blacklist_records",
     "can_change_blacklist_records",
     "can_delete_blacklist_records",
+    "can_view_player_profile",
 }
 
 class Blacklist(TypedDict):
@@ -246,3 +247,16 @@ class CRCONIntegration(CustomIntegration):
                 expires_at=datetime.now(tz=timezone.utc).isoformat(),
             )
         )
+
+    async def get_player_eos_id(self, player_id: str) -> str | None:
+        resp = await self._make_request(
+            "GET", "/get_player_profile",
+            data=dict(player_id=player_id)
+        )
+
+        result = resp["result"]
+        if result is None:
+            self.logger.warning("%r: No profile found for player_id %s", self, player_id)
+            return None
+        
+        return result.get("soldier", {}).get("eos_id")

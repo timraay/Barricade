@@ -77,5 +77,5 @@ class T17SupportPlayerReviewView(View):
         report: schemas.ReportWithToken,
         stats: dict[int, schemas.ResponseStats] | None = None
     ):
-        embed = await get_report_embed(report, stats=stats)
+        embed = await get_report_embed(report, stats=stats, with_eos_ids=True)
         return embed

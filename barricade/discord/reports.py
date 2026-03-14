@@ -41,7 +41,8 @@ async def get_report_embed(
         report: schemas.ReportWithToken,
         responses: list[schemas.PendingResponse] | None = None,
         stats: dict[int, schemas.ResponseStats] | None = None,
-        with_footer: bool = True
+        with_footer: bool = True,
+        with_eos_ids: bool = False,
 ) -> discord.Embed:
     embed = discord.Embed(
         colour=discord.Colour.dark_theme(),
@@ -76,6 +77,10 @@ async def get_report_embed(
             value = f"{Emojis.STEAM if is_steam else Emojis.EPIC_XBOX} *`{player.player_id}`*"
         else:
             value = f"*`{player.player_id}`*"
+        
+        if with_eos_ids and not is_steam:
+            value += f"\n-# {Emojis.EASY_ANTI_CHEAT}"
+            value += f"*`{player.player.eos_id}`*" if player.player.eos_id else "\n-# No EOS ID known"
 
         if stats and (stat := stats.get(player.id)):
             num_responses = stat.num_banned + stat.num_rejected
