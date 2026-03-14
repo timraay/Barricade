@@ -123,6 +123,7 @@ class CustomException(Exception):
         self.log_traceback = log_traceback
         super().__init__(*args)
 
+_DISCORD_LOGGER = logging.getLogger("discord")
 
 def get_error_embed_from_exc(error: Exception):
     if isinstance(error, (app_commands.CommandInvokeError, commands.CommandInvokeError)):
@@ -134,7 +135,7 @@ def get_error_embed_from_exc(error: Exception):
     elif isinstance(error, CustomException):
         embed = get_error_embed(title=error.error, description=str(error))
         if error.log_traceback:
-            logging.error("An unexpected error occured when handling an interaction", exc_info=error)
+            _DISCORD_LOGGER.error("An unexpected error occured when handling an interaction", exc_info=error)
     
     elif isinstance(error, ExpiredButtonError):
         embed = get_error_embed("This action no longer is available.")
@@ -166,7 +167,7 @@ def get_error_embed_from_exc(error: Exception):
         embed = get_error_embed("Invalid argument!", esc_md(str(error)))
     else:
         embed = get_error_embed("An unexpected error occured!", esc_md(str(error)))
-        logging.error("An unexpected error occured when handling an interaction", exc_info=error)
+        _DISCORD_LOGGER.error("An unexpected error occured when handling an interaction", exc_info=error)
     
     return embed
 
