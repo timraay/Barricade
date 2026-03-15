@@ -80,7 +80,7 @@ async def get_report_embed(
         
         if with_eos_ids and not is_steam:
             value += f"\n-# {Emojis.EASY_ANTI_CHEAT}"
-            value += f"*`{player.player.eos_id}`*" if player.player.eos_id else "\n-# No EOS ID known"
+            value += f"*`{player.player.eos_id}`*" if player.player.eos_id else "No EOS ID known"
 
         if stats and (stat := stats.get(player.id)):
             num_responses = stat.num_banned + stat.num_rejected
