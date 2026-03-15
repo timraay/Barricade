@@ -10,3 +10,4 @@ python-multipart
 python-jose[cryptography]
 passlib[bcrypt]
 alembic
+websockets==13.*
