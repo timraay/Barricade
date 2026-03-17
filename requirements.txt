@@ -8,6 +8,6 @@ discord.py>=2.4.0
 cachetools
 python-multipart
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[bcrypt]==4.3.*
 alembic
 websockets==13.*
