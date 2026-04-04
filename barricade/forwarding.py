@@ -524,8 +524,12 @@ async def send_or_edit_report_management_message(
     community = report.token.community
     admin = report.token.admin
 
-    user = await bot.get_or_fetch_member(admin.discord_id)
-    content = f"{user.mention} your report was submitted! (ID: #{report.id})"
+    if admin:
+        user = await bot.get_or_fetch_member(admin.discord_id)
+        content = f"{user.mention} your report was submitted! (ID: #{report.id})"
+    else:
+        user = None
+        content = f"Report submitted! (ID: #{report.id})"
     
     async with session_factory.begin() as db:                    
         view = ReportManagementView(report)
@@ -540,7 +544,7 @@ async def send_or_edit_report_management_message(
             view=view,
             admin=admin,
             content=content,
-            allowed_mentions=discord.AllowedMentions(users=[user])
+            allowed_mentions=discord.AllowedMentions(users=[user] if user else [])
         )
 
 async def send_or_edit_t17_support_report_review_message(

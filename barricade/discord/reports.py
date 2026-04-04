@@ -125,19 +125,24 @@ async def get_report_embed(
         )
 
     if with_footer:
-        user = await bot.get_or_fetch_member(report.token.admin_id, strict=False)
-        if user and user.avatar:
-            avatar_url = user.avatar.url
+        avatar_url: str | None = None
+
+        if report.token.admin:
+            user = await bot.get_or_fetch_member(report.token.admin.discord_id, strict=False)
+            if user and user.avatar:
+                avatar_url = user.avatar.url
+            admin_name = await get_admin_name(report.token.admin)
+
+            embed.set_footer(
+                text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
+                icon_url=avatar_url
+            )
         else:
-            avatar_url = None
-
-        admin_name = await get_admin_name(report.token.admin)
-
+            embed.set_footer(
+                text=f"Report by {report.token.community.name} • {report.token.community.contact_url}",
+                icon_url=avatar_url
+            )
         embed.timestamp = report.created_at
-        embed.set_footer(
-            text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
-            icon_url=avatar_url
-        )
 
     return embed
 

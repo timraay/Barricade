@@ -120,7 +120,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
 
 class URLFactory:
     class Key(NamedTuple):
-        admin_id: int
+        admin_id: int | None
         community_id: int
         platform: Platform
 

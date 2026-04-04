@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, selectinload
 
 from barricade import schemas
-from barricade.crud.communities import get_admin_by_id
+from barricade.crud.communities import get_admin_by_id, get_community_by_id
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
 from barricade.discord.audit import audit_report_create, audit_report_delete, audit_report_edit, audit_token_create
@@ -64,25 +64,33 @@ async def create_token(
         No admin with the given ID exists
     AlreadyExistsError
         The admin's community differs from the given community ID
+    InvalidPlatformError
+        The community is not known for the given platform
     """
     if params.expires_at < datetime.now(tz=timezone.utc):
         raise ValueError("Token would already be expired")
-    
-    admin = await get_admin_by_id(db, params.admin_id)
-    if not admin:
-        raise NotFoundError("No admin with ID %s" % params.admin_id)
-    if not admin.community:
-        raise NotFoundError("Admin with ID %s is not part of any community" % params.admin_id)
-    if admin.community_id != params.community_id:
-        raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
-    
-    if params.platform == Platform.PC:
-        if not admin.community.is_pc:
-            raise InvalidPlatformError("Community with ID %s is not a PC community" % admin.community_id)
-    elif params.platform == Platform.CONSOLE:
-        if not admin.community.is_console:
-            raise InvalidPlatformError("Community with ID %s is not a console community" % admin.community_id)
 
+    community = await get_community_by_id(db, params.community_id)
+    if not community:
+        raise NotFoundError("No community with ID %s" % params.community_id)
+
+    if params.platform == Platform.PC:
+        if not community.is_pc:
+            raise InvalidPlatformError("Community with ID %s is not a PC community" % community.id)
+    elif params.platform == Platform.CONSOLE:
+        if not community.is_console:
+            raise InvalidPlatformError("Community with ID %s is not a console community" % community.id)
+
+    admin = None
+    if params.admin_id is not None:
+        admin = await get_admin_by_id(db, params.admin_id)
+        if not admin:
+            raise NotFoundError("No admin with ID %s" % params.admin_id)
+        if not admin.community:
+            raise NotFoundError("Admin with ID %s is not part of any community" % params.admin_id)
+        if admin.community_id != params.community_id:
+            raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
+    
     db_token = models.ReportToken(
         **params.model_dump()
     )

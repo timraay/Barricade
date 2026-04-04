@@ -10,7 +10,7 @@ from barricade.crud import communities, reports
 from barricade.db import DatabaseDep, models
 from barricade.discord.bot import bot
 from barricade.enums import Emojis, ReportReasonFlag
-from barricade.exceptions import NotFoundError
+from barricade.exceptions import AlreadyExistsError, InvalidPlatformError, NotFoundError
 from barricade.web import schemas as web_schemas
 from barricade.web.paginator import PaginatedResponse, PaginatorDep
 from barricade.web.scopes import Scopes
@@ -59,26 +59,37 @@ async def create_report(
             Security(get_active_token, scopes=Scopes.REPORT_MANAGE.to_list())
         ],
 ):
-    db_admin = await communities.get_admin_by_id(db, report.admin_id)
-    if not db_admin:
+    db_community = await communities.get_community_by_id(db, report.community_id)
+    if not db_community:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Admin does not exist"
-        )
-    if not db_admin.community_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin is not part of a community"
+            detail="Community does not exist"
         )
     
-    db_token = await reports.create_token(db,
-        params=schemas.ReportTokenCreateParams(
-            admin_id=db_admin.discord_id,
-            community_id=db_admin.community_id,
-            platform=report.platform,
-        ),
-        by=(token.user.username if token.user else "Web Token")
-    )
+    try:
+        db_token = await reports.create_token(db,
+            params=schemas.ReportTokenCreateParams(
+                admin_id=report.admin_id,
+                community_id=report.community_id,
+                platform=report.platform,
+            ),
+            by=(token.user.username if token.user else "Web Token")
+        )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No admin with the given ID exists"
+        )
+    except AlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin belongs to a different community"
+        )
+    except InvalidPlatformError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
     return await reports.create_report(db,
         params=schemas.ReportCreateParams(
@@ -113,6 +124,9 @@ async def notify_of_errors_in_dms(token: models.ReportToken, submission: schemas
     try:
         yield
     except Exception as e:
+        if token.admin_id is None:
+            raise
+
         try:
             user = await bot.get_or_fetch_user(token.admin_id)
 
@@ -136,7 +150,7 @@ async def notify_of_errors_in_dms(token: models.ReportToken, submission: schemas
             logger.exception("Failed to notify %s of submission failure", token.admin_id)
             pass
 
-        raise e
+        raise
 
 @router.post("/reports/submit", response_model=schemas.SafeReportWithToken)
 async def submit_report(
@@ -277,16 +291,10 @@ async def create_own_report(
             Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_MANAGE.to_list())
         ],
 ):
-    admin = await communities.get_admin_by_id(db, report.admin_id)
-    if not admin:
+    if report.community_id != token.community_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Admin does not exist"
-        )
-    if admin.community_id != token.community_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin is not part of your community"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report is not created by your community"
         )
     return await create_report(report, db, token)
 

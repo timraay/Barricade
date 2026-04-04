@@ -229,7 +229,8 @@ async def audit_token_create(
     )
     await set_footer(embed, token.admin_id, by)
     add_community_field(embed, token.community)
-    await add_admin_field(embed, token.admin)
+    if token.admin:
+        await add_admin_field(embed, token.admin)
 
     await _audit(embed)
 
@@ -246,7 +247,8 @@ async def audit_report_create(
     )
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
-    await add_admin_field(embed, report.token.admin)
+    if report.token.admin:
+        await add_admin_field(embed, report.token.admin)
     report_channel = get_report_channel(report.token.platform)
     embed.add_field(
         name="Message",
@@ -269,7 +271,8 @@ async def audit_report_edit(
     )
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
-    await add_admin_field(embed, report.token.admin)
+    if report.token.admin:
+        await add_admin_field(embed, report.token.admin)
     report_channel = get_report_channel(report.token.platform)
     embed.add_field(
         name="Message",
@@ -293,7 +296,8 @@ async def audit_report_delete(
     )
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
-    await add_admin_field(embed, report.token.admin)
+    if report.token.admin:
+        await add_admin_field(embed, report.token.admin)
     embed.add_field(
         name="Report",
         value="See below"

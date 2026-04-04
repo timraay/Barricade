@@ -109,7 +109,7 @@ class _PlayerBase(BaseModel):
 
 class _ReportTokenBase(BaseModel):
     community_id: int
-    admin_id: int
+    admin_id: Optional[int]
     expires_at: datetime
     platform: Platform
 
@@ -197,7 +197,7 @@ class SafeReportTokenRef(_ReportTokenBase, _ModelFromAttributes):
     id: int
 
     community: CommunityRef
-    admin: AdminRef
+    admin: Optional[AdminRef]
 
 class ReportTokenRef(SafeReportTokenRef):
     value: str
@@ -350,7 +350,8 @@ class ReportCreateParams(ReportEditParams):
     token_id: int
 
 class ReportCreateParamsTokenless(ReportEditParams):
-    admin_id: int
+    community_id: int
+    admin_id: Optional[int]
     platform: Platform
 
     @field_serializer('admin_id', when_used='json-unless-none')
