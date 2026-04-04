@@ -9,6 +9,7 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from .community import Community
     from .player_ban import PlayerBan
+    from .web_token import WebToken
 
 class Integration(ModelBase):
     __tablename__ = "integrations"
@@ -27,3 +28,4 @@ class Integration(ModelBase):
 
     community: Mapped['Community'] = relationship(back_populates="integrations")
     bans: Mapped[list['PlayerBan']] = relationship(back_populates="integration", cascade="all, delete-orphan")
+    token: Mapped[Optional['WebToken']] = relationship(back_populates="integration", cascade="all, delete-orphan", uselist=False)

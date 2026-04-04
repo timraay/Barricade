@@ -37,6 +37,7 @@ class TokenCreateParams(BaseModel):
     expires_delta: timedelta | None = ACCESS_TOKEN_EXPIRE_DELTA
     user_id: int | None = None
     community_id: int | None = None
+    integration_id: int | None = None
 
 class BaseToken(BaseModel):
     scopes: Scopes | None
@@ -44,6 +45,7 @@ class BaseToken(BaseModel):
 
     user_id: int | None
     community_id: int | None
+    integration_id: int | None = None
 
     user: WebUser | None
 
