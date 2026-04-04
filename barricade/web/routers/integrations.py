@@ -3,6 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Security, status
 from barricade import schemas
 from barricade.db import models
+from barricade.forwarding import send_optional_player_alert_to_community
+from barricade.integrations.custom.models import ScanPlayersRequestPayload
 from barricade.integrations.integration import Integration
 from barricade.integrations.manager import IntegrationManager
 from barricade.web.paginator import PaginatedResponse, PaginatorDep
@@ -94,6 +96,20 @@ async def disable_integration(
     await integration.disable()
     return integration.config
 
+@router.post("/integrations/{integration_id}/scan-players")
+async def integration_scan_players(
+        integration: OwnIntegrationDep,
+        payload: ScanPlayersRequestPayload,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_MANAGE.to_list())
+        ],
+):
+    await send_optional_player_alert_to_community(
+        integration.config.community_id,
+        payload.player_ids
+    )
+
 
 @router.get("/communities/me/integrations/{integration_id}", response_model=schemas.SafeIntegrationConfig)
 async def get_own_community_integration(
@@ -124,6 +140,18 @@ async def disable_own_community_integration(
         ],
 ):
     return disable_integration(integration, token)
+
+@router.post("/communities/me/integrations/{integration_id}/scan-players")
+async def own_community_integration_scan_players(
+        integration: OwnIntegrationDep,
+        payload: ScanPlayersRequestPayload,
+        token: Annotated[
+            web_schemas.TokenWithHash,
+            Security(get_active_token_community(True), scopes=Scopes.COMMUNITY_ME_MANAGE.to_list())
+        ],
+):
+    return await integration_scan_players(integration, payload, token)
+
 
 def setup(app: FastAPI):
     app.include_router(router)
