@@ -3,10 +3,14 @@ import asyncio
 from barricade import schemas
 from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud.communities import get_admin_by_id
-from barricade.discord import bot
-from barricade.discord.communities import get_admin_roles, revoke_user_roles, update_user_roles
-from barricade.utils import safe_create_task
 from barricade.db import session_factory
+from barricade.discord import bot
+from barricade.discord.communities import (
+    get_admin_roles,
+    revoke_user_roles,
+    update_user_roles,
+)
+from barricade.utils import safe_create_task
 
 
 async def main():
@@ -21,7 +25,7 @@ async def main():
         await bot.wait_until_ready()
 
         admin_role, owner_role, *_ = get_admin_roles()
-        
+
         async with session_factory() as db:
             async for member in bot.primary_guild.fetch_members(limit=None):
                 if admin_role in member.roles or owner_role in member.roles:
@@ -40,5 +44,6 @@ async def main():
         if not bot.is_closed():
             await bot.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(main())

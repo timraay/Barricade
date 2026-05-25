@@ -1,21 +1,27 @@
 from datetime import datetime, timedelta
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from barricade.constants import ACCESS_TOKEN_EXPIRE_DELTA
 from barricade.web.scopes import Scopes
 
+
 class WebUserBase(BaseModel):
     username: str
 
+
 class WebUserDelete(WebUserBase):
     pass
+
 
 class WebUserUpdateParams(WebUserBase):
     username: str = Field(min_length=3, max_length=20)
     scopes: Scopes = Scopes(0)
 
+
 class WebUserCreateParams(WebUserUpdateParams):
     password: str = Field(min_length=8, max_length=64)
+
 
 class WebUser(WebUserBase):
     id: int
@@ -24,8 +30,10 @@ class WebUser(WebUserBase):
     class Config:
         from_attributes = True
 
+
 class WebUserWithHash(WebUser):
     hashed_password: str
+
 
 class WebUserWithPassword(WebUser):
     password: str
@@ -38,6 +46,7 @@ class TokenCreateParams(BaseModel):
     user_id: int | None = None
     community_id: int | None = None
 
+
 class BaseToken(BaseModel):
     scopes: Scopes | None
     expires: datetime | None
@@ -47,6 +56,7 @@ class BaseToken(BaseModel):
 
     user: WebUser | None
 
+
 class TokenWithHash(BaseToken):
     id: int
     hashed_token: str
@@ -54,8 +64,10 @@ class TokenWithHash(BaseToken):
     class Config:
         from_attributes = True
 
+
 class Token(BaseToken):
     token: str
+
 
 class Login(BaseModel):
     access_token: str

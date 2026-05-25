@@ -1,14 +1,15 @@
-
 import logging
 
 from barricade.constants import LOGS_FOLDER
 
+
 def _get_logs_format(name: str | None = None):
     if name:
-        fmt = '[%(asctime)s][{}][%(levelname)s][%(module)s.%(funcName)s:%(lineno)s] %(message)s'.format(name)
+        fmt = f"[%(asctime)s][{name}][%(levelname)s][%(module)s.%(funcName)s:%(lineno)s] %(message)s"
     else:
-        fmt = '[%(asctime)s][%(levelname)s][%(module)s.%(funcName)s:%(lineno)s] %(message)s'
+        fmt = "[%(asctime)s][%(levelname)s][%(module)s.%(funcName)s:%(lineno)s] %(message)s"
     return fmt
+
 
 def get_logger(community_id: int):
     logger = logging.getLogger(str(community_id))
@@ -18,7 +19,7 @@ def get_logger(community_id: int):
         name = f"community{community_id}"
         filename = f"{name}.log"
 
-        handler = logging.FileHandler(filename=LOGS_FOLDER / filename, encoding='utf-8')
+        handler = logging.FileHandler(filename=LOGS_FOLDER / filename, encoding="utf-8")
         handler.setFormatter(logging.Formatter(_get_logs_format()))
         logger.addHandler(handler)
 
@@ -27,79 +28,70 @@ def get_logger(community_id: int):
         logger.addHandler(handler)
     return logger
 
+
 UVICORN_LOG_CONFIG = {
-    'version': 1,
-    'formatters': {
-        'app': {
-            'format': _get_logs_format(name="app")
+    "version": 1,
+    "formatters": {
+        "app": {"format": _get_logs_format(name="app")},
+        "web_access": {"format": _get_logs_format(name="web")},
+        "web_error": {"format": "[%(asctime)s][web][%(levelname)s] %(message)s"},
+        "nameless": {"format": _get_logs_format()},
+        "nameless_noloc": {"format": "[%(asctime)s][%(levelname)s] %(message)s"},
+    },
+    "handlers": {
+        "stream_app": {
+            "level": logging.INFO,
+            "formatter": "app",
+            "class": "logging.StreamHandler",
         },
-        'web_access': {
-            'format': _get_logs_format(name="web")
+        "stream_web_access": {
+            "level": logging.WARNING,
+            "formatter": "web_access",
+            "class": "logging.StreamHandler",
         },
-        'web_error': {
-            'format': '[%(asctime)s][web][%(levelname)s] %(message)s'
+        "stream_web_error": {
+            "level": logging.INFO,
+            "formatter": "web_error",
+            "class": "logging.StreamHandler",
         },
-        'nameless': {
-            'format': _get_logs_format()
+        "file_app": {
+            "level": logging.INFO,
+            "formatter": "nameless",
+            "class": "logging.FileHandler",
+            "filename": LOGS_FOLDER / "app.log",
+            "encoding": "utf-8",
         },
-        'nameless_noloc': {
-            'format': '[%(asctime)s][%(levelname)s] %(message)s'
+        "file_web_access": {
+            "level": logging.INFO,
+            "formatter": "nameless_noloc",
+            "class": "logging.FileHandler",
+            "filename": LOGS_FOLDER / "web_access.log",
+            "encoding": "utf-8",
+        },
+        "file_web_error": {
+            "level": logging.DEBUG,
+            "formatter": "nameless",
+            "class": "logging.FileHandler",
+            "filename": LOGS_FOLDER / "web_error.log",
+            "encoding": "utf-8",
         },
     },
-    'handlers': {
-        'stream_app': {
-            'level': logging.INFO,
-            'formatter': 'app',
-            'class': 'logging.StreamHandler',
+    "loggers": {
+        "": {
+            "handlers": ["stream_app", "file_app"],
+            "level": logging.INFO,
+            "propagate": False,
         },
-        'stream_web_access': {
-            'level': logging.WARNING,
-            'formatter': 'web_access',
-            'class': 'logging.StreamHandler',
+        "uvicorn.access": {
+            "handlers": ["stream_web_access", "file_web_access"],
+            "level": logging.INFO,
+            "propagate": False,
         },
-        'stream_web_error': {
-            'level': logging.INFO,
-            'formatter': 'web_error',
-            'class': 'logging.StreamHandler',
-        },
-        'file_app': {
-            'level': logging.INFO,
-            'formatter': 'nameless',
-            'class': 'logging.FileHandler',
-            'filename': LOGS_FOLDER / "app.log",
-            'encoding': 'utf-8'
-        },
-        'file_web_access': {
-            'level': logging.INFO,
-            'formatter': 'nameless_noloc',
-            'class': 'logging.FileHandler',
-            'filename': LOGS_FOLDER / "web_access.log",
-            'encoding': 'utf-8'
-        },
-        'file_web_error': {
-            'level': logging.DEBUG,
-            'formatter': 'nameless',
-            'class': 'logging.FileHandler',
-            'filename': LOGS_FOLDER / "web_error.log",
-            'encoding': 'utf-8'
+        "uvicorn.error": {
+            "handlers": ["stream_web_error", "file_web_error"],
+            "level": logging.INFO,
+            "propagate": False,
         },
     },
-    'loggers': {
-        '': {
-            'handlers': ['stream_app', 'file_app'],
-            'level': logging.INFO,
-            'propagate': False
-        },
-        'uvicorn.access': {
-            'handlers': ['stream_web_access', 'file_web_access'],
-            'level': logging.INFO,
-            'propagate': False
-        },
-        'uvicorn.error': {
-            'handlers': ['stream_web_error', 'file_web_error'],
-            'level': logging.INFO,
-            'propagate': False
-        }
-    }
 }
 UVICORN_LOG_LEVEL = logging.INFO

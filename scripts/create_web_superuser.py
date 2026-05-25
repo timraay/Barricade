@@ -1,9 +1,10 @@
 import asyncio
 
-from barricade.db import session_factory, create_tables
+from barricade.db import create_tables, session_factory
 from barricade.web.schemas import WebUserCreateParams
 from barricade.web.scopes import Scopes
 from barricade.web.security import create_user
+
 
 async def main(username: str | None = None, password: str | None = None):
     username = username or input("Username: ")
@@ -11,12 +12,13 @@ async def main(username: str | None = None, password: str | None = None):
 
     await create_tables()
     async with session_factory.begin() as db:
-        await create_user(db, WebUserCreateParams(
-            username=username,
-            password=password,
-            scopes=Scopes.all()
-        ))
-    
+        await create_user(
+            db,
+            WebUserCreateParams(
+                username=username, password=password, scopes=Scopes.all()
+            ),
+        )
+
     print("\nSuperuser created!")
 
 

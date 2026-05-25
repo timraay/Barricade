@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,12 +9,18 @@ from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
-from barricade.discord.audit import audit_report_create, audit_report_delete, audit_report_edit, audit_token_create
-from barricade.discord.reports import get_report_embed, get_report_channel
+from barricade.discord.audit import (
+    audit_report_create,
+    audit_report_delete,
+    audit_report_edit,
+    audit_token_create,
+)
+from barricade.discord.reports import get_report_channel, get_report_embed
 from barricade.enums import Platform
-from barricade.exceptions import InvalidPlatformError, NotFoundError, AlreadyExistsError
+from barricade.exceptions import AlreadyExistsError, InvalidPlatformError, NotFoundError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
+
 
 async def get_token_by_value(db: AsyncSession, token_value: str):
     """Look up a token by its value.
@@ -31,16 +37,19 @@ async def get_token_by_value(db: AsyncSession, token_value: str):
     Token | None
         The token model, or None if it does not exist
     """
-    stmt = select(models.ReportToken) \
-        .where(models.ReportToken.value == token_value) \
+    stmt = (
+        select(models.ReportToken)
+        .where(models.ReportToken.value == token_value)
         .options(selectinload(models.ReportToken.report))
+    )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
+
 async def create_token(
-        db: AsyncSession,
-        params: schemas.ReportTokenCreateParams,
-        by: str | None = None,
+    db: AsyncSession,
+    params: schemas.ReportTokenCreateParams,
+    by: str | None = None,
 ):
     """Create a new token.
 
@@ -65,47 +74,50 @@ async def create_token(
     AlreadyExistsError
         The admin's community differs from the given community ID
     """
-    if params.expires_at < datetime.now(tz=timezone.utc):
+    if params.expires_at < datetime.now(tz=UTC):
         raise ValueError("Token would already be expired")
-    
+
     admin = await get_admin_by_id(db, params.admin_id)
     if not admin:
-        raise NotFoundError("No admin with ID %s" % params.admin_id)
+        raise NotFoundError(f"No admin with ID {params.admin_id}")
     if not admin.community:
-        raise NotFoundError("Admin with ID %s is not part of any community" % params.admin_id)
+        raise NotFoundError(
+            f"Admin with ID {params.admin_id} is not part of any community"
+        )
     if admin.community_id != params.community_id:
-        raise AlreadyExistsError("Admin belongs to community with ID %s, not %s" % (admin.community_id, params.community_id))
-    
+        raise AlreadyExistsError(
+            f"Admin belongs to community with ID {admin.community_id}, not {params.community_id}"
+        )
+
     if params.platform == Platform.PC:
         if not admin.community.is_pc:
-            raise InvalidPlatformError("Community with ID %s is not a PC community" % admin.community_id)
-    elif params.platform == Platform.CONSOLE:
+            raise InvalidPlatformError(
+                f"Community with ID {admin.community_id} is not a PC community"
+            )
+    elif params.platform == Platform.CONSOLE:  # noqa: SIM102
         if not admin.community.is_console:
-            raise InvalidPlatformError("Community with ID %s is not a console community" % admin.community_id)
+            raise InvalidPlatformError(
+                f"Community with ID {admin.community_id} is not a console community"
+            )
 
-    db_token = models.ReportToken(
-        **params.model_dump()
-    )
+    db_token = models.ReportToken(**params.model_dump())
     db.add(db_token)
     await db.flush()
     await db.refresh(db_token)
 
     token = schemas.ReportTokenRef.model_validate(db_token)
 
-    safe_create_task(
-        audit_token_create(token, by=by)
-    )
+    safe_create_task(audit_token_create(token, by=by))
 
     return db_token
 
 
-
 async def get_all_reports(
-        db: AsyncSession,
-        community_id: int | None = None,
-        load_token: bool = False,
-        limit: int = 100,
-        offset: int = 0
+    db: AsyncSession,
+    community_id: int | None = None,
+    load_token: bool = False,
+    limit: int = 100,
+    offset: int = 0,
 ):
     """Retrieve all reports.
 
@@ -128,20 +140,30 @@ async def get_all_reports(
         A sequence of all reports
     """
     if load_token:
-        options = (selectinload(models.Report.players), selectinload(models.Report.token))
+        options = (
+            selectinload(models.Report.players),
+            selectinload(models.Report.token),
+        )
     else:
         options = (selectinload(models.Report.players),)
 
     stmt = select(models.Report).limit(limit).offset(offset).options(*options)
 
     if community_id is not None:
-        stmt = stmt.join(models.Report.token).where(models.ReportToken.community_id == community_id)
+        stmt = stmt.join(models.Report.token).where(
+            models.ReportToken.community_id == community_id
+        )
 
     result = await db.scalars(stmt)
     return result.all()
 
 
-async def get_report_by_id(db: AsyncSession, report_id: int, load_token: bool = False, load_relations: bool = False):
+async def get_report_by_id(
+    db: AsyncSession,
+    report_id: int,
+    load_token: bool = False,
+    load_relations: bool = False,
+):
     """Look up a report by its ID.
 
     Parameters
@@ -164,13 +186,19 @@ async def get_report_by_id(db: AsyncSession, report_id: int, load_token: bool = 
     if load_relations:
         options = (Load(models.Report).selectinload("*"),)
     elif load_token:
-        options = (selectinload(models.Report.players), selectinload(models.Report.token),)
+        options = (
+            selectinload(models.Report.players),
+            selectinload(models.Report.token),
+        )
     else:
         options = (selectinload(models.Report.players),)
 
     return await db.get(models.Report, report_id, options=options)
 
-async def get_reports_for_player(db: AsyncSession, player_id: str, load_token: bool = False):
+
+async def get_reports_for_player(
+    db: AsyncSession, player_id: str, load_token: bool = False
+):
     """Get all reports of a player
 
     Parameters
@@ -188,26 +216,33 @@ async def get_reports_for_player(db: AsyncSession, player_id: str, load_token: b
         A sequence of report models
     """
     if load_token:
-        options = (selectinload(models.Report.players), selectinload(models.Report.token))
+        options = (
+            selectinload(models.Report.players),
+            selectinload(models.Report.token),
+        )
     else:
         options = (selectinload(models.Report.players),)
-    
-    stmt = select(models.Report) \
-        .join(models.Report.players) \
-        .where(models.PlayerReport.player_id == player_id) \
+
+    stmt = (
+        select(models.Report)
+        .join(models.Report.players)
+        .where(models.PlayerReport.player_id == player_id)
         .options(*options)
+    )
     result = await db.scalars(stmt)
     return result.all()
+
 
 async def is_player_reported(db: AsyncSession, player_id: str):
     stmt = select(exists().where(models.PlayerReport.player_id == player_id))
     result = await db.scalar(stmt)
     return bool(result)
 
+
 async def create_report(
-        db: AsyncSession,
-        params: schemas.ReportCreateParams,
-        by: str | None = None,
+    db: AsyncSession,
+    params: schemas.ReportCreateParams,
+    by: str | None = None,
 ):
     """Create a new report.
 
@@ -227,25 +262,25 @@ async def create_report(
         The report model
     """
     report_payload = params.model_dump(exclude={"token_id", "players"})
-    report_payload.update({
-        "id": params.token_id,
-        "message_id": 0
-    })
+    report_payload.update({"id": params.token_id, "message_id": 0})
 
     db_players = []
     for player in params.players:
         # This flushes, and since we don't want a partially initialized report
         # flushed, we do this first.
-        db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
-            id=player.player_id,
-            bm_rcon_url=player.bm_rcon_url,
-            eos_id=player.eos_id,
-        ))
+        db_player, _ = await get_or_create_player(
+            db,
+            schemas.PlayerCreateParams(
+                id=player.player_id,
+                bm_rcon_url=player.bm_rcon_url,
+                eos_id=player.eos_id,
+            ),
+        )
         db_players.append(db_player)
         # player.bm_rcon_url = db_player.bm_rcon_url
 
     db_report = models.Report(**report_payload)
-    for player, db_player in zip(params.players, db_players):
+    for player, db_player in zip(params.players, db_players, strict=True):
         models.PlayerReport(
             report=db_report,
             player=db_player,
@@ -268,29 +303,25 @@ async def create_report(
 
     await db.commit()
     EventHooks.invoke_report_create(report)
-    safe_create_task(
-        audit_report_create(report, by=by)
-    )
+    safe_create_task(audit_report_create(report, by=by))
 
     return db_report
 
+
 async def edit_report(
-        db: AsyncSession,
-        report: schemas.ReportCreateParams,
-        by: str | None = None,
+    db: AsyncSession,
+    report: schemas.ReportCreateParams,
+    by: str | None = None,
 ):
     db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
-        raise NotFoundError("No report exists with ID %s" % report.token_id)
-    
+        raise NotFoundError(f"No report exists with ID {report.token_id}")
+
     old_report = schemas.ReportWithRelations.model_validate(db_report)
-    
+
     # Index all existing PRs by their IDs
-    db_prs = {
-        db_pr.player_id: db_pr
-        for db_pr in db_report.players
-    }
-    
+    db_prs = {db_pr.player_id: db_pr for db_pr in db_report.players}
+
     # Iterate over all submitted players
     for player in report.players:
         db_pr = db_prs.pop(player.player_id, None)
@@ -302,11 +333,14 @@ async def edit_report(
                 db_pr.player.bm_rcon_url = player.bm_rcon_url
         else:
             # Player did not yet exist, add to report
-            db_player, _ = await get_or_create_player(db, schemas.PlayerCreateParams(
-                id=player.player_id,
-                bm_rcon_url=player.bm_rcon_url,
-                eos_id=player.eos_id,
-            ))
+            db_player, _ = await get_or_create_player(
+                db,
+                schemas.PlayerCreateParams(
+                    id=player.player_id,
+                    bm_rcon_url=player.bm_rcon_url,
+                    eos_id=player.eos_id,
+                ),
+            )
             db_pr = models.PlayerReport(
                 report=db_report,
                 player=db_player,
@@ -314,7 +348,7 @@ async def edit_report(
             )
             # db_report.players.append(db_pr)
             db.add(db_pr)
-    
+
     # Iterate over all remaining previous players and remove them
     for db_pr in db_prs.values():
         # db_report.players.remove(db_pr)
@@ -328,19 +362,18 @@ async def edit_report(
     # await db.refresh(db_report)
 
     new_report = schemas.ReportWithRelations.model_validate(db_report)
-    if (new_report != old_report):
+    if new_report != old_report:
         # Only invoke if something actually changed
         EventHooks.invoke_report_edit(new_report, old_report)
-        safe_create_task(
-            audit_report_edit(new_report, by=by)
-        )
+        safe_create_task(audit_report_edit(new_report, by=by))
 
     return db_report
 
+
 async def delete_report(
-        db: AsyncSession,
-        report_id: int,
-        by: str | None = None,
+    db: AsyncSession,
+    report_id: int,
+    by: str | None = None,
 ):
     """Delete a report.
 
@@ -362,8 +395,8 @@ async def delete_report(
     # Retrieve report
     db_report = await get_report_by_id(db, report_id, load_relations=True)
     if not db_report:
-        raise NotFoundError("No report exists with ID %s" % report_id)
-    
+        raise NotFoundError(f"No report exists with ID {report_id}")
+
     # Retrieve stats for auditing
     stats: dict[int, schemas.ResponseStats] = {}
     for db_pr in db_report.players:
@@ -377,11 +410,10 @@ async def delete_report(
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
     EventHooks.invoke_report_delete(report)
-    safe_create_task(
-        audit_report_delete(report, stats, by=by)
-    )
+    safe_create_task(audit_report_delete(report, stats, by=by))
 
     return True
+
 
 async def get_player(db: AsyncSession, player_id: str):
     """Look up a player.
@@ -399,6 +431,7 @@ async def get_player(db: AsyncSession, player_id: str):
         The player model, or None if it does not exist
     """
     return await db.get(models.Player, player_id)
+
 
 async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreateParams):
     """Look up a player, and create if it does not exist.
@@ -421,12 +454,22 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
         dirty = False
         if player.bm_rcon_url and player.bm_rcon_url != db_player.bm_rcon_url:
             if player.bm_rcon_url:
-                logging.warning("Updating bm_rcon_url for player %s from %s to %s", player.id, db_player.bm_rcon_url, player.bm_rcon_url)
+                logging.warning(
+                    "Updating bm_rcon_url for player %s from %s to %s",
+                    player.id,
+                    db_player.bm_rcon_url,
+                    player.bm_rcon_url,
+                )
             db_player.bm_rcon_url = player.bm_rcon_url
             dirty = True
         if player.eos_id and player.eos_id != db_player.eos_id:
             if player.eos_id:
-                logging.warning("Updating eos_id for player %s from %s to %s", player.id, db_player.eos_id, player.eos_id)
+                logging.warning(
+                    "Updating eos_id for player %s from %s to %s",
+                    player.id,
+                    db_player.eos_id,
+                    player.eos_id,
+                )
             db_player.eos_id = player.eos_id
             dirty = True
         if dirty:
@@ -436,10 +479,13 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
         db.add(db_player)
         await db.flush()
         created = True
-    
+
     return db_player, created
 
-async def get_report_message_by_community_id(db: AsyncSession, report_id: int, community_id: int | None):
+
+async def get_report_message_by_community_id(
+    db: AsyncSession, report_id: int, community_id: int | None
+):
     """Look up a report by its ID.
 
     Parameters

@@ -5,16 +5,28 @@ from sqlalchemy.orm import Load, selectinload
 from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.db import models
-from barricade.discord.audit import audit_community_admin_add, audit_community_admin_remove, audit_community_change_owner, audit_community_create, audit_community_edit
+from barricade.discord.audit import (
+    audit_community_admin_add,
+    audit_community_admin_remove,
+    audit_community_change_owner,
+    audit_community_create,
+    audit_community_edit,
+)
 from barricade.discord.communities import revoke_user_roles, update_user_roles
 from barricade.exceptions import (
-    AdminNotAssociatedError, AlreadyExistsError, AdminOwnsCommunityError,
-    MaxLimitReachedError, NotFoundError
+    AdminNotAssociatedError,
+    AdminOwnsCommunityError,
+    AlreadyExistsError,
+    MaxLimitReachedError,
+    NotFoundError,
 )
 from barricade.logger import get_logger
 from barricade.utils import safe_create_task
 
-async def get_all_admins(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
+
+async def get_all_admins(
+    db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0
+):
     """Retrieve all admins.
 
     Parameters
@@ -36,13 +48,19 @@ async def get_all_admins(db: AsyncSession, load_relations: bool = False, limit: 
     if load_relations:
         options = (Load(models.Admin).selectinload("*"),)
     else:
-        options = (selectinload(models.Admin.community), selectinload(models.Admin.owned_community))
+        options = (
+            selectinload(models.Admin.community),
+            selectinload(models.Admin.owned_community),
+        )
 
     stmt = select(models.Admin).limit(limit).offset(offset).options(*options)
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
+
+async def get_admin_by_id(
+    db: AsyncSession, discord_id: int, load_relations: bool = False
+):
     """Look up an admin by their discord ID.
 
     Parameters
@@ -62,12 +80,17 @@ async def get_admin_by_id(db: AsyncSession, discord_id: int, load_relations: boo
     if load_relations:
         options = (Load(models.Admin).selectinload("*"),)
     else:
-        options = (selectinload(models.Admin.community), selectinload(models.Admin.owned_community))
+        options = (
+            selectinload(models.Admin.community),
+            selectinload(models.Admin.owned_community),
+        )
 
     return await db.get(models.Admin, discord_id, options=options)
 
 
-async def get_all_communities(db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0):
+async def get_all_communities(
+    db: AsyncSession, load_relations: bool = False, limit: int = 100, offset: int = 0
+):
     """Retrieve all communities.
 
     Parameters
@@ -89,13 +112,20 @@ async def get_all_communities(db: AsyncSession, load_relations: bool = False, li
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
     stmt = select(models.Community).limit(limit).offset(offset).options(*options)
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_community_by_id(db: AsyncSession, community_id: int, load_relations: bool = False):
+
+async def get_community_by_id(
+    db: AsyncSession, community_id: int, load_relations: bool = False
+):
     """Look up a community by its ID.
 
     Parameters
@@ -115,11 +145,18 @@ async def get_community_by_id(db: AsyncSession, community_id: int, load_relation
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
     return await db.get(models.Community, community_id, options=options)
 
-async def get_community_by_name(db: AsyncSession, name: str, load_relations: bool = False):
+
+async def get_community_by_name(
+    db: AsyncSession, name: str, load_relations: bool = False
+):
     """Look up a community by its name.
 
     Parameters
@@ -139,12 +176,21 @@ async def get_community_by_name(db: AsyncSession, name: str, load_relations: boo
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
-    stmt = select(models.Community).where(models.Community.name == name).options(*options)
+    stmt = (
+        select(models.Community).where(models.Community.name == name).options(*options)
+    )
     return await db.scalar(stmt)
-    
-async def get_community_by_guild_id(db: AsyncSession, guild_id: int, load_relations: bool = False):
+
+
+async def get_community_by_guild_id(
+    db: AsyncSession, guild_id: int, load_relations: bool = False
+):
     """Look up a community by its forward Guild ID.
 
     Parameters
@@ -164,14 +210,23 @@ async def get_community_by_guild_id(db: AsyncSession, guild_id: int, load_relati
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
-    stmt = select(models.Community).where(
-        models.Community.forward_guild_id == guild_id
-    ).options(*options)
+    stmt = (
+        select(models.Community)
+        .where(models.Community.forward_guild_id == guild_id)
+        .options(*options)
+    )
     return await db.scalar(stmt)
 
-async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
+
+async def get_community_by_owner_id(
+    db: AsyncSession, discord_id: int, load_relations: bool = False
+):
     """Look up the community an admin is owner of by their discord ID.
 
     Parameters
@@ -191,14 +246,23 @@ async def get_community_by_owner_id(db: AsyncSession, discord_id: int, load_rela
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
-    stmt = select(models.Community).where(
-        models.Community.owner_id == discord_id
-    ).options(*options)
+    stmt = (
+        select(models.Community)
+        .where(models.Community.owner_id == discord_id)
+        .options(*options)
+    )
     return await db.scalar(stmt)
 
-async def get_community_by_admin_id(db: AsyncSession, discord_id: int, load_relations: bool = False):
+
+async def get_community_by_admin_id(
+    db: AsyncSession, discord_id: int, load_relations: bool = False
+):
     """Look up the community an admin is part of by their discord ID.
 
     Parameters
@@ -218,18 +282,25 @@ async def get_community_by_admin_id(db: AsyncSession, discord_id: int, load_rela
     if load_relations:
         options = (Load(models.Community).selectinload("*"),)
     else:
-        options = (selectinload(models.Community.admins), selectinload(models.Community.owner), selectinload(models.Community.integrations))
+        options = (
+            selectinload(models.Community.admins),
+            selectinload(models.Community.owner),
+            selectinload(models.Community.integrations),
+        )
 
-    stmt = select(models.Community).join(models.Community.admins).where(
-        models.Admin.discord_id == discord_id
-    ).options(*options)
+    stmt = (
+        select(models.Community)
+        .join(models.Community.admins)
+        .where(models.Admin.discord_id == discord_id)
+        .options(*options)
+    )
     return await db.scalar(stmt)
 
 
 async def create_new_community(
-        db: AsyncSession,
-        params: schemas.CommunityCreateParams,
-        by: str | None = None,
+    db: AsyncSession,
+    params: schemas.CommunityCreateParams,
+    by: str | None = None,
 ):
     """Create a new community.
 
@@ -273,7 +344,7 @@ async def create_new_community(
     elif db_owner.name != params.owner_name:
         # Update saved name of owner
         db_owner.name = params.owner_name
-    
+
     # Create the Community
     db_community = models.Community(
         **params.model_dump(exclude={"owner_name", "owner_id"}),
@@ -304,11 +375,12 @@ async def create_new_community(
 
     return db_community
 
+
 async def edit_community(
-        db: AsyncSession,
-        db_community: models.Community,
-        params: schemas.CommunityEditParams,
-        by: str | None = None,
+    db: AsyncSession,
+    db_community: models.Community,
+    params: schemas.CommunityEditParams,
+    by: str | None = None,
 ):
     """Edit an existing community.
 
@@ -332,22 +404,22 @@ async def edit_community(
         The updated name is already in use
     """
     # Look if a community with the same name already exists
-    if other_community := await get_community_by_name(db, params.name):
-        if other_community.id != db_community.id:
-            raise AlreadyExistsError("Name is already in use")
+    other_community = await get_community_by_name(db, params.name)
+    if other_community and other_community.id != db_community.id:
+        raise AlreadyExistsError("Name is already in use")
 
     for key, val in params:
         setattr(db_community, key, val)
 
     await db.flush()
-    
+
     safe_create_task(
         audit_community_edit(
             community=schemas.Community.model_validate(db_community),
             by=by,
         )
     )
-    
+
     # Update roles
     community = schemas.CommunityRef.model_validate(db_community)
     await db_community.awaitable_attrs.admins
@@ -356,10 +428,11 @@ async def edit_community(
 
     return db_community
 
+
 async def create_new_admin(
-        db: AsyncSession,
-        params: schemas.AdminCreateParams,
-        by: str | None = None,
+    db: AsyncSession,
+    params: schemas.AdminCreateParams,
+    by: str | None = None,
 ):
     """Create a new admin.
 
@@ -386,12 +459,14 @@ async def create_new_admin(
     """
     if await get_admin_by_id(db, params.discord_id):
         raise AlreadyExistsError
-    
+
     db_community = None
     if params.community_id:
         db_community = await get_community_by_id(db, params.community_id)
         if not db_community:
-            raise NotFoundError("Community with ID %s does not exist" % params.community_id)
+            raise NotFoundError(
+                f"Community with ID {params.community_id} does not exist"
+            )
         elif len(db_community.admins) > MAX_ADMIN_LIMIT:
             # -1 to exclude owner, +1 to include the new admin
             raise MaxLimitReachedError(MAX_ADMIN_LIMIT)
@@ -410,16 +485,15 @@ async def create_new_admin(
         community = schemas.CommunityRef.model_validate(db_community)
         admin = schemas.AdminRef.model_validate(db_admin)
         await update_user_roles(params.discord_id, community=community)
-        safe_create_task(
-            audit_community_admin_add(community, admin, by=by)
-        )
+        safe_create_task(audit_community_admin_add(community, admin, by=by))
 
     return db_admin
 
+
 async def admin_leave_community(
-        db: AsyncSession,
-        db_admin: models.Admin,
-        by: str | None = None,
+    db: AsyncSession,
+    db_admin: models.Admin,
+    by: str | None = None,
 ):
     """Remove an admin from a community.
 
@@ -443,16 +517,17 @@ async def admin_leave_community(
         The admin is a community owner
     """
     if db_admin.community_id is None:
-        raise NotFoundError("Admin with ID %s is not part of a community" % db_admin.discord_id)
-    
+        raise NotFoundError(
+            f"Admin with ID {db_admin.discord_id} is not part of a community"
+        )
+
     db_community: models.Community = await db_admin.awaitable_attrs.community
 
     admin = schemas.Admin.model_validate(db_admin)
     community = schemas.CommunityRef.model_validate(db_community)
-    
+
     if community.owner_id == admin.discord_id:
         raise AdminOwnsCommunityError(admin)
-    
 
     db_admin.community_id = None
     await db.flush()
@@ -460,17 +535,16 @@ async def admin_leave_community(
 
     await revoke_user_roles(admin.discord_id, strict=False)
 
-    safe_create_task(
-        audit_community_admin_remove(community, admin, by=by)
-    )
+    safe_create_task(audit_community_admin_remove(community, admin, by=by))
 
     return db_admin
 
+
 async def admin_join_community(
-        db: AsyncSession,
-        db_admin: models.Admin,
-        db_community: models.Community,
-        by: str | None = None,
+    db: AsyncSession,
+    db_admin: models.Admin,
+    db_community: models.Community,
+    by: str | None = None,
 ):
     """Add an admin to a community.
 
@@ -500,11 +574,11 @@ async def admin_join_community(
             return db_admin
         else:
             raise AlreadyExistsError(db_admin)
-        
+
     if len(await db_community.awaitable_attrs.admins) > MAX_ADMIN_LIMIT:
         # -1 to exclude owner, +1 to include the new admin
         raise MaxLimitReachedError(MAX_ADMIN_LIMIT)
-        
+
     db_admin.community_id = db_community.id
     if not db_community.owner_id:
         # If the community was abandoned, make them the owner
@@ -518,17 +592,16 @@ async def admin_join_community(
 
     await db.refresh(db_admin)
 
-    safe_create_task(
-        audit_community_admin_add(community, admin, by=by)
-    )
+    safe_create_task(audit_community_admin_add(community, admin, by=by))
 
     return db_admin
 
+
 async def transfer_ownership(
-        db: AsyncSession,
-        community_id: int,
-        admin_id: int,
-        by: str | None = None,
+    db: AsyncSession,
+    community_id: int,
+    admin_id: int,
+    by: str | None = None,
 ):
     """Transfer ownership of a community.
 
@@ -555,20 +628,20 @@ async def transfer_ownership(
     """
     db_community = await get_community_by_id(db, community_id)
     if not db_community:
-        raise NotFoundError("Community with ID %s does not exist" % community_id)
+        raise NotFoundError(f"Community with ID {community_id} does not exist")
     community = schemas.Community.model_validate(db_community)
 
     db_admin = await get_admin_by_id(db, admin_id)
     if not db_admin:
-        raise NotFoundError("Admin with ID %s does not exist" % admin_id)
+        raise NotFoundError(f"Admin with ID {admin_id} does not exist")
     admin = schemas.Admin.model_validate(db_admin)
 
     if db_community.owner_id == db_admin.discord_id:
         return False
-    
+
     if db_admin.community_id != db_community.id:
         raise AdminNotAssociatedError(admin, community)
-    
+
     db_old_owner: models.Admin = await db_community.awaitable_attrs.owner
     old_owner = schemas.Admin.model_validate(db_old_owner)
 
@@ -581,33 +654,34 @@ async def transfer_ownership(
     await update_user_roles(db_admin.discord_id, community=community)
     await update_user_roles(old_owner.discord_id, community=community, strict=False)
 
-    safe_create_task(
-        audit_community_change_owner(old_owner, admin, by=by)
-    )
+    safe_create_task(audit_community_change_owner(old_owner, admin, by=by))
 
     return True
 
+
 async def abandon_community(
-        db: AsyncSession,
-        community_id: int,
-        by: str | None = None,
+    db: AsyncSession,
+    community_id: int,
+    by: str | None = None,
 ):
     db_community = await get_community_by_id(db, community_id)
     if not db_community:
-        raise NotFoundError("Community with ID %s does not exist" % community_id)
+        raise NotFoundError(f"Community with ID {community_id} does not exist")
 
     db_owner = db_community.owner
     if not db_owner:
-        raise AlreadyExistsError("Community with ID %s is already abandoned" % community_id)
+        raise AlreadyExistsError(
+            f"Community with ID {community_id} is already abandoned"
+        )
     owner = schemas.Admin.model_validate(db_owner)
 
     if len(db_community.admins) > 1:
         raise MaxLimitReachedError(
             1,
             "All admins but the owner have to be removed first before"
-            " the owner can abandon the community"
+            " the owner can abandon the community",
         )
-    
+
     db_community.owner_id = None
     await db.flush()
     db_owner.community_id = None
@@ -615,6 +689,7 @@ async def abandon_community(
     await db.refresh(db_community)
 
     from barricade.integrations.manager import IntegrationManager
+
     manager = IntegrationManager()
     for db_config in db_community.integrations:
         if not db_config.enabled:
@@ -623,7 +698,9 @@ async def abandon_community(
         config = schemas.IntegrationConfig.model_validate(db_config)
         integration = manager.get_by_config(config)
         if not integration:
-            get_logger(db_community.id).error("Integration with config %r should be registered by manager but was not" % config)
+            get_logger(db_community.id).error(
+                f"Integration with config {config!r} should be registered by manager but was not"
+            )
             db_config.enabled = False
             continue
 
@@ -631,8 +708,6 @@ async def abandon_community(
 
     await revoke_user_roles(owner.discord_id)
 
-    safe_create_task(
-        audit_community_change_owner(owner, None, by=by)
-    )
+    safe_create_task(audit_community_change_owner(owner, None, by=by))
 
     return db_community

@@ -1,10 +1,10 @@
 import asyncio
 import logging
 import random
-from typing import AsyncIterator
-import websockets
+from collections.abc import AsyncIterator
 from urllib.parse import urlparse, urlunparse
 
+import websockets
 import websockets.legacy
 import websockets.legacy.client
 
@@ -15,9 +15,10 @@ BACKOFF_MAX = 300.0
 BACKOFF_FACTOR = 1.618
 BACKOFF_INITIAL = 5
 
+
 async def reconnect(
-        ws_factory: websockets.legacy.client.Connect,
-        logger: logging.Logger,
+    ws_factory: websockets.legacy.client.Connect,
+    logger: logging.Logger,
 ) -> AsyncIterator[websockets.WebSocketClientProtocol]:
     # Modified version of Connect.__aiter__ which reconnects
     # with exponential backoff, unless a 401 or 403 is returned
@@ -28,10 +29,12 @@ async def reconnect(
                 yield protocol
         except Exception as e:
             # If we fail to authorize ourselves we raise instead of backoff
-            if isinstance(e, websockets.InvalidStatusCode):
-                if e.status_code in (403, 1008):
-                    raise
-            
+            if isinstance(e, websockets.InvalidStatusCode) and e.status_code in (
+                403,
+                1008,
+            ):
+                raise
+
             # Add a random initial delay between 0 and 5 seconds.
             # See 7.2.3. Recovering from Abnormal Closure in RFC 6544.
             if backoff_delay == BACKOFF_MIN:
@@ -57,15 +60,17 @@ async def reconnect(
             # Connection succeeded - reset backoff delay
             backoff_delay = BACKOFF_MIN
 
+
 class WebsocketRequestException(Exception):
     pass
+
 
 class Websocket:
     def __init__(
         self,
         address: str,
         token: str | None = None,
-        logger: logging.Logger = logging # type: ignore
+        logger: logging.Logger = logging,  # type: ignore
     ):
         self.address = address
         self.token = token
@@ -95,37 +100,37 @@ class Websocket:
 
     def is_started(self):
         return self._ws_task is not None
-    
+
     def is_connected(self):
         return self._ws.done() and not self._ws.cancelled() and not self._ws.exception()
-    
+
     async def wait_until_connected(self, timeout: float | None = None):
         try:
             return await asyncio.wait_for(asyncio.shield(self._ws), timeout=timeout)
         except asyncio.CancelledError:
-            raise RuntimeError("Websocket is stopped")
+            raise RuntimeError("Websocket is stopped") from None
         except TimeoutError:
-            raise TimeoutError("Websocket is not connected")
+            raise TimeoutError("Websocket is not connected") from None
 
     def start(self):
         if self.is_started():
             self.stop()
-        
+
         class_name = type(self).__name__
         self._ws_task = safe_create_task(
             self._ws_loop(),
             err_msg=f"{class_name} failed to connect and was stopped",
             logger=self.logger,
-            name=f"{class_name}[{self.address}]"
+            name=f"{class_name}[{self.address}]",
         )
         self._ws = asyncio.Future()
-    
+
     def stop(self):
         if self._ws_task:
             self._ws_task.cancel()
             self._ws_task = None
         self._ws.cancel()
-    
+
     def update_connection(self):
         # Restart the connection
         if self.is_started():
@@ -135,10 +140,7 @@ class Websocket:
         try:
             # Initialize the factory
             ws_factory = websockets.connect(
-                self.get_url(),
-                extra_headers={
-                    'Authorization': f'Bearer {self.token}'
-                }
+                self.get_url(), extra_headers={"Authorization": f"Bearer {self.token}"}
             )
 
             try:
@@ -155,7 +157,9 @@ class Websocket:
                             try:
                                 await self.handle_message(message)
                             except Exception:
-                                self.logger.exception("Failed to handle incoming message: %s", message)
+                                self.logger.exception(
+                                    "Failed to handle incoming message: %s", message
+                                )
                     except websockets.ConnectionClosed as e:
                         # If the websocket was closed, try reconnecting
                         if e.code == 4000:
@@ -174,7 +178,7 @@ class Websocket:
             # When exiting the loop, stop the task and cancel the future
             if not self._ws.done():
                 self._ws.cancel()
-            
+
             # Propagate fatal websocket errors to the websocket task
             if e := self._ws.exception():
                 raise e

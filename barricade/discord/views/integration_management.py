@@ -1,51 +1,76 @@
 import asyncio
-from functools import partial
 import re
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from functools import partial
 
 import discord
 from discord import ButtonStyle, Interaction
 from discord.utils import escape_markdown as esc_md
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.constants import MAX_INTEGRATION_LIMIT
 from barricade.crud.communities import get_admin_by_id, get_community_by_id
 from barricade.db import models, session_factory
-from barricade.discord.utils import CallableSelect, View, Modal, CallableButton, CustomException, format_url, get_danger_embed, get_success_embed, get_question_embed
+from barricade.discord.utils import (
+    CallableButton,
+    CallableSelect,
+    CustomException,
+    Modal,
+    View,
+    format_url,
+    get_danger_embed,
+    get_question_embed,
+    get_success_embed,
+)
 from barricade.enums import IntegrationType
-from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
-from barricade.integrations import Integration, BattlemetricsIntegration, CRCONIntegration, INTEGRATION_TYPES
+from barricade.exceptions import (
+    IntegrationMissingPermissionsError,
+    IntegrationValidationError,
+)
+from barricade.integrations import (
+    INTEGRATION_TYPES,
+    BattlemetricsIntegration,
+    CRCONIntegration,
+    Integration,
+)
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 
-RE_BATTLEMETRICS_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
-RE_CRCON_URL = re.compile(r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$")
+RE_BATTLEMETRICS_ORG_URL = re.compile(
+    r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)"
+)
+RE_CRCON_URL = re.compile(
+    r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$"
+)
+
 
 async def configure_battlemetrics_integration(
     interaction: Interaction,
-    view: 'IntegrationManagementView',
-    config: schemas.BattlemetricsIntegrationConfig | None
+    view: "IntegrationManagementView",
+    config: schemas.BattlemetricsIntegrationConfig | None,
 ):
     modal = ConfigureBattlemetricsIntegrationModal(view, default_values=config)
     await interaction.response.send_modal(modal)
 
+
 async def configure_crcon_integration(
     interaction: Interaction,
-    view: 'IntegrationManagementView',
-    config: schemas.CRCONIntegrationConfig | None
+    view: "IntegrationManagementView",
+    config: schemas.CRCONIntegrationConfig | None,
 ):
     modal = ConfigureCRCONIntegrationModal(view, default_values=config)
     await interaction.response.send_modal(modal)
 
+
 async def configure_custom_integration(
     interaction: Interaction,
-    view: 'IntegrationManagementView',
-    config: schemas.CustomIntegrationConfig | None
+    view: "IntegrationManagementView",
+    config: schemas.CustomIntegrationConfig | None,
 ):
     modal = ConfigureCustomIntegrationModal(view, default_values=config)
     await interaction.response.send_modal(modal)
+
 
 def get_config_from_community(community: models.Community, integration_id: int):
     for integration in community.integrations:
@@ -62,23 +87,24 @@ async def get_name(integration: Integration):
     except Exception:
         return "*Name unknown*"
 
+
 class IntegrationManagementView(View):
     def __init__(self, community: schemas.Community):
-        super().__init__(timeout=60*30)
+        super().__init__(timeout=60 * 30)
         self.selected_integration_id: int | None = None
         self.community = schemas.Community.model_validate(community)
         self.integration_names: dict[int, str] = {}
         self.comments: dict[int, str] = {}
         self.logger = get_logger(self.community.id)
         self.update_integrations()
-    
+
     async def get_integration_name(self, integration: Integration):
         if not integration.config.id:
             return await get_name(integration)
-        
+
         if name := self.integration_names.get(integration.config.id):
             return name
-        
+
         name = await get_name(integration)
         self.integration_names[integration.config.id] = name
         return name
@@ -96,11 +122,14 @@ class IntegrationManagementView(View):
         for config in self.community.integrations:
             integration = manager.get_by_config(config)
             if not integration:
-                self.logger.error("Integration with config %r should be registered by manager but was not" % config)
+                self.logger.error(
+                    "Integration with config %r should be registered by manager but was not",
+                    config,
+                )
                 continue
 
             assert integration.config.id is not None
-            self.integrations[integration.config.id] = integration # type: ignore
+            self.integrations[integration.config.id] = integration  # type: ignore
 
     # --- Sending and editing
 
@@ -112,10 +141,12 @@ class IntegrationManagementView(View):
         num_enabled = 0
 
         # Gather integration names in parallel, might be potentially slow if done sequentially
-        integration_names = await asyncio.gather(*(
-            self.get_integration_name(integration)
-            for integration in self.integrations.values()
-        ))
+        integration_names = await asyncio.gather(
+            *(
+                self.get_integration_name(integration)
+                for integration in self.integrations.values()
+            )
+        )
 
         self.clear_items()
 
@@ -141,64 +172,78 @@ class IntegrationManagementView(View):
                 embed_value = f"{name_hyperlink}\n**Disabled** \\🔴"
                 if comment := self.comments.get(integration.config.id):
                     embed_value += f"\n-# {comment}"
-            
+
             integration_select.add_option(
                 label=name,
-                description=f"{i+1}. {integration.meta.name}",
+                description=f"{i + 1}. {integration.meta.name}",
                 value=str(integration.config.id),
                 emoji=emoji,
                 default=(integration.config.id == self.selected_integration_id),
             )
 
             embed.add_field(
-                name=f"{i+1}. {integration.meta.name}",
-                value=embed_value,
-                inline=True
+                name=f"{i + 1}. {integration.meta.name}", value=embed_value, inline=True
             )
 
-        if (self.integrations):
+        if self.integrations:
             self.add_item(integration_select)
 
-        integration = self.integrations.get(self.selected_integration_id) # type: ignore
+        integration = self.integrations.get(self.selected_integration_id)  # type: ignore
         if integration:
             assert integration.config.id is not None
 
             if integration.config.enabled:
-                self.add_item(CallableButton(
-                    partial(self.disable_integration, integration.config.id),
-                    style=ButtonStyle.blurple,
-                    label="Disable",
-                    row=1
-                ))
+                self.add_item(
+                    CallableButton(
+                        partial(self.disable_integration, integration.config.id),
+                        style=ButtonStyle.blurple,
+                        label="Disable",
+                        row=1,
+                    )
+                )
             else:
-                self.add_item(CallableButton(
-                    partial(self.enable_integration, integration.config.id),
-                    style=ButtonStyle.green,
-                    label="Enable",
-                    row=1
-                ))
-            
-            self.add_item(CallableButton(
-                partial(self.configure_integration, type(integration), integration.config.id),
-                style=ButtonStyle.gray if integration.config.enabled else ButtonStyle.blurple,
-                label="Reconfigure...",
-                row=1
-            ))
+                self.add_item(
+                    CallableButton(
+                        partial(self.enable_integration, integration.config.id),
+                        style=ButtonStyle.green,
+                        label="Enable",
+                        row=1,
+                    )
+                )
+
+            self.add_item(
+                CallableButton(
+                    partial(
+                        self.configure_integration,
+                        type(integration),
+                        integration.config.id,
+                    ),
+                    style=ButtonStyle.gray
+                    if integration.config.enabled
+                    else ButtonStyle.blurple,
+                    label="Reconfigure...",
+                    row=1,
+                )
+            )
 
             if not integration.config.enabled:
-                self.add_item(CallableButton(
-                    partial(self.delete_integration, integration.config.id),
-                    style=ButtonStyle.red,
-                    label="Delete",
-                    row=1
-                ))
+                self.add_item(
+                    CallableButton(
+                        partial(self.delete_integration, integration.config.id),
+                        style=ButtonStyle.red,
+                        label="Delete",
+                        row=1,
+                    )
+                )
 
-        self.add_item(CallableButton(
-            self.add_integration,
-            style=ButtonStyle.gray,
-            label="Add integration...",
-            row=2
-        ))
+        self.add_item(
+            CallableButton(
+                self.add_integration,
+                style=ButtonStyle.gray,
+                label="Add integration...",
+                row=2,
+            )
+        )
 
         embed.title = f"Connected integrations ({num_enabled})"
         return embed
@@ -206,7 +251,8 @@ class IntegrationManagementView(View):
     async def send(self, interaction: Interaction):
         # First get how many enabled integrations there are
         to_validate = [
-            integration for integration in self.integrations.values()
+            integration
+            for integration in self.integrations.values()
             if integration.config.enabled
         ]
 
@@ -214,43 +260,50 @@ class IntegrationManagementView(View):
             # Inform user some integrations will need to be validated first
             embed = discord.Embed(
                 description=f"Validating {len(to_validate)} integration(s)...",
-                colour=discord.Colour(0x2b2d31)
+                colour=discord.Colour(0x2B2D31),
             )
-            await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
+            await interaction.response.send_message(
+                embed=embed, view=self, ephemeral=True
+            )
             self.message = await interaction.original_response()
-        
-            # Validate all integrations
-            validations = await asyncio.gather(*[
-                integration.validate(self.community)
-                for integration in to_validate
-            ], return_exceptions=True)
 
-            for integration, validation in zip(to_validate, validations):
+            # Validate all integrations
+            validations = await asyncio.gather(
+                *[integration.validate(self.community) for integration in to_validate],
+                return_exceptions=True,
+            )
+
+            for integration, validation in zip(to_validate, validations, strict=True):
                 if isinstance(validation, Exception):
                     assert integration.config.id is not None
                     if isinstance(validation, IntegrationValidationError):
                         await integration.disable()
                         self.comments[integration.config.id] = str(validation)
                     else:
-                        self.logger.error("Failed to validate integration with ID %s" % integration.config.id, exc_info=validation)
-                        self.comments[integration.config.id] = "Unexpected validation error"
-            
+                        self.logger.error(
+                            f"Failed to validate integration with ID {integration.config.id}",
+                            exc_info=validation,
+                        )
+                        self.comments[integration.config.id] = (
+                            "Unexpected validation error"
+                        )
+
             await self.edit()
-        
+
         else:
             await interaction.response.defer(ephemeral=True)
             embed = await self.get_embed_update_self()
             await interaction.followup.send(embed=embed, view=self)
             self.message = await interaction.original_response()
-    
-    async def edit(self, interaction: Optional[Interaction] = None):
+
+    async def edit(self, interaction: Interaction | None = None):
         embed = await self.get_embed_update_self()
 
         if interaction and not interaction.response.is_done():
             await interaction.response.edit_message(embed=embed, view=self)
         else:
             await self.message.edit(embed=embed, view=self)
-    
+
     # --- Utilities
 
     async def validate_adminship(self, db: AsyncSession, user_id: int):
@@ -258,11 +311,15 @@ class IntegrationManagementView(View):
         if not db_community:
             raise CustomException("This community no longer exists!")
         community = schemas.Community.model_validate(db_community)
-        
+
         db_admin = await get_admin_by_id(db, user_id)
-        if not db_admin or self.community.id != db_community.id or self.community.id != db_admin.community_id:
+        if (
+            not db_admin
+            or self.community.id != db_community.id
+            or self.community.id != db_admin.community_id
+        ):
             raise CustomException("You need to be the community admin to do this!")
-        
+
         self.community = community
         self.update_integrations()
 
@@ -271,10 +328,14 @@ class IntegrationManagementView(View):
         if not integration:
             raise CustomException("This integration no longer exists")
         return integration
-    
-    async def validate_integration(self, integration: Integration, save_comment: bool = False):
+
+    async def validate_integration(
+        self, integration: Integration, save_comment: bool = False
+    ):
         if save_comment and integration.config.id is None:
-            raise ValueError("save_comment cannot be True if the integration hasn't been saved yet")
+            raise ValueError(
+                "save_comment cannot be True if the integration hasn't been saved yet"
+            )
 
         try:
             missing_optional_permissions = await integration.validate(self.community)
@@ -288,22 +349,26 @@ class IntegrationManagementView(View):
                     "Your API token is missing the following permissions/scopes:\n - "
                     + "\n - ".join(e.missing_permissions)
                     + "\nRefer to [the wiki](https://github.com/timraay/Barricade/wiki/Frequently-Asked-Questions#what-permissions-do-integrations-require) for a full list of required permissions."
-                )
-            )
+                ),
+            ) from None
         except IntegrationValidationError as e:
             if save_comment:
                 assert integration.config.id is not None
                 self.comments[integration.config.id] = str(e)
-            raise CustomException("Failed to configure integration!", str(e))
+            raise CustomException("Failed to configure integration!", str(e)) from None
         except Exception as e:
             if save_comment:
                 assert integration.config.id is not None
                 self.comments[integration.config.id] = "Unexpected validation error"
-            raise CustomException("Unexpected validation error!", str(e), log_traceback=True)
-        
+            raise CustomException(
+                "Unexpected validation error!", str(e), log_traceback=True
+            ) from None
+
         return missing_optional_permissions
-    
-    async def submit_integration_config(self, interaction: Interaction, integration: Integration):
+
+    async def submit_integration_config(
+        self, interaction: Interaction, integration: Integration
+    ):
         # Defer the interaction in case below steps take longer than 3 seconds
         await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -312,7 +377,7 @@ class IntegrationManagementView(View):
             await self.validate_adminship(db, interaction.user.id)
 
             missing_optional_permissions = await self.validate_integration(integration)
-            
+
             # Update config in DB
             if integration.config.id:
                 await integration.update(db)
@@ -335,12 +400,12 @@ class IntegrationManagementView(View):
         else:
             embed_desc = None
 
-        await interaction.followup.send(embed=get_success_embed(
-            f"Configured {integration.meta.name} integration!",
-            embed_desc
-        ))
+        await interaction.followup.send(
+            embed=get_success_embed(
+                f"Configured {integration.meta.name} integration!", embed_desc
+            )
+        )
         await self.edit()
-
 
     # --- Button action handlers
 
@@ -351,7 +416,12 @@ class IntegrationManagementView(View):
 
         await self.edit(interaction=interaction)
 
-    async def configure_integration(self, integration_cls: type[Integration], integration_id: int | None, interaction: Interaction):
+    async def configure_integration(
+        self,
+        integration_cls: type[Integration],
+        integration_id: int | None,
+        interaction: Interaction,
+    ):
         async with session_factory() as db:
             await self.validate_adminship(db, interaction.user.id)
 
@@ -363,14 +433,19 @@ class IntegrationManagementView(View):
 
         match integration_cls.meta.type:
             case IntegrationType.BATTLEMETRICS:
-                await configure_battlemetrics_integration(interaction, self, config) # type: ignore
+                await configure_battlemetrics_integration(interaction, self, config)  # type: ignore
             case IntegrationType.COMMUNITY_RCON:
-                await configure_crcon_integration(interaction, self, config) # type: ignore
+                await configure_crcon_integration(interaction, self, config)  # type: ignore
             case IntegrationType.CUSTOM:
-                await configure_custom_integration(interaction, self, config) # type: ignore
+                await configure_custom_integration(interaction, self, config)  # type: ignore
             case _:
-                self.logger.error("Tried configuring integration with unknown type %s", integration_cls.meta.type)
-                raise CustomException("Unknown integration type \"%s\"" % integration_cls.meta.type)
+                self.logger.error(
+                    "Tried configuring integration with unknown type %s",
+                    integration_cls.meta.type,
+                )
+                raise CustomException(
+                    f'Unknown integration type "{integration_cls.meta.type}"'
+                )
 
     async def enable_integration(self, integration_id: int, interaction: Interaction):
         async with session_factory() as db:
@@ -381,9 +456,8 @@ class IntegrationManagementView(View):
             # Validate config
             missing_optional_permissions = await self.validate_integration(integration)
             self.comments.pop(integration.config.id, None)
-            
-            await integration.enable()
 
+            await integration.enable()
 
         embed_desc = await self.get_integration_hyperlink(integration)
         if missing_optional_permissions:
@@ -393,9 +467,12 @@ class IntegrationManagementView(View):
                 + "\n-# These permissions might become required in the future. Refer to the wiki for more information."
             )
 
-        await interaction.response.send_message(embed=get_success_embed(
-            f"Enabled {integration.meta.name} integration!", embed_desc
-        ), ephemeral=True)
+        await interaction.response.send_message(
+            embed=get_success_embed(
+                f"Enabled {integration.meta.name} integration!", embed_desc
+            ),
+            ephemeral=True,
+        )
         await self.edit()
 
     async def disable_integration(self, integration_id: int, interaction: Interaction):
@@ -403,17 +480,17 @@ class IntegrationManagementView(View):
             await self.validate_adminship(db, interaction.user.id)
             integration = self.get_integration(integration_id)
             await integration.disable()
-        
+
         embed = get_success_embed(
             f"Disabled {integration.meta.name} integration!",
-            await self.get_integration_hyperlink(integration)
+            await self.get_integration_hyperlink(integration),
         )
         if interaction.response.is_done():
             await interaction.response.edit_message(embed=embed, view=None)
         else:
             await interaction.response.send_message(embed=embed, ephemeral=True)
         await self.edit()
-    
+
     async def delete_integration(self, integration_id: int, interaction: Interaction):
         integration = self.get_integration(integration_id)
 
@@ -426,26 +503,37 @@ class IntegrationManagementView(View):
             await integration.delete()
 
             if config := next(
-                (itg for itg in self.community.integrations if itg.id == integration_id),
-                None
+                (
+                    itg
+                    for itg in self.community.integrations
+                    if itg.id == integration_id
+                ),
+                None,
             ):
                 self.community.integrations.remove(config)
 
             await _interaction.edit_original_response(
-                embed=get_success_embed(f"{integration.meta.name} integration #{integration_id} deleted!"),
-                view=None
+                embed=get_success_embed(
+                    f"{integration.meta.name} integration #{integration_id} deleted!"
+                ),
+                view=None,
             )
             self.update_integrations()
             await self.edit()
-        
+
         view = View()
         view.add_item(
-            CallableButton(confirm_delete, style=ButtonStyle.red, label="Delete Integration", single_use=True)
+            CallableButton(
+                confirm_delete,
+                style=ButtonStyle.red,
+                label="Delete Integration",
+                single_use=True,
+            )
         )
         await interaction.response.send_message(
             embed=get_danger_embed(
                 "Are you sure you want to delete this integration?",
-                "This action is irreversible."
+                "This action is irreversible.",
             ),
             view=view,
             ephemeral=True,
@@ -459,69 +547,91 @@ class IntegrationManagementView(View):
                     f"Only {MAX_INTEGRATION_LIMIT} integrations can be added to a community at a time."
                     " Note that you do not need to setup an integration for each individual server."
                     " Reach out to Bunker admins to request an exemption."
-                )
+                ),
             )
         self.clear_items()
         for integration_cls in INTEGRATION_TYPES:
-            self.add_item(CallableButton(
-                partial(self.configure_integration, integration_cls, None),
-                style=ButtonStyle.blurple,
-                label=integration_cls.meta.name,
-                emoji=integration_cls.meta.emoji,
-                row=0
-            ))
-        self.add_item(discord.ui.Button(
-            style=ButtonStyle.gray,
-            label="Help",
-            row=1,
-            url="https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers"
-        ))
-        self.add_item(CallableButton(
-            self.edit,
-            style=ButtonStyle.gray,
-            label="Back...",
-            row=1
-        ))
+            self.add_item(
+                CallableButton(
+                    partial(self.configure_integration, integration_cls, None),
+                    style=ButtonStyle.blurple,
+                    label=integration_cls.meta.name,
+                    emoji=integration_cls.meta.emoji,
+                    row=0,
+                )
+            )
+        self.add_item(
+            discord.ui.Button(
+                style=ButtonStyle.gray,
+                label="Help",
+                row=1,
+                url="https://github.com/timraay/Barricade/wiki/Quickstart#3-connecting-to-your-game-servers",
+            )
+        )
+        self.add_item(
+            CallableButton(self.edit, style=ButtonStyle.gray, label="Back...", row=1)
+        )
         await interaction.response.edit_message(view=self)
+
 
 class AskRemoveBansView(View):
     def __init__(self, fut: asyncio.Future):
         self.fut = fut
-        self.add_item(CallableButton(partial(self.submit, True), label="Yes", style=ButtonStyle.blurple, single_use=True))
-        self.add_item(CallableButton(partial(self.submit, False), label="No", style=ButtonStyle.blurple, single_use=True))
+        self.add_item(
+            CallableButton(
+                partial(self.submit, True),
+                label="Yes",
+                style=ButtonStyle.blurple,
+                single_use=True,
+            )
+        )
+        self.add_item(
+            CallableButton(
+                partial(self.submit, False),
+                label="No",
+                style=ButtonStyle.blurple,
+                single_use=True,
+            )
+        )
 
     async def submit(self, remove_bans: bool, interaction: Interaction):
         await interaction.response.defer()
         if not self.fut.done():
             self.fut.set_result(remove_bans)
-    
+
     async def on_timeout(self):
-        self.fut.set_exception(asyncio.TimeoutError())
+        self.fut.set_exception(TimeoutError())
+
 
 async def ask_remove_bans(interaction: Interaction):
     fut = asyncio.get_running_loop().create_future()
     view = AskRemoveBansView(fut)
-    await interaction.response.send_message(embed=get_question_embed(
-        "Do you want to unban all players?",
-        (
-            "You are about to disconnect this integration from Barricade, meaning it will no longer"
-            "receive updates from Barricade on what players to ban or unban."
-            "\n\n"
-            "If you want this integration to remove all its Barricade bans, press \"Yes\". If you want"
-            " them to remain in place, press \"No\"."
-            "\n\n"
-            "This decision does not affect any other integrations. Should you choose \"Yes\", you"
-            " will always be able to import your bans again in the future."
-        )
-    ), view=view)
+    await interaction.response.send_message(
+        embed=get_question_embed(
+            "Do you want to unban all players?",
+            (
+                "You are about to disconnect this integration from Barricade, meaning it will no longer"
+                "receive updates from Barricade on what players to ban or unban."
+                "\n\n"
+                'If you want this integration to remove all its Barricade bans, press "Yes". If you want'
+                ' them to remain in place, press "No".'
+                "\n\n"
+                'This decision does not affect any other integrations. Should you choose "Yes", you'
+                " will always be able to import your bans again in the future."
+            ),
+        ),
+        view=view,
+    )
     return await fut
 
+
 class ConfigureBattlemetricsIntegrationModal(Modal):
-    def __init__(self, view: IntegrationManagementView, default_values: Optional[schemas.BattlemetricsIntegrationConfig] = None):
-        super().__init__(
-            title="Configure Battlemetrics Integration",
-            timeout=None
-        )
+    def __init__(
+        self,
+        view: IntegrationManagementView,
+        default_values: schemas.BattlemetricsIntegrationConfig | None = None,
+    ):
+        super().__init__(title="Configure Battlemetrics Integration", timeout=None)
         self.view = view
 
         # Define input fields
@@ -539,7 +649,10 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
         if default_values:
             self.integration_id = default_values.id
             self.api_key.default = default_values.api_key
-            self.org_url.default = "https://www.battlemetrics.com/rcon/orgs/edit/" + str(default_values.organization_id)
+            self.org_url.default = (
+                "https://www.battlemetrics.com/rcon/orgs/edit/"
+                + str(default_values.organization_id)
+            )
         else:
             self.integration_id = None
 
@@ -563,12 +676,14 @@ class ConfigureBattlemetricsIntegrationModal(Modal):
 
         await self.view.submit_integration_config(interaction, integration)
 
+
 class ConfigureCRCONIntegrationModal(Modal):
-    def __init__(self, view: IntegrationManagementView, default_values: Optional[schemas.CRCONIntegrationConfig] = None):
-        super().__init__(
-            title="Configure Community RCON Integration",
-            timeout=None
-        )
+    def __init__(
+        self,
+        view: IntegrationManagementView,
+        default_values: schemas.CRCONIntegrationConfig | None = None,
+    ):
+        super().__init__(title="Configure Community RCON Integration", timeout=None)
         self.view = view
 
         # Define input fields
@@ -588,7 +703,7 @@ class ConfigureCRCONIntegrationModal(Modal):
             self.api_key.default = default_values.api_key
         else:
             self.integration_id = None
-        
+
         self.add_item(self.api_url)
         self.add_item(self.api_key)
 
@@ -598,7 +713,7 @@ class ConfigureCRCONIntegrationModal(Modal):
         if not match:
             raise CustomException(
                 "Invalid Community RCON URL!",
-                "Go to any login-protected page of your CRCON and copy the URL."
+                "Go to any login-protected page of your CRCON and copy the URL.",
             )
 
         config = schemas.CRCONIntegrationConfigParams(
@@ -611,19 +726,19 @@ class ConfigureCRCONIntegrationModal(Modal):
 
         await self.view.submit_integration_config(interaction, integration)
 
+
 class ConfigureCustomIntegrationModal(Modal):
-    def __init__(self, view: IntegrationManagementView, default_values: Optional[schemas.CustomIntegrationConfig] = None):
-        super().__init__(
-            title="Configure Custom Integration",
-            timeout=None
-        )
+    def __init__(
+        self,
+        view: IntegrationManagementView,
+        default_values: schemas.CustomIntegrationConfig | None = None,
+    ):
+        super().__init__(title="Configure Custom Integration", timeout=None)
         self.view = view
 
         # Define input fields
         self.api_url = discord.ui.TextInput(
-            label="Websocket URL",
-            style=discord.TextStyle.short,
-            placeholder="ws://..."
+            label="Websocket URL", style=discord.TextStyle.short, placeholder="ws://..."
         )
         self.api_key = discord.ui.TextInput(
             label="Auth Bearer Token",
@@ -643,7 +758,7 @@ class ConfigureCustomIntegrationModal(Modal):
             self.banlist_id.default = default_values.banlist_id
         else:
             self.integration_id = None
-        
+
         self.add_item(self.api_url)
         self.add_item(self.api_key)
         self.add_item(self.banlist_id)
@@ -659,4 +774,3 @@ class ConfigureCustomIntegrationModal(Modal):
         integration = CustomIntegration(config)
 
         await self.view.submit_integration_config(interaction, integration)
-

@@ -1,13 +1,15 @@
-from cachetools import TTLCache
 from enum import IntEnum
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import ClassVar, NamedTuple
 from urllib.parse import urlencode
+
+from cachetools import TTLCache
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.constants import REPORT_FORM_URL
 from barricade.crud.reports import create_token
 from barricade.enums import Platform, ReportReasonFlag
+
 
 class FormEntryID(IntEnum):
     token_value = 1804901355
@@ -46,7 +48,7 @@ class FormEntryID(IntEnum):
 
     def encode_str(self, params: dict, value: str):
         params[self._key()] = value
-    
+
     def encode_flag(self, params: dict, flag: ReportReasonFlag, custom: str | None):
         values = []
 
@@ -56,14 +58,19 @@ class FormEntryID(IntEnum):
             values.extend((flag ^ ReportReasonFlag.CUSTOM).to_list(None))
             values.append("__other_option__")
             params[f"{self._key()}.other_option_response"] = custom
-        
+
         else:
             values.extend(flag.to_list(None))
-        
+
         params[self._key()] = values
 
-    def encode_bool(self, params: dict, value: str = "I want to include another player in the report"):
+    def encode_bool(
+        self,
+        params: dict,
+        value: str = "I want to include another player in the report",
+    ):
         params[self._key()] = value
+
 
 def get_report_edit_url(report: schemas.ReportWithToken):
     params = {}
@@ -71,7 +78,9 @@ def get_report_edit_url(report: schemas.ReportWithToken):
     FormEntryID.token_value.encode_str(params, report.token.value + "1")
 
     FormEntryID.desc.encode_str(params, report.body)
-    FormEntryID.reason.encode_flag(params, report.reasons_bitflag, report.reasons_custom)
+    FormEntryID.reason.encode_flag(
+        params, report.reasons_bitflag, report.reasons_custom
+    )
 
     # Beautiful. I love this. This is fun.
 
@@ -81,7 +90,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
         FormEntryID.player1_id.encode_str(params, player.player_id)
         if player.player.bm_rcon_url:
             FormEntryID.player1_bm_url.encode_str(params, player.player.bm_rcon_url)
-    
+
     if len(report.players) >= 2:
         player = report.players[1]
         FormEntryID.include_player2.encode_bool(params)
@@ -89,7 +98,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
         FormEntryID.player2_id.encode_str(params, player.player_id)
         if player.player.bm_rcon_url:
             FormEntryID.player2_bm_url.encode_str(params, player.player.bm_rcon_url)
-    
+
     if len(report.players) >= 3:
         player = report.players[2]
         FormEntryID.include_player3.encode_bool(params)
@@ -97,7 +106,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
         FormEntryID.player3_id.encode_str(params, player.player_id)
         if player.player.bm_rcon_url:
             FormEntryID.player3_bm_url.encode_str(params, player.player.bm_rcon_url)
-    
+
     if len(report.players) >= 4:
         player = report.players[3]
         FormEntryID.include_player4.encode_bool(params)
@@ -105,7 +114,7 @@ def get_report_edit_url(report: schemas.ReportWithToken):
         FormEntryID.player4_id.encode_str(params, player.player_id)
         if player.player.bm_rcon_url:
             FormEntryID.player4_bm_url.encode_str(params, player.player.bm_rcon_url)
-    
+
     if len(report.players) >= 5:
         player = report.players[4]
         FormEntryID.include_player5.encode_bool(params)
@@ -115,8 +124,9 @@ def get_report_edit_url(report: schemas.ReportWithToken):
             FormEntryID.player5_bm_url.encode_str(params, player.player.bm_rcon_url)
 
     FormEntryID.is_edit.encode_bool(params, value="1")
-    
+
     return REPORT_FORM_URL + urlencode(params, doseq=True)
+
 
 class URLFactory:
     class Key(NamedTuple):
@@ -128,14 +138,16 @@ class URLFactory:
         def from_token(cls, token: schemas._ReportTokenBase):
             return cls(token.admin_id, token.community_id, token.platform)
 
-    _cache: ClassVar[TTLCache[Key, str]] = TTLCache(maxsize=999, ttl=60*60)
+    _cache: ClassVar = TTLCache[Key, str](maxsize=999, ttl=60 * 60)
 
     @staticmethod
-    async def get(db: AsyncSession, params: schemas.ReportTokenCreateParams, by: str | None = None):
+    async def get(
+        db: AsyncSession, params: schemas.ReportTokenCreateParams, by: str | None = None
+    ):
         key = URLFactory.Key.from_token(params)
         if url := URLFactory._cache.get(key):
             return url
-        
+
         db_token = await create_token(db, params, by=by)
 
         url_params = {}

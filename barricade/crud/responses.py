@@ -1,6 +1,7 @@
-from typing import Sequence
-from sqlalchemy import exists, not_, select, func
+from collections.abc import Sequence
+
 import sqlalchemy.exc
+from sqlalchemy import exists, func, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +11,7 @@ from barricade.enums import ReportReasonFlag, ReportRejectReason
 from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
+
 
 async def set_report_response(db: AsyncSession, params: schemas.ResponseCreateParams):
     """Set or change a community's response to a reported player.
@@ -28,14 +30,19 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
     models.PlayerReportResponse
         The response
     """
-    stmt = select(models.PlayerReportResponse).where(
-        models.PlayerReportResponse.pr_id == params.pr_id,
-        models.PlayerReportResponse.community_id == params.community_id,
-    ).options(
-        selectinload(models.PlayerReportResponse.player_report)
+    stmt = (
+        select(models.PlayerReportResponse)
+        .where(
+            models.PlayerReportResponse.pr_id == params.pr_id,
+            models.PlayerReportResponse.community_id == params.community_id,
+        )
+        .options(
+            selectinload(models.PlayerReportResponse.player_report)
             .selectinload(models.PlayerReport.report)
             .selectinload(models.Report.token)
-    ).limit(1)
+        )
+        .limit(1)
+    )
     db_prr = await db.scalar(stmt)
 
     if not db_prr:
@@ -44,7 +51,7 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         try:
             await db.flush()
         except sqlalchemy.exc.IntegrityError:
-            raise NotFoundError("Report or community no longer exists")
+            raise NotFoundError("Report or community no longer exists") from None
         await db.commit()
         await db.refresh(db_prr)
         await db_prr.player_report.report.awaitable_attrs.token
@@ -59,16 +66,22 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         EventHooks.invoke_player_ban(prr)
     else:
         EventHooks.invoke_player_unban(prr)
-    
+
     logger = get_logger(prr.community_id)
     logger.info(
         "Set report response for player %s of report %s. Banned? %s. Reject reason? %s",
-        prr.player_report.player_id, prr.player_report.report_id, prr.banned, prr.reject_reason,
+        prr.player_report.player_id,
+        prr.player_report.report_id,
+        prr.banned,
+        prr.reject_reason,
     )
 
     return db_prr
 
-async def get_community_responses_to_report(db: AsyncSession, report: schemas.Report, community_id: int):
+
+async def get_community_responses_to_report(
+    db: AsyncSession, report: schemas.Report, community_id: int
+):
     """Get all of a community's responses to a specific report.
 
     Parameters
@@ -85,39 +98,43 @@ async def get_community_responses_to_report(db: AsyncSession, report: schemas.Re
     Sequence[models.PlayerReportResponse]
         All of a community's responses to the report
     """
-    stmt = select(models.PlayerReportResponse).where(
-        models.PlayerReportResponse.community_id == community_id,
-        models.PlayerReportResponse.pr_id.in_([
-            pr.id for pr in report.players
-        ])
-    ).options(
-        selectinload(models.PlayerReportResponse.player_report)
+    stmt = (
+        select(models.PlayerReportResponse)
+        .where(
+            models.PlayerReportResponse.community_id == community_id,
+            models.PlayerReportResponse.pr_id.in_([pr.id for pr in report.players]),
+        )
+        .options(
+            selectinload(models.PlayerReportResponse.player_report)
             .selectinload(models.PlayerReport.report)
             .selectinload(models.Report.token)
+        )
     )
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerReportRef) -> schemas.ResponseStats:
-    stmt = select(
-        models.PlayerReportResponse.banned,
-        models.PlayerReportResponse.reject_reason,
-        func.count(models.PlayerReportResponse.pr_id).label("amount")
-    ).where(
-        models.PlayerReportResponse.pr_id == player_report.id
-    ).group_by(
-        models.PlayerReportResponse.banned,
-        models.PlayerReportResponse.reject_reason,
+
+async def get_response_stats(
+    db: AsyncSession, player_report: schemas.PlayerReportRef
+) -> schemas.ResponseStats:
+    stmt = (
+        select(
+            models.PlayerReportResponse.banned,
+            models.PlayerReportResponse.reject_reason,
+            func.count(models.PlayerReportResponse.pr_id).label("amount"),
+        )
+        .where(models.PlayerReportResponse.pr_id == player_report.id)
+        .group_by(
+            models.PlayerReportResponse.banned,
+            models.PlayerReportResponse.reject_reason,
+        )
     )
 
     results = await db.execute(stmt)
     data = schemas.ResponseStats(
         num_banned=0,
         num_rejected=0,
-        reject_reasons={
-            reject_reason: 0
-            for reject_reason in ReportRejectReason
-        }
+        reject_reasons={reject_reason: 0 for reject_reason in ReportRejectReason},
     )
 
     for result in results:
@@ -130,16 +147,20 @@ async def get_response_stats(db: AsyncSession, player_report: schemas.PlayerRepo
 
     return data
 
-async def bulk_get_response_stats(db: AsyncSession, players: Sequence[schemas.PlayerReportRef]) -> dict[int, schemas.ResponseStats]:
+
+async def bulk_get_response_stats(
+    db: AsyncSession, players: Sequence[schemas.PlayerReportRef]
+) -> dict[int, schemas.ResponseStats]:
     stats: dict[int, schemas.ResponseStats] = {}
     for player in players:
         stats[player.id] = await get_response_stats(db, player)
     return stats
 
+
 async def get_pending_responses(
-        db: AsyncSession,
-        community: schemas.CommunityRef,
-        player_reports: list[schemas.PlayerReportRef],
+    db: AsyncSession,
+    community: schemas.CommunityRef,
+    player_reports: list[schemas.PlayerReportRef],
 ):
     responses = {
         pr.id: schemas.PendingResponse(
@@ -147,22 +168,24 @@ async def get_pending_responses(
             player_report=pr,
             community_id=community.id,
             community=community,
-        ) for pr in player_reports
-    }
-    
-    stmt = select(
-        models.PlayerReportResponse.pr_id,
-        models.PlayerReportResponse.reject_reason,
-        models.PlayerReportResponse.banned,
-        models.PlayerReportResponse.responded_by,
-    ).join(
-        models.PlayerReport
-    ).where(
-        models.PlayerReportResponse.community_id == community.id,
-        models.PlayerReport.id.in_(
-            [pr.id for pr in player_reports]
         )
-    ).limit(len(player_reports))
+        for pr in player_reports
+    }
+
+    stmt = (
+        select(
+            models.PlayerReportResponse.pr_id,
+            models.PlayerReportResponse.reject_reason,
+            models.PlayerReportResponse.banned,
+            models.PlayerReportResponse.responded_by,
+        )
+        .join(models.PlayerReport)
+        .where(
+            models.PlayerReportResponse.community_id == community.id,
+            models.PlayerReport.id.in_([pr.id for pr in player_reports]),
+        )
+        .limit(len(player_reports))
+    )
     result = await db.execute(stmt)
     for row in result:
         response = responses[row.pr_id]
@@ -170,14 +193,15 @@ async def get_pending_responses(
         response.banned = row.banned
         response.reject_reason = row.reject_reason
         response.responded_by = row.responded_by
-    
+
     return list(responses.values())
 
+
 async def get_reports_for_player_with_no_community_review(
-        db: AsyncSession,
-        player_id: str,
-        community_id: int,
-        reasons_filter: ReportReasonFlag | None = None
+    db: AsyncSession,
+    player_id: str,
+    community_id: int,
+    reasons_filter: ReportReasonFlag | None = None,
 ):
     """Get all reports of a specific player which the given community has not yet responded to.
 
@@ -199,21 +223,23 @@ async def get_reports_for_player_with_no_community_review(
         A sequence of report models
     """
     options = (selectinload(models.Report.players), selectinload(models.Report.token))
-    stmt = select(models.Report) \
-        .join(models.Report.players) \
-        .join(models.Report.token) \
+    stmt = (
+        select(models.Report)
+        .join(models.Report.players)
+        .join(models.Report.token)
         .where(
             models.PlayerReport.player_id == player_id,
             models.ReportToken.community_id != community_id,
             not_(
                 exists().where(
                     models.PlayerReportResponse.community_id == community_id,
-                    models.PlayerReportResponse.pr_id == models.PlayerReport.id
+                    models.PlayerReportResponse.pr_id == models.PlayerReport.id,
                 )
-            )
-        ) \
+            ),
+        )
         .options(*options)
-    
+    )
+
     if reasons_filter is not None:
         stmt = stmt.where(
             models.Report.reasons_bitflag.bitwise_and(reasons_filter) != 0
@@ -222,7 +248,10 @@ async def get_reports_for_player_with_no_community_review(
     result = await db.scalars(stmt)
     return result.all()
 
-async def get_successful_responses_without_bans(db: AsyncSession, community_id: int, integration_id: int):
+
+async def get_successful_responses_without_bans(
+    db: AsyncSession, community_id: int, integration_id: int
+):
     """Find all players that an integration has not banned yet, that should
     be banned. Returns one response with token for each player found.
 
@@ -250,13 +279,14 @@ async def get_successful_responses_without_bans(db: AsyncSession, community_id: 
         )
         .join(models.PlayerReportResponse.player_report)
         .where(
-            not_(exists(
-                select(models.PlayerBan)
-                .where(
-                    models.PlayerBan.integration_id == integration_id,
-                    models.PlayerBan.player_id == models.PlayerReport.player_id,
+            not_(
+                exists(
+                    select(models.PlayerBan).where(
+                        models.PlayerBan.integration_id == integration_id,
+                        models.PlayerBan.player_id == models.PlayerReport.player_id,
+                    )
                 )
-            ))
+            )
         )
         .distinct(models.PlayerReport.player_id)
         .options(
@@ -265,6 +295,6 @@ async def get_successful_responses_without_bans(db: AsyncSession, community_id: 
             .selectinload(models.Report.token)
         )
     )
-    
+
     result = await db.scalars(stmt)
     return result.all()

@@ -1,7 +1,9 @@
 from enum import IntFlag, auto
 
+
 def _convert_name(name: str):
     return name.lower().replace("_", ".")
+
 
 class Scopes(IntFlag):
     # Do NOT reorder or insert between
@@ -33,15 +35,16 @@ class Scopes(IntFlag):
 
     def to_list(self) -> list[str]:
         return list(
-            _convert_name(v.name) # type: ignore
+            _convert_name(v.name)  # type: ignore
             for v in self
         )
-    
+
     def to_dict(self) -> dict[str, str | None]:
         return {
             _convert_name(v.name): SCOPE_DESCRIPTIONS.get(v)  # type: ignore
             for v in self
         }
+
 
 SCOPE_DESCRIPTIONS = {
     Scopes.STAFF: "Manage web users",

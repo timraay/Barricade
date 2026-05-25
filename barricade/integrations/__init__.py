@@ -1,14 +1,14 @@
 from sqlalchemy import select
-from barricade.db import models, session_factory
 
+from barricade.db import models, session_factory
 from barricade.enums import IntegrationType
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
-from .integration import Integration
 
 from .battlemetrics import BattlemetricsIntegration
 from .crcon import CRCONIntegration
+from .integration import Integration
 
 INTEGRATION_TYPES = (
     CRCONIntegration,
@@ -16,11 +16,14 @@ INTEGRATION_TYPES = (
     CustomIntegration,
 )
 
+
 def type_to_integration(integration_type: IntegrationType) -> type[Integration]:
     return next(
-        integration for integration in INTEGRATION_TYPES
+        integration
+        for integration in INTEGRATION_TYPES
         if integration.meta.type == integration_type
     )
+
 
 async def load_all():
     manager = IntegrationManager()

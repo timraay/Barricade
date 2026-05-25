@@ -1,45 +1,68 @@
 import inspect
-import aiohttp
+from collections.abc import AsyncGenerator, Sequence
 from functools import wraps
-from typing import AsyncGenerator, Sequence
+
+import aiohttp
 
 from barricade import schemas
 from barricade.db import session_factory
 from barricade.enums import IntegrationType
 from barricade.exceptions import (
-    IntegrationBanError, IntegrationCommandError, IntegrationDisabledError, IntegrationFailureError, NotFoundError,
-    AlreadyBannedError, IntegrationValidationError
+    AlreadyBannedError,
+    IntegrationBanError,
+    IntegrationCommandError,
+    IntegrationDisabledError,
+    IntegrationFailureError,
+    IntegrationValidationError,
+    NotFoundError,
 )
 from barricade.integrations.custom.models import (
-    BanPlayersRequestConfigPayload, BanPlayersRequestPayload, ClientRequestType, NewReportRequestPayload,
-    NewReportRequestPayloadPlayer, UnbanPlayersRequestConfigPayload, UnbanPlayersRequestPayload
+    BanPlayersRequestConfigPayload,
+    BanPlayersRequestPayload,
+    ClientRequestType,
+    NewReportRequestPayload,
+    NewReportRequestPayloadPlayer,
+    UnbanPlayersRequestConfigPayload,
+    UnbanPlayersRequestPayload,
 )
 from barricade.integrations.custom.websocket import CustomWebsocket
-from barricade.integrations.integration import Integration, IntegrationMetaData, is_enabled
+from barricade.integrations.integration import (
+    Integration,
+    IntegrationMetaData,
+    is_enabled,
+)
+
 
 def is_websocket_enabled(func):
     @wraps(func)
-    def decorated(integration: 'CustomIntegration', *args, **kwargs):
+    def decorated(integration: "CustomIntegration", *args, **kwargs):
         # Define the condition
         async def check():
             if not integration.ws.is_started():
                 await integration.disable()
-                raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
+                raise IntegrationDisabledError(
+                    f"Integration {integration!r} is disabled. Enable before retrying."
+                )
 
         # Return an asyncgenerator if that's what we're decorating
         if inspect.isasyncgenfunction(func):
+
             async def inner_gen():
                 await check()
                 async for v in func(integration, *args, **kwargs):
                     yield v
+
             return inner_gen()
         else:
+
             async def inner_coro():
                 await check()
                 return await func(integration, *args, **kwargs)
+
             return inner_coro()
 
     return decorated
+
 
 class CustomIntegration(Integration):
     meta = IntegrationMetaData(
@@ -64,10 +87,10 @@ class CustomIntegration(Integration):
 
     def start_connection(self):
         self.ws.start()
-    
+
     def stop_connection(self):
         self.ws.stop()
-    
+
     def update_connection(self):
         self.ws.address = self.get_ws_url()
         self.ws.token = self.config.api_key
@@ -91,22 +114,22 @@ class CustomIntegration(Integration):
                         bm_rcon_url=player.player.bm_rcon_url,
                     )
                     for player in report.players
-                ]
-            ).model_dump()
+                ],
+            ).model_dump(),
         )
 
     # --- Abstract method implementations
 
     async def get_instance_name(self) -> str:
         return "Custom"
-    
+
     def get_instance_url(self) -> str:
         return self.config.api_url
 
     async def validate(self, community: schemas.Community) -> set[str]:
         if community.id != self.config.community_id:
             raise IntegrationValidationError("Communities do not match")
-        
+
         return set()
 
     @is_enabled
@@ -120,8 +143,7 @@ class CustomIntegration(Integration):
 
             try:
                 remote_id = await self.add_ban(
-                    player_id=player_id,
-                    reason=self.get_ban_reason(response)
+                    player_id=player_id, reason=self.get_ban_reason(response)
                 )
             except IntegrationFailureError:
                 raise
@@ -147,12 +169,13 @@ class CustomIntegration(Integration):
                 raise
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to unban player") from e
-    
+
     @is_enabled
     async def bulk_ban_players(self, responses: Sequence[schemas.ResponseWithToken]):
         self.logger.info(
             "%r: Bulk banning players %s",
-            self, [response.player_report.player_id for response in responses]
+            self,
+            [response.player_report.player_id for response in responses],
         )
         ban_ids: list[tuple[str, str]] = []
         try:
@@ -181,7 +204,9 @@ class CustomIntegration(Integration):
 
         successful_player_ids: list[str] = []
         try:
-            async for ban_id in self.remove_multiple_bans(ban_ids=list(remote_ids.keys())):
+            async for ban_id in self.remove_multiple_bans(
+                ban_ids=list(remote_ids.keys())
+            ):
                 successful_player_ids.append(remote_ids[ban_id])
         finally:
             if successful_player_ids:
@@ -194,7 +219,9 @@ class CustomIntegration(Integration):
 
     # --- Websocket API wrappers
 
-    async def _make_request(self, method: str, endpoint: str, data: dict | None = None) -> dict:
+    async def _make_request(
+        self, method: str, endpoint: str, data: dict | None = None
+    ) -> dict:
         """Make an API request.
 
         Parameters
@@ -220,16 +247,13 @@ class CustomIntegration(Integration):
         url = self.get_api_url() + endpoint
         headers = {"Authorization": f"Bearer {self.config.api_key}"}
         async with aiohttp.ClientSession(headers=headers) as session:
-            if method in {"POST", "PATCH"}:
-                kwargs = {"json": data}
-            else:
-                kwargs = {"params": data}
+            kwargs = {"json": data} if method in {"POST", "PATCH"} else {"params": data}
 
-            async with session.request(method=method, url=url, **kwargs) as r: # type: ignore
+            async with session.request(method=method, url=url, **kwargs) as r:  # type: ignore
                 r.raise_for_status()
-                content_type = r.headers.get('content-type', '')
+                content_type = r.headers.get("content-type", "")
 
-                if 'json' in content_type:
+                if "json" in content_type:
                     response = await r.json()
                 # elif "text/html" in content_type:
                 #     response = (await r.content.read()).decode()
@@ -239,15 +263,20 @@ class CustomIntegration(Integration):
         return response
 
     @is_websocket_enabled
-    async def add_multiple_bans(self, player_ids: dict[str, str | None], *, partial_retry: bool = True) -> AsyncGenerator[tuple[str, str], None]:
+    async def add_multiple_bans(
+        self, player_ids: dict[str, str | None], *, partial_retry: bool = True
+    ) -> AsyncGenerator[tuple[str, str], None]:
         try:
-            response = await self.ws.execute(ClientRequestType.BAN_PLAYERS, BanPlayersRequestPayload(
-                player_ids=player_ids,
-                config=BanPlayersRequestConfigPayload(
-                    banlist_id=self.config.banlist_id,
-                    reason="Banned via shared HLL Barricade report.",
-                )
-            ).model_dump())
+            response = await self.ws.execute(
+                ClientRequestType.BAN_PLAYERS,
+                BanPlayersRequestPayload(
+                    player_ids=player_ids,
+                    config=BanPlayersRequestConfigPayload(
+                        banlist_id=self.config.banlist_id,
+                        reason="Banned via shared HLL Barricade report.",
+                    ),
+                ).model_dump(),
+            )
         except IntegrationCommandError as e:
             if e.response.get("error") != "Could not ban all players":
                 raise
@@ -255,13 +284,17 @@ class CustomIntegration(Integration):
             successful_ids = e.response["ban_ids"]
             for player_id, ban_id in successful_ids.items():
                 yield str(player_id), str(ban_id)
-            
+
             if not partial_retry:
                 raise
 
             # Retry for failed player IDs
-            missing_player_ids = {k: v for k, v in player_ids.items() if k not in successful_ids}
-            async for (player_id, ban_id) in self.add_multiple_bans(missing_player_ids, partial_retry=False):
+            missing_player_ids = {
+                k: v for k, v in player_ids.items() if k not in successful_ids
+            }
+            async for player_id, ban_id in self.add_multiple_bans(
+                missing_player_ids, partial_retry=False
+            ):
                 yield player_id, ban_id
         else:
             assert response is not None
@@ -269,14 +302,19 @@ class CustomIntegration(Integration):
                 yield str(player_id), str(ban_id)
 
     @is_websocket_enabled
-    async def remove_multiple_bans(self, ban_ids: Sequence[str], *, partial_retry: bool = True) -> AsyncGenerator[str, None]:
+    async def remove_multiple_bans(
+        self, ban_ids: Sequence[str], *, partial_retry: bool = True
+    ) -> AsyncGenerator[str, None]:
         try:
-            response = await self.ws.execute(ClientRequestType.UNBAN_PLAYERS, UnbanPlayersRequestPayload(
-                ban_ids=list(ban_ids),
-                config=UnbanPlayersRequestConfigPayload(
-                    banlist_id=self.config.banlist_id,
-                )
-            ).model_dump())
+            response = await self.ws.execute(
+                ClientRequestType.UNBAN_PLAYERS,
+                UnbanPlayersRequestPayload(
+                    ban_ids=list(ban_ids),
+                    config=UnbanPlayersRequestConfigPayload(
+                        banlist_id=self.config.banlist_id,
+                    ),
+                ).model_dump(),
+            )
         except IntegrationCommandError as e:
             if e.response.get("error") != "Could not unban all players":
                 raise
@@ -284,13 +322,15 @@ class CustomIntegration(Integration):
             successful_ids = e.response["ban_ids"]
             for ban_id in successful_ids:
                 yield str(ban_id)
-            
+
             if not partial_retry:
                 raise
 
             # Retry for failed ban IDs
             missing_ban_ids = list(set(ban_ids) - set(successful_ids))
-            async for ban_id in self.remove_multiple_bans(missing_ban_ids, partial_retry=False):
+            async for ban_id in self.remove_multiple_bans(
+                missing_ban_ids, partial_retry=False
+            ):
                 yield ban_id
         else:
             assert response is not None

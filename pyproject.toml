@@ -1,0 +1,48 @@
+[project]
+name = "Barricade"
+version = "0.1.0"
+description = "Barricade is a service by server admins for server admins, to protect their Hell Let Loose servers from cheaters and troublemakers through collaborative data sharing."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.31.0",
+    "bcrypt==4.3.*",
+    "cachetools>=7.1.4",
+    "discord-py>=2.4.0",
+    "fastapi>=0.136.3",
+    "passlib[bcrypt]>=1.7.4",
+    "psycopg2>=2.9.12",
+    "pydantic>=2.0.0",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.29",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "uvicorn[standard]>=0.48.0",
+    "websockets==13.*",
+]
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+ignore = [
+    "E501",  # Line length is handled by black
+    "B027",  # Allow non-abstract empty ABC methods
+    "SIM108",
+]
+
+[dependency-groups]
+dev = [
+    "alembic>=1.18.4",
+    "ruff>=0.12.0",
+]

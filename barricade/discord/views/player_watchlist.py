@@ -1,20 +1,25 @@
+import contextlib
 import re
-from sqlalchemy.ext.asyncio import AsyncSession
 
 import discord
-from discord import ui, ButtonStyle, Interaction
+from discord import ButtonStyle, Interaction, ui
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.watchlists import create_watchlist, get_watchlist_by_player_and_community
+from barricade.crud.watchlists import (
+    create_watchlist,
+    get_watchlist_by_player_and_community,
+)
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.utils import CustomException, View, handle_error_wrap
 from barricade.exceptions import AlreadyExistsError
 
+
 class PlayerToggleWatchlistButton(
     discord.ui.DynamicItem[discord.ui.Button],
-    template=r"watchlist:(?P<community_id>\d+):(?P<player_id>.+):(?P<is_watchlisted>0|1)"
+    template=r"watchlist:(?P<community_id>\d+):(?P<player_id>.+):(?P<is_watchlisted>0|1)",
 ):
     def __init__(
         self,
@@ -27,21 +32,35 @@ class PlayerToggleWatchlistButton(
         self.player_id = player_id
         self.is_watchlisted = is_watchlisted
 
-        button.custom_id = f"watchlist:{self.community_id}:{self.player_id}:{int(self.is_watchlisted)}"
-        
+        button.custom_id = (
+            f"watchlist:{self.community_id}:{self.player_id}:{int(self.is_watchlisted)}"
+        )
+
         super().__init__(button)
-    
+
     @classmethod
-    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /): # type: ignore
+    async def from_custom_id(  # type: ignore
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Button,
+        match: re.Match[str],
+        /,
+    ):
         return cls(
             button=item,
             community_id=int(match["community_id"]),
             player_id=match["player_id"],
             is_watchlisted=match["is_watchlisted"] == "1",
         )
-    
+
     @classmethod
-    def create(cls, community_id: int, player_id: str, is_watchlisted: bool, row: int | None = None):
+    def create(
+        cls,
+        community_id: int,
+        player_id: str,
+        is_watchlisted: bool,
+        row: int | None = None,
+    ):
         button = discord.ui.Button(
             label="Remove from watchlist" if is_watchlisted else "Add to watchlist",
             emoji="👁️",
@@ -54,16 +73,16 @@ class PlayerToggleWatchlistButton(
             player_id=player_id,
             is_watchlisted=is_watchlisted,
         )
-    
+
     @handle_error_wrap
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.community_id)
             if not db_community:
                 raise CustomException("Community not found")
-            
+
             await assert_has_admin_role(
-                interaction.user, # type: ignore
+                interaction.user,  # type: ignore
                 schemas.CommunityRef.model_validate(db_community),
             )
 
@@ -73,7 +92,7 @@ class PlayerToggleWatchlistButton(
                 await self.remove_watchlist(db)
             else:
                 await self.add_watchlist(db)
-            
+
             # Create copy of button
             new_button = self.create(
                 community_id=self.community_id,
@@ -90,7 +109,9 @@ class PlayerToggleWatchlistButton(
                     view.add_item(new_button)
                     break
             else:
-                raise RuntimeError("Expected to find button with custom ID %s" % self.custom_id)
+                raise RuntimeError(
+                    f"Expected to find button with custom ID {self.custom_id!r}"
+                )
 
             # Edit message
             await interaction.response.edit_message(view=view)
@@ -100,13 +121,13 @@ class PlayerToggleWatchlistButton(
             player_id=self.player_id,
             community_id=self.community_id,
         )
-        try:
+        with contextlib.suppress(AlreadyExistsError):
             await create_watchlist(db, params)
-        except AlreadyExistsError:
-            pass
 
     async def remove_watchlist(self, db: AsyncSession):
-        db_watchlist = await get_watchlist_by_player_and_community(db, self.player_id, self.community_id)
+        db_watchlist = await get_watchlist_by_player_and_community(
+            db, self.player_id, self.community_id
+        )
         if db_watchlist:
             await db.delete(db_watchlist)
             await db.flush()

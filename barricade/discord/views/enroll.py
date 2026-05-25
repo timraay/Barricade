@@ -1,38 +1,54 @@
-from functools import partial
 import re
-from discord import ButtonStyle, Color, Interaction
+from functools import partial
+
 import discord
+import pydantic_core
+from discord import ButtonStyle, Color, Interaction
 from discord.ui import TextInput
 from pydantic import ValidationError
-import pydantic_core
+
 from barricade import schemas
 from barricade.constants import DISCORD_ENROLL_CHANNEL_ID
-
 from barricade.crud.communities import create_new_community, get_admin_by_id
 from barricade.db import session_factory
-from barricade.discord.utils import Modal, View, CallableButton, CustomException, format_url, get_command_mention, get_success_embed
+from barricade.discord.utils import (
+    CallableButton,
+    CustomException,
+    Modal,
+    View,
+    format_url,
+    get_command_mention,
+    get_success_embed,
+)
 from barricade.discord.views.community_overview import CommunityBaseModal
 from barricade.enums import Emojis
 
-RE_BATTLEMETRICS_URL = re.compile(r"^https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+$")
+RE_BATTLEMETRICS_URL = re.compile(
+    r"^https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+$"
+)
 RE_SERVER_ADDRESS = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{3,5}$")
+
 
 class EnrollView(View):
     def __init__(self):
         super().__init__(timeout=None)
 
-        self.add_item(CallableButton(
-            partial(self.send_owner_form, True),
-            style=ButtonStyle.blurple,
-            label="Request access (PC)",
-            custom_id="enroll_pc"
-        ))
-        self.add_item(CallableButton(
-            partial(self.send_owner_form, False),
-            style=ButtonStyle.blurple,
-            label="Request access (Console)",
-            custom_id="enroll_console"
-        ))
+        self.add_item(
+            CallableButton(
+                partial(self.send_owner_form, True),
+                style=ButtonStyle.blurple,
+                label="Request access (PC)",
+                custom_id="enroll_pc",
+            )
+        )
+        self.add_item(
+            CallableButton(
+                partial(self.send_owner_form, False),
+                style=ButtonStyle.blurple,
+                label="Request access (Console)",
+                custom_id="enroll_console",
+            )
+        )
 
     async def send_owner_form(self, is_pc: bool, interaction: Interaction):
         async with session_factory() as db:
@@ -42,25 +58,24 @@ class EnrollView(View):
                     raise CustomException(
                         f"You are already an admin for {admin.community.name}!",
                         (
-                            f"Either resign using {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)} or" # type: ignore
+                            f"Either resign using {await get_command_mention(interaction.client.tree, 'leave-community', guild_only=True)} or"  # type: ignore
                             f" ask the existing owner to transfer ownership."
-                        )
+                        ),
                     )
-                elif (is_pc and not admin.community.is_pc) or (not is_pc and not admin.community.is_console):
+                elif (is_pc and not admin.community.is_pc) or (
+                    not is_pc and not admin.community.is_console
+                ):
                     raise CustomException(
                         f"You are already registered as owner of {admin.community.name}!",
-                        f"If you want to change what platform(s) your community hosts servers for, please reach out to Bunker staff."
+                        "If you want to change what platform(s) your community hosts servers for, please reach out to Bunker staff.",
                     )
                 else:
                     raise CustomException(
                         f"You are already registered as owner of {admin.community.name}!",
-                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}." # type: ignore
+                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}.",  # type: ignore
                     )
-        
-        if is_pc:
-            modal = PCEnrollModal()
-        else:
-            modal = ConsoleEnrollModal()
+
+        modal = PCEnrollModal() if is_pc else ConsoleEnrollModal()
         await interaction.response.send_modal(modal)
 
 
@@ -75,26 +90,25 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
             is_pc=False,
             is_console=False,
         )
-    
+
     def get_server_value(self) -> str:
         return "Unknown"
-
 
     async def on_submit(self, interaction: Interaction):
         channel = interaction.client.get_channel(DISCORD_ENROLL_CHANNEL_ID)
         if not channel:
             raise CustomException(
                 "Could not send application!",
-                "Channel not found. Reach out to an administrator."
+                "Channel not found. Reach out to an administrator.",
             )
         if not isinstance(channel, discord.TextChannel):
             raise CustomException(
                 "Could not send application!",
-                "Invalid channel configured. Reach out to an administrator."
+                "Invalid channel configured. Reach out to an administrator.",
             )
-        
+
         params = self.get_params(interaction)
-        
+
         embed = discord.Embed(
             title=f"{params.tag} {params.name}",
             color=Color.blurple(),
@@ -102,12 +116,12 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
         embed.add_field(
             name="Contact URL",
             value=f"{Emojis.CONTACT} {params.contact_url}",
-            inline=True
+            inline=True,
         )
         embed.add_field(
-            name=f"Owner",
+            name="Owner",
             value=f"{interaction.user.display_name}\n{interaction.user.mention}",
-            inline=True
+            inline=True,
         )
         embed.add_field(
             name="Server",
@@ -116,15 +130,20 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
         )
         embed.add_field(
             name="Payload",
-            value="```json\n" + params.model_dump_json(indent=2, exclude_unset=True) + "\n```",
-            inline=False
+            value="```json\n"
+            + params.model_dump_json(indent=2, exclude_unset=True)
+            + "\n```",
+            inline=False,
         )
 
         await channel.send(embed=embed, view=EnrollAcceptView())
-        await interaction.response.send_message(embed=get_success_embed(
-            "Application sent!",
-            "Your application was submitted for review. You will automatically receive your roles once accepted."
-        ), ephemeral=True)
+        await interaction.response.send_message(
+            embed=get_success_embed(
+                "Application sent!",
+                "Your application was submitted for review. You will automatically receive your roles once accepted.",
+            ),
+            ephemeral=True,
+        )
 
 
 class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
@@ -137,7 +156,7 @@ class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
         params = super().get_params(interaction)
         params.is_pc = True
         return params
-    
+
     def get_server_value(self):
         return format_url("View on Battlemetrics", self.battlemetrics_url.value)
 
@@ -146,10 +165,11 @@ class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
         if not bm_url_match:
             raise CustomException(
                 "Invalid Battlemetrics URL!",
-                "Please visit [Battlemetrics](https://www.battlemetrics.com/servers/hll), search for your server, click on it, and copy the URL."
+                "Please visit [Battlemetrics](https://www.battlemetrics.com/servers/hll), search for your server, click on it, and copy the URL.",
             )
 
         return await super().on_submit(interaction)
+
 
 class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
     image_url = TextInput(
@@ -161,7 +181,7 @@ class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
         params = super().get_params(interaction)
         params.is_console = True
         return params
-    
+
     def get_server_value(self):
         return format_url("View Image", str(pydantic_core.Url(self.image_url.value)))
 
@@ -171,19 +191,22 @@ class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
             (
                 "Please provide a valid URL to an image. The image must show your game server on your server management panel or in the server browser."
                 " Your server's name needs to be visible. [Imgur](https://imgur.com/upload) is recommended to quickly upload your image online."
-            )
+            ),
         )
         try:
             url = pydantic_core.Url(self.image_url.value)
         except ValidationError:
-            raise invalid_url_exc
-        
+            raise invalid_url_exc from None
+
         if not url.host:
             raise invalid_url_exc
-        if "discord" in url.host and not (url.host.startswith("cdn.") or url.host.startswith("media")):
+        if "discord" in url.host and not (
+            url.host.startswith("cdn.") or url.host.startswith("media")
+        ):
             raise invalid_url_exc
 
         return await super().on_submit(interaction)
+
 
 class EnrollEditModal(Modal, title="Edit Application"):
     def __init__(self, params: schemas.CommunityCreateParams):
@@ -191,25 +214,25 @@ class EnrollEditModal(Modal, title="Edit Application"):
         self.input = TextInput(
             label="Parameters",
             style=discord.TextStyle.paragraph,
-            default=params.model_dump_json(indent=2)
+            default=params.model_dump_json(indent=2),
         )
         self.add_item(self.input)
-    
+
     async def on_submit(self, interaction: Interaction):
         try:
             params = schemas.CommunityCreateParams.model_validate_json(self.input.value)
         except ValidationError as e:
-            raise CustomException(
-                "Invalid parameters!",
-                str(e)
-            )
+            raise CustomException("Invalid parameters!", str(e)) from None
 
         await interaction.response.defer()
         message = await interaction.original_response()
 
         embed = message.embeds[0]
-        embed._fields[-1]["value"] = "```json\n" + params.model_dump_json(indent=2, exclude_unset=True) + "\n```" # type: ignore
+        embed._fields[-1]["value"] = (
+            "```json\n" + params.model_dump_json(indent=2, exclude_unset=True) + "\n```"
+        )  # type: ignore
         await interaction.edit_original_response(embed=embed)
+
 
 class MessageApplicationModal(Modal):
     def __init__(self, member: discord.Member):
@@ -220,16 +243,19 @@ class MessageApplicationModal(Modal):
             style=discord.TextStyle.paragraph,
         )
         self.add_item(self.input)
-    
+
     async def on_submit(self, interaction: Interaction):
         embed = discord.Embed(description=">>> " + self.input.value)
         embed.set_author(name="Message from Barricade staff:")
-        embed.set_footer(text="You cannot reply to this message. Ask questions in the Discord server.")
+        embed.set_footer(
+            text="You cannot reply to this message. Ask questions in the Discord server."
+        )
         await self.member.send(embed=embed)
         await interaction.response.send_message(
             embed=get_success_embed("Message sent!"),
             ephemeral=True,
         )
+
 
 class EnrollAcceptView(View):
     def __init__(self):
@@ -238,25 +264,25 @@ class EnrollAcceptView(View):
             self.accept_enrollment,
             label="Accept",
             style=ButtonStyle.green,
-            custom_id="enroll_accept"
+            custom_id="enroll_accept",
         )
         self.deny_button = CallableButton(
             self.deny_enrollment,
             label="Deny",
             style=ButtonStyle.red,
-            custom_id="enroll_deny"
+            custom_id="enroll_deny",
         )
         self.edit_button = CallableButton(
             self.edit_enrollment,
             label="Edit",
             style=ButtonStyle.gray,
-            custom_id="enroll_edit"
+            custom_id="enroll_edit",
         )
         self.message_button = CallableButton(
             self.message_applicant,
             label="Message",
             style=ButtonStyle.blurple,
-            custom_id="enroll_message_user"
+            custom_id="enroll_message_user",
         )
         self.add_item(self.accept_button)
         self.add_item(self.deny_button)
@@ -264,16 +290,16 @@ class EnrollAcceptView(View):
         self.add_item(self.message_button)
 
     def get_params(self, interaction: Interaction) -> schemas.CommunityCreateParams:
-        content: str = interaction.message.embeds[0].fields[-1].value # type: ignore
-        payload = content[8:-4] # Strip discord formatting
+        content: str = interaction.message.embeds[0].fields[-1].value  # type: ignore
+        payload = content[8:-4]  # Strip discord formatting
         return schemas.CommunityCreateParams.model_validate_json(payload)
-    
+
     async def accept_enrollment(self, interaction: Interaction):
         params = self.get_params(interaction)
-        
+
         async with session_factory.begin() as db:
             await create_new_community(db, params)
-        
+
         self.accept_button.disabled = True
         self.deny_button.disabled = True
         self.edit_button.disabled = True
@@ -286,7 +312,7 @@ class EnrollAcceptView(View):
         self.edit_button.disabled = True
         self.deny_button.label = "Denied!"
         await interaction.response.edit_message(view=self)
-    
+
     async def edit_enrollment(self, interaction: Interaction):
         params = self.get_params(interaction)
         modal = EnrollEditModal(params)
@@ -296,6 +322,6 @@ class EnrollAcceptView(View):
         params = self.get_params(interaction)
         assert interaction.guild is not None
         member = await interaction.guild.fetch_member(params.owner_id)
-        
+
         modal = MessageApplicationModal(member)
         await interaction.response.send_modal(modal)

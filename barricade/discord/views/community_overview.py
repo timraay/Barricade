@@ -7,31 +7,38 @@ from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord import bot
 from barricade.discord.communities import get_forward_channel
-from barricade.discord.utils import CustomException, Modal, View, CallableButton, get_command_mention
+from barricade.discord.utils import (
+    CallableButton,
+    CustomException,
+    Modal,
+    View,
+    get_command_mention,
+)
 from barricade.enums import Emojis
+
 
 class CommunityOverviewView(View):
     def __init__(self, community: schemas.Community, user: Member):
         super().__init__(timeout=500)
         self.user = user
-        self.set_community(community)        
+        self.set_community(community)
 
     def set_community(self, community: schemas.Community):
         self.community = community
         self.admin = next(
             (admin for admin in community.admins if admin.discord_id == self.user.id),
-            None
+            None,
         )
         self.is_owner = community.owner_id == self.user.id
         self.is_admin = self.admin and not self.is_owner
 
         self.clear_items()
         if self.is_owner:
-            self.add_item(CallableButton(
-                self.open_edit_modal,
-                style=ButtonStyle.blurple,
-                label="Edit"
-            ))
+            self.add_item(
+                CallableButton(
+                    self.open_edit_modal, style=ButtonStyle.blurple, label="Edit"
+                )
+            )
 
     async def open_edit_modal(self, interaction: Interaction):
         async with session_factory() as db:
@@ -41,16 +48,18 @@ class CommunityOverviewView(View):
 
             if self.community.owner_id != interaction.user.id:
                 raise CustomException("You no longer own this community!")
-            
+
         modal = CommunityEditModal(self)
         await interaction.response.send_modal(modal)
-    
-    async def submit_edit_modal(self, interaction: Interaction, modal: 'CommunityEditModal'):
+
+    async def submit_edit_modal(
+        self, interaction: Interaction, modal: "CommunityEditModal"
+    ):
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.community.id)
             if not db_community:
                 raise CustomException("You are no longer part of a community!")
-            
+
             community = schemas.Community.model_validate(db_community)
             if community.owner_id != interaction.user.id:
                 raise CustomException("You no longer own this community!")
@@ -60,15 +69,12 @@ class CommunityOverviewView(View):
             params.tag = modal.tag.value
             params.contact_url = modal.contact_url.value
 
-            await edit_community(db, db_community, params, by=interaction.user) # type: ignore
+            await edit_community(db, db_community, params, by=interaction.user)  # type: ignore
 
         self.set_community(community)
         embed = await self.get_embed(interaction)
 
-        await interaction.response.edit_message(
-            embed=embed,
-            view=self
-        )
+        await interaction.response.edit_message(embed=embed, view=self)
 
     async def get_embed(self, interaction: Interaction):
         if self.community.is_pc and self.community.is_console:
@@ -87,8 +93,10 @@ class CommunityOverviewView(View):
 
         channel = get_forward_channel(self.community)
         if channel:
-            embed.set_thumbnail(url=channel.guild.icon.url if channel.guild.icon else None)
-            
+            embed.set_thumbnail(
+                url=channel.guild.icon.url if channel.guild.icon else None
+            )
+
         if self.is_admin or self.is_owner:
             if not self.community.forward_channel_id:
                 channel_mention = "⚠️ *No reports channel*"
@@ -106,7 +114,7 @@ class CommunityOverviewView(View):
                 name="Contact",
                 value=f"{Emojis.CONTACT} {self.community.contact_url}",
             )
-        
+
         admin_list = []
         for admin in self.community.admins:
             try:
@@ -114,7 +122,7 @@ class CommunityOverviewView(View):
                 admin_list.append(member.mention)
             except HTTPException:
                 admin_list.append(admin.name)
-            
+
             if self.community.owner_id == admin.discord_id:
                 admin_list[-1] += f" {Emojis.OWNER}"
 
@@ -137,36 +145,48 @@ class CommunityOverviewView(View):
                 name="> Available commands (Admin)",
                 value=(
                     ">>> -# "
-                    + await get_command_mention(interaction.client.tree, "leave-community", guild_only=True) # type: ignore
+                    + await get_command_mention(
+                        interaction.client.tree,  # type: ignore
+                        "leave-community",
+                        guild_only=True,
+                    )
                     + " - Leave this community"
                 ),
-                inline=False
+                inline=False,
             )
         elif self.is_owner:
             embed.add_field(
                 name="> Available commands (Owner)",
                 value=(
                     ">>> -# "
-                    + await get_command_mention(interaction.client.tree, "add-admin", guild_only=True) # type: ignore
+                    + await get_command_mention(
+                        interaction.client.tree,  # type: ignore
+                        "add-admin",
+                        guild_only=True,
+                    )
                     + " - Add an admin to your community\n-# "
-                    + await get_command_mention(interaction.client.tree, "remove-admin", guild_only=True) # type: ignore
+                    + await get_command_mention(
+                        interaction.client.tree,  # type: ignore
+                        "remove-admin",
+                        guild_only=True,
+                    )
                     + " - Remove an admin from your community\n-# "
-                    + await get_command_mention(interaction.client.tree, "transfer-ownership", guild_only=True) # type: ignore
+                    + await get_command_mention(
+                        interaction.client.tree,  # type: ignore
+                        "transfer-ownership",
+                        guild_only=True,
+                    )
                     + " - Transfer ownership to one of your admins"
                 ),
-                inline=False
+                inline=False,
             )
-        
+
         return embed
 
     async def send(self, interaction: Interaction):
         embed = await self.get_embed(interaction)
-        
-        await interaction.response.send_message(
-            embed=embed,
-            view=self,
-            ephemeral=True
-        )
+
+        await interaction.response.send_message(embed=embed, view=self, ephemeral=True)
 
 
 class CommunityBaseModal(Modal):
@@ -177,7 +197,7 @@ class CommunityBaseModal(Modal):
         min_length=3,
         max_length=32,
     )
-    
+
     tag = TextInput(
         label="Tag",
         placeholder='eg. "[ABC]", "DEF |"',
@@ -192,14 +212,15 @@ class CommunityBaseModal(Modal):
         max_length=64,
     )
 
+
 class CommunityEditModal(CommunityBaseModal):
-    def __init__(self, view: 'CommunityOverviewView'):
+    def __init__(self, view: "CommunityOverviewView"):
         self.view = view
         community = view.community
         super().__init__(title=f"Community: {community.name}")
         self.name.default = community.name
         self.tag.default = community.tag
         self.contact_url.default = community.contact_url
-    
+
     async def on_submit(self, interaction: Interaction):
         await self.view.submit_edit_modal(interaction, self)

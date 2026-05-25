@@ -7,13 +7,12 @@ from typing import Literal, overload
 import discord
 from discord.ext import commands
 
-from barricade.discord.utils import handle_error
 from barricade.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
+from barricade.discord.utils import handle_error
 from barricade.enums import Platform
 
-__all__ = (
-    "bot",
-)
+__all__ = ("bot",)
+
 
 async def load_all_cogs():
     cog_path_template = DISCORD_COGS_PATH.as_posix().replace("/", ".") + ".{}"
@@ -25,33 +24,44 @@ async def load_all_cogs():
             except Exception:
                 logging.exception(f"Cog {cog_name} cannot be loaded")
                 pass
-    logging.info('Loaded all cogs')
+    logging.info("Loaded all cogs")
+
 
 async def sync_commands():
     try:
-        await asyncio.wait_for(bot.tree.sync(guild=discord.Object(DISCORD_GUILD_ID)), timeout=5)
+        await asyncio.wait_for(
+            bot.tree.sync(guild=discord.Object(DISCORD_GUILD_ID)), timeout=5
+        )
         await asyncio.wait_for(bot.tree.sync(), timeout=5)
-        logging.info('Synced app commands')
-    except asyncio.TimeoutError:
-        logging.warn("Didn't sync app commands. This was likely last done recently, resulting in rate limits.")
+        logging.info("Synced app commands")
+    except TimeoutError:
+        logging.warn(
+            "Didn't sync app commands. This was likely last done recently, resulting in rate limits."
+        )
 
 
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.remove_command('help')
+        self.remove_command("help")
         self.allowed_mentions = discord.AllowedMentions.none()
-    
+
     async def setup_hook(self) -> None:
         await load_all_cogs()
         await sync_commands()
 
-        from barricade.discord.views.enroll import EnrollView, EnrollAcceptView
-        from barricade.discord.views.submit_report import GetSubmissionURLView
-        from barricade.discord.views.player_review import PlayerReportResponseButton, PlayerToggleWatchlistButton, PlayerReportSelect
+        from barricade.discord.views.enroll import EnrollAcceptView, EnrollView
+        from barricade.discord.views.player_review import (
+            PlayerReportResponseButton,
+            PlayerReportSelect,
+            PlayerToggleWatchlistButton,
+        )
         from barricade.discord.views.report_management import ReportManagementButton
-        from barricade.discord.views.t17_support_player_review import T17SupportPlayerReportResponseButton
-        
+        from barricade.discord.views.submit_report import GetSubmissionURLView
+        from barricade.discord.views.t17_support_player_review import (
+            T17SupportPlayerReportResponseButton,
+        )
+
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
         self.add_view(GetSubmissionURLView(Platform.PC))
@@ -70,24 +80,32 @@ class Bot(commands.Bot):
         if guild is None:
             raise RuntimeError("Guild not found")
         return guild
-    
+
     async def get_or_fetch_user(self, user_id: int):
         user = self.get_user(user_id)
         if user:
             return user
         else:
             return await self.fetch_user(user_id)
-    
+
     @overload
     async def get_or_fetch_member(self, member_id: int) -> discord.Member: ...
     @overload
-    async def get_or_fetch_member(self, member_id: int, strict: Literal[True]) -> discord.Member: ...
+    async def get_or_fetch_member(
+        self, member_id: int, strict: Literal[True]
+    ) -> discord.Member: ...
     @overload
-    async def get_or_fetch_member(self, member_id: int, strict: Literal[False]) -> discord.Member | None: ...
+    async def get_or_fetch_member(
+        self, member_id: int, strict: Literal[False]
+    ) -> discord.Member | None: ...
     @overload
-    async def get_or_fetch_member(self, member_id: int, strict: bool = True) -> discord.Member | None: ...
+    async def get_or_fetch_member(
+        self, member_id: int, strict: bool = True
+    ) -> discord.Member | None: ...
 
-    async def get_or_fetch_member(self, member_id: int, strict: bool = True) -> discord.Member | None:
+    async def get_or_fetch_member(
+        self, member_id: int, strict: bool = True
+    ) -> discord.Member | None:
         guild = self.primary_guild
         member = guild.get_member(member_id)
         if member:
@@ -98,26 +116,34 @@ class Bot(commands.Bot):
             if strict:
                 raise
             return None
-    
-    def get_partial_message(self, channel_id: int, message_id: int, guild_id: int | None = None):
-        return self.get_partial_messageable(channel_id, guild_id=guild_id).get_partial_message(message_id)
+
+    def get_partial_message(
+        self, channel_id: int, message_id: int, guild_id: int | None = None
+    ):
+        return self.get_partial_messageable(
+            channel_id, guild_id=guild_id
+        ).get_partial_message(message_id)
 
     async def delete_message(self, channel_id: int, message_id: int):
         message = self.get_partial_message(channel_id, message_id)
         await message.delete()
 
+
 def command_prefix(bot: Bot, message: discord.Message):
-    return bot.user.mention + " " # type: ignore
+    return bot.user.mention + " "  # type: ignore
+
 
 bot = Bot(
     intents=discord.Intents.default() | discord.Intents(members=True),
     command_prefix=command_prefix,
-    case_insensitive=True
+    case_insensitive=True,
 )
+
 
 @bot.tree.error
 async def on_interaction_error(interaction: discord.Interaction, error: Exception):
     await handle_error(interaction, error)
+
 
 @bot.command()
 @commands.is_owner()
@@ -139,4 +165,3 @@ async def reload(ctx: commands.Context, cog_name: str | None = None):
             await reload_cog(ctx, cog_name)
         else:
             await ctx.send(f"{cog_name} doesn't exist")
-

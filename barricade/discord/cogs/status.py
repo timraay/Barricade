@@ -6,6 +6,7 @@ from barricade.db import models, session_factory
 from barricade.discord.bot import Bot
 from barricade.enums import Emojis
 
+
 class StatusCog(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -14,13 +15,21 @@ class StatusCog(commands.Cog):
     @tasks.loop(minutes=10)
     async def update_bot_status(self):
         async with session_factory() as db:
-            num_players_reported = await db.scalar(select(func.count()).select_from(models.PlayerReport))
-            num_bans_issued = await db.scalar(select(func.count()).select_from(models.PlayerReportResponse).where(models.PlayerReportResponse.banned == True))
+            num_players_reported = await db.scalar(
+                select(func.count()).select_from(models.PlayerReport)
+            )
+            num_bans_issued = await db.scalar(
+                select(func.count())
+                .select_from(models.PlayerReportResponse)
+                .where(models.PlayerReportResponse.banned)
+            )
 
-        await self.bot.change_presence(activity=CustomActivity(
-            name=f"{num_players_reported} players reported | {num_bans_issued} bans issued",
-            emoji=Emojis.BANNED
-        ))
+        await self.bot.change_presence(
+            activity=CustomActivity(
+                name=f"{num_players_reported} players reported | {num_bans_issued} bans issued",
+                emoji=Emojis.BANNED,
+            )
+        )
 
     @update_bot_status.before_loop
     async def before_update_bot_status(self):

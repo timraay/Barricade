@@ -1,14 +1,21 @@
 import ast
-import discord
-from discord import app_commands, Interaction
-from discord.ext import commands
-from barricade.constants import DISCORD_GUILD_ID, DISCORD_OWNER_ROLE_ID, MAX_ADMIN_LIMIT
+import contextlib
 
+import discord
+from discord import Interaction, app_commands
+from discord.ext import commands
+
+from barricade.constants import DISCORD_GUILD_ID, DISCORD_OWNER_ROLE_ID, MAX_ADMIN_LIMIT
 from barricade.discord.bot import Bot
-from barricade.discord.utils import get_command_mention, get_success_embed, handle_error_wrap
+from barricade.discord.utils import (
+    get_command_mention,
+    get_success_embed,
+    handle_error_wrap,
+)
 from barricade.discord.views.enroll import EnrollView
 from barricade.discord.views.submit_report import GetSubmissionURLView
 from barricade.enums import Platform
+
 
 def insert_returns(body):
     # insert return stmt if the l expression is a expression statement
@@ -25,15 +32,18 @@ def insert_returns(body):
     if isinstance(body[-1], ast.With):
         insert_returns(body[-1].body)
 
+
 @app_commands.guilds(DISCORD_GUILD_ID)
 @app_commands.default_permissions(manage_guild=True)
-class SetupCog(commands.GroupCog, group_name='setup'):
+class SetupCog(commands.GroupCog, group_name="setup"):
     def __init__(self, bot: Bot):
         self.bot = bot
 
     @app_commands.command(name="send-submission-start-message")
-    async def create_submission_start_message(self, interaction: Interaction, platform: Platform):
-        await interaction.channel.send( # type: ignore
+    async def create_submission_start_message(
+        self, interaction: Interaction, platform: Platform
+    ):
+        await interaction.channel.send(  # type: ignore
             content=(
                 "## Submitting a report"
                 "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
@@ -49,19 +59,18 @@ class SetupCog(commands.GroupCog, group_name='setup'):
                 description=(
                     "-# Reporting requires a **burden of proof**."
                     "\n-# Reports with insufficient evidence are subject to removal."
-                )
+                ),
             ),
-            view=GetSubmissionURLView(platform)
+            view=GetSubmissionURLView(platform),
         )
 
         await interaction.response.send_message(
-            embed=get_success_embed("Message sent!"),
-            ephemeral=True
+            embed=get_success_embed("Message sent!"), ephemeral=True
         )
 
     @app_commands.command(name="send-community-enroll-message")
     async def create_community_enroll_message(self, interaction: Interaction):
-        await interaction.channel.send( # type: ignore
+        await interaction.channel.send(  # type: ignore
             content=(
                 "### Are you the owner of a Hell Let Loose server?"
                 "\nRequest to join the Bunker to claim the"
@@ -80,19 +89,21 @@ class SetupCog(commands.GroupCog, group_name='setup'):
             ),
             embed=discord.Embed(
                 title="Request access to Bunker",
-                description="-# Requests are manually reviewed. Please be patient."
+                description="-# Requests are manually reviewed. Please be patient.",
             ),
             view=EnrollView(),
-            allowed_mentions=discord.AllowedMentions.none()
+            allowed_mentions=discord.AllowedMentions.none(),
         )
 
         await interaction.response.send_message(
-            embed=get_success_embed("Message sent!"),
-            ephemeral=True
+            embed=get_success_embed("Message sent!"), ephemeral=True
         )
 
-    
-    @commands.command(description="Evaluate a python variable or expression", usage="r!eval <cmd>", hidden=True)
+    @commands.command(
+        description="Evaluate a python variable or expression",
+        usage="r!eval <cmd>",
+        hidden=True,
+    )
     @commands.is_owner()
     @handle_error_wrap
     async def eval(self, ctx, *, cmd):
@@ -109,24 +120,23 @@ class SetupCog(commands.GroupCog, group_name='setup'):
         body = f"async def {fn_name}():\n{cmd}"
 
         parsed = ast.parse(body)
-        body = parsed.body[0].body # type: ignore
+        body = parsed.body[0].body  # type: ignore
 
         insert_returns(body)
 
         env = {
-            'bot': self.bot,
-            'discord': discord,
-            'commands': commands,
-            'ctx': ctx,
-            '__import__': __import__
+            "bot": self.bot,
+            "discord": discord,
+            "commands": commands,
+            "ctx": ctx,
+            "__import__": __import__,
         }
         exec(compile(parsed, filename="<ast>", mode="exec"), env)
 
-        result = (await eval(f"{fn_name}()", env))
-        try:
+        result = await eval(f"{fn_name}()", env)
+        with contextlib.suppress(discord.HTTPException):
             await ctx.send(result)
-        except discord.HTTPException:
-            pass
+
 
 async def setup(bot: Bot):
     await bot.add_cog(SetupCog(bot))

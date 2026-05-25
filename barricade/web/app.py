@@ -1,13 +1,15 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
 import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
 
 from barricade import integrations
+from barricade.constants import DISCORD_BOT_TOKEN, WEB_DOCS_VISIBLE
 from barricade.db import create_tables
 from barricade.discord import bot
-from barricade.constants import DISCORD_BOT_TOKEN, WEB_DOCS_VISIBLE
 from barricade.utils import safe_create_task
 from barricade.web import routers
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,10 +24,10 @@ async def lifespan(app: FastAPI):
         await bot.login(DISCORD_BOT_TOKEN)
         safe_create_task(bot.connect(reconnect=True), name="DiscordBot")
         await bot.wait_until_ready()
-        
+
         assert bot.user is not None
         logging.info("Started bot %s (ID: %s)", bot.user.name, bot.user.id)
-    
+
         # Start serving requests
         yield
 
@@ -33,6 +35,7 @@ async def lifespan(app: FastAPI):
         # Close bot if necessary
         if not bot.is_closed():
             await bot.close()
+
 
 if WEB_DOCS_VISIBLE:
     app = FastAPI(lifespan=lifespan)

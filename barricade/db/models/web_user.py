@@ -1,12 +1,13 @@
-from barricade.db import ModelBase
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from typing import TYPE_CHECKING
+from barricade.db import ModelBase
 
 if TYPE_CHECKING:
     from .web_token import WebToken
+
 
 class WebUser(ModelBase):
     __tablename__ = "web_users"
@@ -16,4 +17,6 @@ class WebUser(ModelBase):
     hashed_password: Mapped[str]
     scopes: Mapped[int] = mapped_column(Integer, default=0)
 
-    tokens: Mapped[list['WebToken']] = relationship(back_populates="user", cascade="all, delete")
+    tokens: Mapped[list["WebToken"]] = relationship(
+        back_populates="user", cascade="all, delete"
+    )

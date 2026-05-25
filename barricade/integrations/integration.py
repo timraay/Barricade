@@ -1,49 +1,73 @@
-from abc import ABC, abstractmethod
 import asyncio
-from functools import wraps
-from pydantic import BaseModel
 import random
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
+from functools import wraps
+
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Sequence
 
 from barricade import schemas
-from barricade.crud.bans import get_ban_by_player_and_integration, create_ban, bulk_create_bans, bulk_delete_bans
+from barricade.crud.bans import (
+    bulk_create_bans,
+    bulk_delete_bans,
+    create_ban,
+    get_ban_by_player_and_integration,
+)
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.integrations import create_integration_config, delete_integration_config, update_integration_config
+from barricade.crud.integrations import (
+    create_integration_config,
+    delete_integration_config,
+    update_integration_config,
+)
 from barricade.crud.responses import get_successful_responses_without_bans
-from barricade.db import session_factory
+from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import IntegrationType
-from barricade.exceptions import AlreadyExistsError, IntegrationBulkBanError, IntegrationDisabledError, IntegrationValidationError, NotFoundError, AlreadyBannedError
-from barricade.db import models
+from barricade.exceptions import (
+    AlreadyBannedError,
+    AlreadyExistsError,
+    IntegrationBulkBanError,
+    IntegrationDisabledError,
+    IntegrationValidationError,
+    NotFoundError,
+)
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 from barricade.utils import safe_create_task
 
 manager = IntegrationManager()
 
+
 def is_saved(func):
     @wraps(func)
-    async def decorator(integration: 'Integration', *args, **kwargs):
+    async def decorator(integration: "Integration", *args, **kwargs):
         if integration.config.id is None:
             raise RuntimeError("Integration needs to be created first")
         return await func(integration, *args, **kwargs)
+
     return decorator
+
 
 def is_enabled(func):
     @wraps(func)
-    async def decorator(integration: 'Integration', *args, **kwargs):
+    async def decorator(integration: "Integration", *args, **kwargs):
         if not integration.config.enabled:
-            raise IntegrationDisabledError("Integration %r is disabled. Enable before retrying." % integration)
+            raise IntegrationDisabledError(
+                f"Integration {integration!r} is disabled. Enable before retrying."
+            )
         return await func(integration, *args, **kwargs)
+
     return decorator
+
 
 class IntegrationMetaData(BaseModel):
     name: str
     config_cls: type[schemas.IntegrationConfig]
     type: IntegrationType
     emoji: str
+
 
 class Integration(ABC):
     # TODO: Check if defined in subclasses using __init_subclass__?
@@ -53,10 +77,12 @@ class Integration(ABC):
         if config.id is not None:
             existing = IntegrationManager().get_by_id(config.id)
             if existing:
-                config = self.meta.config_cls.model_validate({
-                    **existing.config.model_dump(),
-                    **config.model_dump(exclude_unset=True)
-                })
+                config = self.meta.config_cls.model_validate(
+                    {
+                        **existing.config.model_dump(),
+                        **config.model_dump(exclude_unset=True),
+                    }
+                )
         self.config = config
 
         self.task: asyncio.Task | None = None
@@ -65,18 +91,18 @@ class Integration(ABC):
 
     def __repr__(self):
         return f"{type(self).__name__}[id={self.config.id}]"
-    
+
     # --- Integration state
 
     async def create(self):
         if self.config.id is not None:
             raise RuntimeError("Integration was already created")
-        
+
         async with session_factory.begin() as db:
-            db_config = await create_integration_config(db, self.config) # type: ignore
+            db_config = await create_integration_config(db, self.config)  # type: ignore
             self.config = schemas.IntegrationConfig.model_validate(db_config)
             manager.add(self)
-    
+
     @is_saved
     async def update(self, db: AsyncSession):
         assert isinstance(self.config, schemas.IntegrationConfig)
@@ -88,7 +114,7 @@ class Integration(ABC):
 
         # Also update integration known to manager (if any)
         manager.get_by_config(self.config)
-        
+
         return db_config
 
     @is_saved
@@ -118,9 +144,11 @@ class Integration(ABC):
                 self.start_connection()
 
                 if not self.task or self.task.done():
-                    self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
-                
-            self.logger.info("Enabled integration %r", self)    
+                    self.task = safe_create_task(
+                        self._loop(), name=f"IntegrationLoop{self.config.id}"
+                    )
+
+            self.logger.info("Enabled integration %r", self)
             return db_config
         except Exception:
             # Reset state
@@ -151,7 +179,7 @@ class Integration(ABC):
         """
         if self.config.enabled is False and not force:
             raise RuntimeError("Integration is already disabled")
-        
+
         try:
             self.config.enabled = False
             async with session_factory.begin() as db:
@@ -162,23 +190,27 @@ class Integration(ABC):
                     self.task.cancel()
                 self.task = None
 
-            self.logger.info("Disabled integration %r", self)    
+            self.logger.info("Disabled integration %r", self)
             return db_config
         except Exception:
             # Reset state
             self.config.enabled = True
             self.start_connection()
-            
+
             if self.task and self.task.done():
-                self.task = safe_create_task(self._loop(), name=f"IntegrationLoop{self.config.id}")
-            
+                self.task = safe_create_task(
+                    self._loop(), name=f"IntegrationLoop{self.config.id}"
+                )
+
             raise
 
     @is_saved
     async def delete(self):
         if self.config.enabled:
-            raise IntegrationDisabledError("Integration %r needs to be disabled before it can be deleted" % self)
-        
+            raise IntegrationDisabledError(
+                f"Integration {self!r} needs to be disabled before it can be deleted"
+            )
+
         assert isinstance(self.config, schemas.IntegrationConfig)
         async with session_factory.begin() as db:
             await delete_integration_config(db, self.config)
@@ -188,31 +220,35 @@ class Integration(ABC):
         self.config.id = None
 
     async def _loop(self):
-        self.logger.info("Starting loop for integration %r", self)    
+        self.logger.info("Starting loop for integration %r", self)
         while True:
             # Sleep 12-24 hours
             await asyncio.sleep(60 * 60 * random.randrange(12, 24))
 
             if not self.config.enabled:
-                self.logger.error("Wanted to synchronize %r but was unexpectedly disabled")
+                self.logger.error(
+                    "Wanted to synchronize %r but was unexpectedly disabled"
+                )
                 return
-            
+
             async with session_factory() as db:
                 db_community = await get_community_by_id(db, self.config.community_id)
                 community = schemas.Community.model_validate(db_community)
-            
+
             try:
                 await self.validate(community)
             except Exception as e:
                 if isinstance(e, IntegrationValidationError):
                     description = f"-# During validation we ran into the following issue:\n-# `{e}`"
                 else:
-                    description = f"-# During validation we ran into an unexpected issue. Please reach out to Barricade staff if this keeps reoccuring."
-                
-                safe_send_to_community(community, embed=get_danger_embed(
-                    f"Your {self.meta.name} integration was disabled!",
-                    description
-                ))
+                    description = "-# During validation we ran into an unexpected issue. Please reach out to Barricade staff if this keeps reoccuring."
+
+                safe_send_to_community(
+                    community,
+                    embed=get_danger_embed(
+                        f"Your {self.meta.name} integration was disabled!", description
+                    ),
+                )
                 # We kind of have to pray that this doesn't fail for whatever reason.
                 # We can't await it, because we would cancel ourselves.
                 safe_create_task(
@@ -243,7 +279,9 @@ class Integration(ABC):
     # --- Everything related to storing and retrieving bans
 
     @is_saved
-    async def get_ban(self, db: AsyncSession, player_id: str) -> models.PlayerBan | None:
+    async def get_ban(
+        self, db: AsyncSession, player_id: str
+    ) -> models.PlayerBan | None:
         """Get a player ban.
 
         Parameters
@@ -258,13 +296,16 @@ class Integration(ABC):
         models.PlayerBan | None
             This integration's ban associated with the player, if any
         """
-        return await get_ban_by_player_and_integration(db,
+        return await get_ban_by_player_and_integration(
+            db,
             player_id=player_id,
-            integration_id=self.config.id, # type: ignore
+            integration_id=self.config.id,  # type: ignore
         )
 
     @is_saved
-    async def set_ban_id(self, db: AsyncSession, player_id: str, ban_id: str) -> models.PlayerBan:
+    async def set_ban_id(
+        self, db: AsyncSession, player_id: str, ban_id: str
+    ) -> models.PlayerBan:
         """Create a ban record
 
         Parameters
@@ -289,17 +330,19 @@ class Integration(ABC):
         self.logger.info("%r: Setting ban ID %s for player %s", self, ban_id, player_id)
         ban = schemas.PlayerBanCreateParams(
             player_id=player_id,
-            integration_id=self.config.id, # type: ignore
+            integration_id=self.config.id,  # type: ignore
             remote_id=ban_id,
         )
         try:
             db_ban = await create_ban(db, ban)
         except AlreadyExistsError as e:
-            raise AlreadyBannedError(player_id, str(e))
+            raise AlreadyBannedError(player_id, str(e)) from None
         return db_ban
-    
+
     @is_saved
-    async def set_multiple_ban_ids(self, db: AsyncSession, *playerids_banids: tuple[str, str]):
+    async def set_multiple_ban_ids(
+        self, db: AsyncSession, *playerids_banids: tuple[str, str]
+    ):
         """Create multiple ban records.
 
         In case a player is already banned and a conflict
@@ -317,13 +360,13 @@ class Integration(ABC):
         bans = [
             schemas.PlayerBanCreateParams(
                 player_id=player_id,
-                integration_id=self.config.id, # type: ignore
+                integration_id=self.config.id,  # type: ignore
                 remote_id=ban_id,
             )
             for player_id, ban_id in playerids_banids
         ]
         await bulk_create_bans(db, bans)
-    
+
     @is_saved
     async def discard_ban_id(self, db: AsyncSession, player_id: str):
         """Delete a ban record
@@ -348,7 +391,9 @@ class Integration(ABC):
         await db.flush()
 
     @is_saved
-    async def discard_multiple_ban_ids(self, db: AsyncSession, player_ids: Sequence[str]):
+    async def discard_multiple_ban_ids(
+        self, db: AsyncSession, player_ids: Sequence[str]
+    ):
         """Deletes all ban records that are associated
         with any of the given responses
 
@@ -360,11 +405,12 @@ class Integration(ABC):
             A sequence of player IDs
         """
         self.logger.info("%r: Discarding bans in bulk: %s", self, ", ".join(player_ids))
-        await bulk_delete_bans(db,
+        await bulk_delete_bans(
+            db,
             models.PlayerBan.player_id.in_(player_ids),
-            models.PlayerBan.integration_id==self.config.id,
+            models.PlayerBan.integration_id == self.config.id,
         )
-    
+
     def get_ban_reason(self, response: schemas.ResponseWithToken) -> str:
         report = response.player_report.report
         reporting_community = report.token.community
@@ -422,7 +468,7 @@ class Integration(ABC):
             The name of the connected instance.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
     def get_instance_url(self) -> str:
         """Get a URL to the specific instance that this

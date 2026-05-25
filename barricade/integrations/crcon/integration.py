@@ -1,17 +1,24 @@
-from datetime import datetime, timezone
 import re
+from datetime import UTC, datetime
 from typing import TypedDict
 
 from aiohttp import ClientResponseError
 
 from barricade import schemas
-from barricade.crud.bans import bulk_delete_bans, expire_bans_of_player, get_bans_by_integration
+from barricade.crud.bans import (
+    bulk_delete_bans,
+    expire_bans_of_player,
+    get_bans_by_integration,
+)
 from barricade.crud.communities import get_community_by_id
 from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Emojis, IntegrationType
-from barricade.exceptions import IntegrationMissingPermissionsError, IntegrationValidationError
+from barricade.exceptions import (
+    IntegrationMissingPermissionsError,
+    IntegrationValidationError,
+)
 from barricade.integrations.custom import CustomIntegration, is_websocket_enabled
 from barricade.integrations.integration import IntegrationMetaData, is_enabled
 from barricade.utils import async_ttl_cache
@@ -27,11 +34,13 @@ REQUIRED_PERMISSIONS = {
     "can_view_player_profile",
 }
 
+
 class Blacklist(TypedDict):
     id: int
     name: str
     sync: str
     servers: list[int] | None
+
 
 class PlayerName(TypedDict):
     id: int
@@ -40,12 +49,14 @@ class PlayerName(TypedDict):
     created: datetime
     last_seen: datetime
 
+
 class Player(TypedDict):
     id: int
     player_id: str
     created: datetime
     names: list[PlayerName]
     steaminfo: dict | None
+
 
 class BlacklistRecord(TypedDict):
     id: int
@@ -59,6 +70,7 @@ class BlacklistRecord(TypedDict):
     player: Player
     formatted_reason: str
 
+
 class CRCONIntegration(CustomIntegration):
     meta = IntegrationMetaData(
         name="Community RCON",
@@ -69,7 +81,7 @@ class CRCONIntegration(CustomIntegration):
 
     def __init__(self, config: schemas.CRCONIntegrationConfigParams) -> None:
         super().__init__(config)
-        self.config: schemas.CRCONIntegrationConfigParams # type: ignore
+        self.config: schemas.CRCONIntegrationConfigParams  # type: ignore
 
     def get_api_url(self):
         return self.config.api_url + "/api"
@@ -79,16 +91,16 @@ class CRCONIntegration(CustomIntegration):
 
     # --- Abstract method implementations
 
-    @async_ttl_cache(size=9999, seconds=60*10)
+    @async_ttl_cache(size=9999, seconds=60 * 10)
     async def get_instance_name(self) -> str:
         resp = await self._make_request(method="GET", endpoint="/get_public_info")
         return resp["result"]["name"]["short_name"]
 
     async def validate(self, community: schemas.Community):
         await super().validate(community)
-        
+
         missing_optional_perms = await self.validate_api_access()
-        
+
         if not self.config.banlist_id:
             try:
                 await self.create_blacklist(community)
@@ -104,7 +116,7 @@ class CRCONIntegration(CustomIntegration):
     async def synchronize(self):
         if not self.config.id:
             raise RuntimeError("Integration has not yet been saved")
-        
+
         remote_bans = await self.get_blacklist_bans()
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.config.community_id)
@@ -118,8 +130,10 @@ class CRCONIntegration(CustomIntegration):
                     # The player was unbanned, change responses of all reports where
                     # the player is banned
                     async with session_factory.begin() as _db:
-                        await expire_bans_of_player(_db, db_ban.player_id, db_ban.integration.community_id)
-            
+                        await expire_bans_of_player(
+                            _db, db_ban.player_id, db_ban.integration.community_id
+                        )
+
             for remote_ban in remote_bans.values():
                 if not remote_ban["is_active"]:
                     continue
@@ -131,9 +145,11 @@ class CRCONIntegration(CustomIntegration):
                         " Please do not put any of your own bans on this blacklist."
                         "\n\n"
                         "-# The ban has been expired. If you wish to restore it, move it to a different blacklist first. If this is a Barricade ban, feel free to ignore this."
-                    )
+                    ),
                 )
-                self.logger.warn("Ban exists on the remote but not locally, expiring: %r", remote_ban)
+                self.logger.warn(
+                    "Ban exists on the remote but not locally, expiring: %r", remote_ban
+                )
                 await self.expire_ban(remote_ban["id"])
                 safe_send_to_community(community, embed=embed)
 
@@ -144,45 +160,49 @@ class CRCONIntegration(CustomIntegration):
             resp = await self._make_request(method="GET", endpoint="/get_version")
         except Exception as e:
             raise IntegrationValidationError("Failed to connect") from e
-        
+
         # Check if version is sufficient
         version = resp["result"].strip()
         match = RE_VERSION.match(version)
         if not match:
-            raise IntegrationValidationError('Unknown CRCON version "%s"' % version)
+            raise IntegrationValidationError(f'Unknown CRCON version "{version}"')
         version_numbers = [int(num) for num in match.groups()]
         if version_numbers[0] < 10:
-            raise IntegrationValidationError('Oudated CRCON version, v10 or above is required')
-        
+            raise IntegrationValidationError(
+                "Oudated CRCON version, v10 or above is required"
+            )
+
         # Check if the user has all the required perms
         try:
-            resp = await self._make_request(method="GET", endpoint="/get_own_user_permissions")
+            resp = await self._make_request(
+                method="GET", endpoint="/get_own_user_permissions"
+            )
         except Exception as e:
             if isinstance(e, ClientResponseError) and e.status == 401:
-                raise IntegrationValidationError("Invalid API key")
+                raise IntegrationValidationError("Invalid API key") from None
             raise IntegrationValidationError("Failed to connect") from e
         result = resp["result"]
         is_superuser = result.get("is_superuser", False)
         if not is_superuser:
-            permissions = set([
-                p["permission"] for p in result.get("permissions", [])
-            ])
+            permissions = set([p["permission"] for p in result.get("permissions", [])])
 
             missing_permissions = REQUIRED_PERMISSIONS.difference(permissions)
             if missing_permissions:
                 raise IntegrationMissingPermissionsError(
                     missing_permissions, "Token owner has insufficient permissions"
                 )
-        
+
         return set()
-    
+
     async def create_blacklist(self, community: schemas.Community):
         self.logger.info("%r: Creating new blacklist", self)
 
         if self.config.banlist_id:
             self.logger.info("%s: Clearing bans from previous blacklist")
             async with session_factory.begin() as db:
-                await bulk_delete_bans(db, models.PlayerBan.integration_id == self.config.id)
+                await bulk_delete_bans(
+                    db, models.PlayerBan.integration_id == self.config.id
+                )
 
         resp = await self._make_request(
             method="POST",
@@ -190,10 +210,10 @@ class CRCONIntegration(CustomIntegration):
             data={
                 "name": f"HLL Barricade - {community.name} (ID: {community.id})",
                 "sync_method": "kick_only",
-            }
+            },
         )
         self.config.banlist_id = str(resp["result"]["id"])
-    
+
     async def validate_blacklist(self, community: schemas.Community):
         # we use get_blacklists instead of get_blacklist because the latter will also fetch
         # and return all bans which makes it very inefficient for simply checking its existence.
@@ -205,9 +225,14 @@ class CRCONIntegration(CustomIntegration):
         for blacklist in blacklists:
             if str(blacklist["id"]) == self.config.banlist_id:
                 return
-            
+
         # If we reach this point, the blacklist no longer exists. Create a new one.
-        self.logger.error("%r: Blacklist #%s not found! Creating new list. Data: %s", self, self.config.banlist_id, resp)
+        self.logger.error(
+            "%r: Blacklist #%s not found! Creating new list. Data: %s",
+            self,
+            self.config.banlist_id,
+            resp,
+        )
         try:
             await self.create_blacklist(community)
         except Exception as e:
@@ -219,13 +244,14 @@ class CRCONIntegration(CustomIntegration):
         page_size = 100
         while True:
             resp = await self._make_request(
-                "GET", "/get_blacklist_records",
+                "GET",
+                "/get_blacklist_records",
                 data=dict(
                     blacklist_id=self.config.banlist_id,
                     exclude_expired=1,
                     page_size=page_size,
                     page=page,
-                )    
+                ),
             )
             result = resp["result"]
 
@@ -237,26 +263,28 @@ class CRCONIntegration(CustomIntegration):
 
             page += 1
         return records
-    
+
     async def expire_ban(self, record_id: int):
         self.logger.info("%r: Expiring record %s", self, record_id)
         await self._make_request(
-            "POST", "/edit_blacklist_record",
+            "POST",
+            "/edit_blacklist_record",
             data=dict(
                 record_id=record_id,
-                expires_at=datetime.now(tz=timezone.utc).isoformat(),
-            )
+                expires_at=datetime.now(tz=UTC).isoformat(),
+            ),
         )
 
     async def get_player_eos_id(self, player_id: str) -> str | None:
         resp = await self._make_request(
-            "GET", "/get_player_profile",
-            data=dict(player_id=player_id)
+            "GET", "/get_player_profile", data=dict(player_id=player_id)
         )
 
         result = resp["result"]
         if result is None:
-            self.logger.warning("%r: No profile found for player_id %s", self, player_id)
+            self.logger.warning(
+                "%r: No profile found for player_id %s", self, player_id
+            )
             return None
-        
+
         return result.get("soldier", {}).get("eos_id")

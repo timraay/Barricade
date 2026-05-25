@@ -1,43 +1,60 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import discord
-from discord import Interaction
-from discord import app_commands
+from discord import Interaction, app_commands
 from discord.ext import commands
 
 from barricade import schemas
-from barricade.db import session_factory
 from barricade.constants import DISCORD_GUILD_ID
 from barricade.crud.communities import get_community_by_admin_id, get_community_by_id
+from barricade.db import session_factory
 from barricade.discord.autocomplete import atcp_community
-from barricade.discord.communities import get_alerts_channel, get_confirmations_channel, get_forward_channel
+from barricade.discord.communities import (
+    get_alerts_channel,
+    get_confirmations_channel,
+    get_forward_channel,
+)
 from barricade.discord.utils import CustomException, get_command_mention
-from barricade.discord.views.role_confirmation import AdminRoleConfirmationView, AlertsRoleConfirmationView
+from barricade.discord.views.channel_confirmation import (
+    AlertsChannelConfirmationView,
+    ConfirmationsChannelConfirmationView,
+    ReportChannelConfirmationView,
+    UpdateGuildConfirmationView,
+    assert_community_guild,
+    get_admin,
+)
 from barricade.discord.views.community_overview import CommunityOverviewView
 from barricade.discord.views.integration_management import IntegrationManagementView
 from barricade.discord.views.reasons_filter import ReasonsFilterView
-from barricade.discord.views.channel_confirmation import (
-    AlertsChannelConfirmationView, ConfirmationsChannelConfirmationView, ReportChannelConfirmationView, UpdateGuildConfirmationView,
-    assert_community_guild, get_admin,
+from barricade.discord.views.role_confirmation import (
+    AdminRoleConfirmationView,
+    AlertsRoleConfirmationView,
 )
 
 if TYPE_CHECKING:
     from barricade.discord.bot import Bot
 
+
 async def assert_channel_permissions(channel: discord.TextChannel):
-    required_perms = discord.Permissions(send_messages=True, read_messages=True, read_message_history=True, embed_links=True)
+    required_perms = discord.Permissions(
+        send_messages=True,
+        read_messages=True,
+        read_message_history=True,
+        embed_links=True,
+    )
     if not channel.permissions_for(channel.guild.me).is_superset(required_perms):
         raise CustomException(
             "Cannot read from and/or send messages to this channel!",
             (
-                f"Give the bot all of the following permissions and try again:"
+                "Give the bot all of the following permissions and try again:"
                 "\n"
                 "\n- View Channel"
                 "\n- Read Message History"
                 "\n- Send Messages"
                 "\n- Embed Links"
-            )
+            ),
         )
+
 
 class CommunitiesCog(commands.Cog):
     config_group = app_commands.Group(
@@ -52,194 +69,236 @@ class CommunitiesCog(commands.Cog):
         parent=config_group,
     )
 
-    def __init__(self, bot: 'Bot'):
+    def __init__(self, bot: "Bot"):
         self.bot = bot
 
-    @config_group.command(name="integrations", description="Enable, disable, or configure your integrations")
+    @config_group.command(
+        name="integrations",
+        description="Enable, disable, or configure your integrations",
+    )
     async def manage_integrations(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
-            
+
             community_id = db_admin.community.id
-            
+
             db.expire(db_admin)
             db_community = await get_community_by_id(db, community_id)
             community = schemas.Community.model_validate(db_community)
             view = IntegrationManagementView(community)
             await view.send(interaction)
-    
-    @config_group.command(name="update-guild", description="Move your configurations over to this Discord server")
+
+    @config_group.command(
+        name="update-guild",
+        description="Move your configurations over to this Discord server",
+    )
     async def update_guild(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
-            db_admin = await get_admin(db, interaction.user.id)
+            await get_admin(db, interaction.user.id)
             assert interaction.guild is not None
             view = UpdateGuildConfirmationView(interaction.guild)
             await view.send(interaction)
 
-    @config_group.command(name="reports-channel", description="Set which channel to receive reports in")
-    async def set_reports_channel(self, interaction: Interaction, channel: discord.TextChannel):
+    @config_group.command(
+        name="reports-channel", description="Set which channel to receive reports in"
+    )
+    async def set_reports_channel(
+        self, interaction: Interaction, channel: discord.TextChannel
+    ):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             if channel.permissions_for(channel.guild.default_role).read_messages:
                 raise CustomException(
                     "This channel is publicly visible!",
-                    "Report feeds should be private and only accessible by admins."
+                    "Report feeds should be private and only accessible by admins.",
                 )
-            
+
             await assert_channel_permissions(channel)
-            
+
             view = ReportChannelConfirmationView(channel)
             await view.send(interaction)
-    
-    @config_disable_group.command(name="reports-channel", description="Stop receiving any reports")
+
+    @config_disable_group.command(
+        name="reports-channel", description="Stop receiving any reports"
+    )
     async def disable_reports_channel(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             view = ReportChannelConfirmationView(None)
             await view.send(interaction)
 
-    @config_group.command(name="confirmations-channel", description="Set which channel to receive report confirmations in")
-    async def set_confirmations_channel(self, interaction: Interaction, channel: discord.TextChannel):
+    @config_group.command(
+        name="confirmations-channel",
+        description="Set which channel to receive report confirmations in",
+    )
+    async def set_confirmations_channel(
+        self, interaction: Interaction, channel: discord.TextChannel
+    ):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
-            if db_admin.community.forward_guild_id and db_admin.community.forward_guild_id != channel.guild.id:
+
+            if (
+                db_admin.community.forward_guild_id
+                and db_admin.community.forward_guild_id != channel.guild.id
+            ):
                 raise CustomException(
                     "Channel must be in the same server as your Reports feed!",
-                    "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed."
+                    "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed.",
                 )
-            
+
             if channel.permissions_for(channel.guild.default_role).read_messages:
                 raise CustomException(
                     "This channel is publicly visible!",
-                    "Confirmations feeds should be private and only accessible by admins."
+                    "Confirmations feeds should be private and only accessible by admins.",
                 )
-            
+
             await assert_channel_permissions(channel)
-            
+
             view = ConfirmationsChannelConfirmationView(channel)
             await view.send(interaction)
-    
-    @config_disable_group.command(name="confirmations-channel", description="Receive report confirmations via DMs")
+
+    @config_disable_group.command(
+        name="confirmations-channel", description="Receive report confirmations via DMs"
+    )
     async def disable_confirmations_channel(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             view = ConfirmationsChannelConfirmationView(None)
             await view.send(interaction)
 
-    @config_group.command(name="alerts-channel", description="Set which channel to receive player alerts in")
-    async def set_alerts_channel(self, interaction: Interaction, channel: discord.TextChannel):
+    @config_group.command(
+        name="alerts-channel",
+        description="Set which channel to receive player alerts in",
+    )
+    async def set_alerts_channel(
+        self, interaction: Interaction, channel: discord.TextChannel
+    ):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
-            if db_admin.community.forward_guild_id and db_admin.community.forward_guild_id != channel.guild.id:
+
+            if (
+                db_admin.community.forward_guild_id
+                and db_admin.community.forward_guild_id != channel.guild.id
+            ):
                 raise CustomException(
                     "Channel must be in the same server as your Reports feed!",
-                    "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed."
+                    "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed.",
                 )
-            
+
             if channel.permissions_for(channel.guild.default_role).read_messages:
                 raise CustomException(
                     "This channel is publicly visible!",
-                    "Alerts feeds should be private and only accessible by admins."
+                    "Alerts feeds should be private and only accessible by admins.",
                 )
-            
+
             await assert_channel_permissions(channel)
-            
+
             view = AlertsChannelConfirmationView(channel)
             await view.send(interaction)
-    
-    @config_disable_group.command(name="alerts-channel", description="Stop receiving any alerts")
+
+    @config_disable_group.command(
+        name="alerts-channel", description="Stop receiving any alerts"
+    )
     async def disable_alerts_channel(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             view = AlertsChannelConfirmationView(None)
             await view.send(interaction)
 
-    @config_group.command(name="admin-role", description="Set a role to identify your admins with")
+    @config_group.command(
+        name="admin-role", description="Set a role to identify your admins with"
+    )
     async def set_admin_role(self, interaction: Interaction, role: discord.Role):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             if db_admin.community.forward_guild_id:
                 guild = self.bot.get_guild(db_admin.community.forward_guild_id)
                 if guild and guild != role.guild:
                     raise CustomException(
                         "Role must be from the same server as your Reports feed!",
-                        "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed."
+                        "Your Reports feed is in a different Discord server. If you want to move to this server, first move your feed.",
                     )
 
             view = AdminRoleConfirmationView(role)
             await view.send(interaction)
 
-    @config_group.command(name="alerts-role", description="Set a role to notify when an alert comes in")
+    @config_group.command(
+        name="alerts-role", description="Set a role to notify when an alert comes in"
+    )
     async def set_alerts_role(self, interaction: Interaction, role: discord.Role):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             if db_admin.community.forward_guild_id:
                 guild = self.bot.get_guild(db_admin.community.forward_guild_id)
                 if guild and guild != role.guild:
                     raise CustomException(
                         "Role must be from the same server as your feeds!",
-                        "Your feeds are in a different Discord server. If you want to move to this server, first move your Reports feed."
+                        "Your feeds are in a different Discord server. If you want to move to this server, first move your Reports feed.",
                     )
 
             view = AdminRoleConfirmationView(role)
             await view.send(interaction)
-    
-    @config_disable_group.command(name="alerts-role", description="Stop any roles from being notified by incoming alerts")
+
+    @config_disable_group.command(
+        name="alerts-role",
+        description="Stop any roles from being notified by incoming alerts",
+    )
     async def disable_alerts_role(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             view = AlertsRoleConfirmationView(None)
             await view.send(interaction)
 
-    @config_group.command(name="reports-filter", description="Select which categories of reports to receive")
+    @config_group.command(
+        name="reports-filter",
+        description="Select which categories of reports to receive",
+    )
     async def set_reports_filter(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
-            
+
             community = schemas.CommunityRef.model_validate(db_admin.community)
-            
+
         view = ReasonsFilterView(community)
         await view.send(interaction)
 
@@ -295,7 +354,11 @@ class CommunitiesCog(commands.Cog):
             elif community.reasons_filter is None:
                 reports_filter = "None"
             else:
-                reports_filter = "\n- ".join(community.reasons_filter.to_list(custom_msg="Custom", with_emoji=True))
+                reports_filter = "\n- ".join(
+                    community.reasons_filter.to_list(
+                        custom_msg="Custom", with_emoji=True
+                    )
+                )
 
             embeds = []
 
@@ -308,7 +371,7 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# The text channel where you receive new reports."
                     f"\n- {reports_channel_mention}"
                 ),
-                inline=True
+                inline=True,
             )
             embed.add_field(
                 name="Admin role",
@@ -317,7 +380,7 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# The role that can review reports."
                     f"\n- {admin_role_mention}"
                 ),
-                inline=True
+                inline=True,
             )
             embed.add_field(
                 name="Reports filter",
@@ -326,9 +389,9 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# Which categories of reports to receive."
                     f"\n- {reports_filter}"
                 ),
-                inline=False
+                inline=False,
             )
-            
+
             embed = discord.Embed(title="Alerts")
             embeds.append(embed)
             embed.add_field(
@@ -338,7 +401,7 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# The text channel where you receive player alerts."
                     f"\n- {alerts_channel_mention}"
                 ),
-                inline=True
+                inline=True,
             )
             embed.add_field(
                 name="Alerts role",
@@ -347,7 +410,7 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# The role that gets notified for alerts."
                     f"\n- {alerts_role_mention}"
                 ),
-                inline=True
+                inline=True,
             )
 
             embed = discord.Embed(title="Other")
@@ -359,7 +422,7 @@ class CommunitiesCog(commands.Cog):
                     f"\n> -# The text channel where you receive report confirmations."
                     f"\n- {confirmations_channel_mention}"
                 ),
-                inline=True
+                inline=True,
             )
             embed.add_field(
                 name="Integrations",
@@ -367,27 +430,26 @@ class CommunitiesCog(commands.Cog):
                     f"-# *{await get_command_mention(self.bot.tree, 'config', 'integrations')}*"
                     f"\n-# *Use the command above to see your integrations.*"
                 ),
-                inline=True
+                inline=True,
             )
 
             await interaction.response.send_message(embeds=embeds, ephemeral=True)
 
-    @app_commands.command(name="community", description="Get information about a community")
+    @app_commands.command(
+        name="community", description="Get information about a community"
+    )
     @app_commands.guilds(DISCORD_GUILD_ID)
     @app_commands.autocomplete(community_id=atcp_community)
     @app_commands.describe(
         community_id="The name of a community",
         user="An admin of a community",
     )
-    @app_commands.rename(
-        community_id="community",
-        user="admin"
-    )
+    @app_commands.rename(community_id="community", user="admin")
     async def get_community_overview(
         self,
         interaction: Interaction,
-        community_id: Optional[int] = None,
-        user: Optional[discord.Member] = None,
+        community_id: int | None = None,
+        user: discord.Member | None = None,
     ):
         async with session_factory() as db:
             if community_id:
@@ -403,7 +465,7 @@ class CommunitiesCog(commands.Cog):
                 if not db_community:
                     raise CustomException(
                         "You are not an admin of a community!",
-                        "Specify a community or user to look for other communities."
+                        "Specify a community or user to look for other communities.",
                     )
 
             community = schemas.Community.model_validate(db_community)
@@ -412,5 +474,6 @@ class CommunitiesCog(commands.Cog):
         view = CommunityOverviewView(community, interaction.user)
         await view.send(interaction)
 
-async def setup(bot: 'Bot'):
+
+async def setup(bot: "Bot"):
     await bot.add_cog(CommunitiesCog(bot))

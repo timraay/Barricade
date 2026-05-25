@@ -1,60 +1,58 @@
-from enum import Enum, StrEnum, IntFlag, auto
 import logging
+from enum import Enum, IntFlag, StrEnum, auto
 from typing import NamedTuple
 
-class PlayerIDType(str, Enum):
+
+class PlayerIDType(StrEnum):
     STEAM_64_ID = "steamID"
     UUID = "hllWindowsID"
 
-class Platform(str, Enum):
+
+class Platform(StrEnum):
     # Careful when renaming, used by PSQL
     PC = "pc"
     CONSOLE = "console"
 
+
 class PlayerAlertType(StrEnum):
     WATCHLISTED = "watchlisted"
     UNREVIEWED = "unreviewed"
+
 
 class ReportRejectReason(StrEnum):
     # Careful when renaming, used by PSQL
     INSUFFICIENT = "Lacks evidence"
     INCONCLUSIVE = "Not severe enough"
 
+
 class IntegrationType(StrEnum):
     BATTLEMETRICS = "battlemetrics"
     COMMUNITY_RCON = "crcon"
     CUSTOM = "custom"
 
+
 class ReportReasonDetailsType(NamedTuple):
     pretty_name: str
     emoji: str
 
+
 class ReportReasonDetails(Enum):
-    HACKING = ReportReasonDetailsType(
-        pretty_name="Hacking",
-        emoji="👾"
-    )
+    HACKING = ReportReasonDetailsType(pretty_name="Hacking", emoji="👾")
     TEAMKILLING_GRIEFING = ReportReasonDetailsType(
-        pretty_name="Teamkilling / Griefing",
-        emoji="🧨"
+        pretty_name="Teamkilling / Griefing", emoji="🧨"
     )
     TOXICITY_HARASSMENT = ReportReasonDetailsType(
-        pretty_name="Toxicity / Harassment",
-        emoji="🤬"
+        pretty_name="Toxicity / Harassment", emoji="🤬"
     )
     RACISM_ANTISEMITISM = ReportReasonDetailsType(
-        pretty_name="Racism / Anti-semitism",
-        emoji="🎭"
+        pretty_name="Racism / Anti-semitism", emoji="🎭"
     )
     STREAMSNIPING_GHOSTING = ReportReasonDetailsType(
-        pretty_name="Stream sniping / Ghosting",
-        emoji="📺"
+        pretty_name="Stream sniping / Ghosting", emoji="📺"
     )
-    BAN_EVASION = ReportReasonDetailsType(
-        pretty_name="Ban evasion",
-        emoji="🕵️‍♂️"
-    )
-    
+    BAN_EVASION = ReportReasonDetailsType(pretty_name="Ban evasion", emoji="🕵️‍♂️")
+
+
 class ReportReasonFlag(IntFlag):
     HACKING = auto()
     TEAMKILLING_GRIEFING = auto()
@@ -85,11 +83,13 @@ class ReportReasonFlag(IntFlag):
                     self |= reason
             if not reason:
                 if self & ReportReasonFlag.CUSTOM:
-                    logging.warn("Multiple custom reasons submitted: %s", ", ".join(reasons))
+                    logging.warn(
+                        "Multiple custom reasons submitted: %s", ", ".join(reasons)
+                    )
                 self |= ReportReasonFlag.CUSTOM
                 custom_msg = reason_name
         return self, custom_msg
-    
+
     def to_list(self, custom_msg: str | None, with_emoji: bool = False):
         reasons: list[str] = []
         for flag in self:
@@ -101,12 +101,13 @@ class ReportReasonFlag(IntFlag):
                 else:
                     reasons.append(custom_msg)
             else:
-                reason = ReportReasonDetails[flag.name] # type: ignore
+                reason = ReportReasonDetails[flag.name]  # type: ignore
                 if with_emoji:
                     reasons.append(f"{reason.value.emoji} {reason.value.pretty_name}")
                 else:
                     reasons.append(reason.value.pretty_name)
         return reasons
+
 
 class Emojis(StrEnum):
     STEAM = "<:steam:1275098550182740101>"
@@ -128,6 +129,7 @@ class Emojis(StrEnum):
     REFRESH = "<:refresh:1283790096461594655>"
     ARROW_DOWN_RIGHT = "<:arrow_down_right:1357406683801849996>"
     EASY_ANTI_CHEAT = "<:easy_anti_cheat:1470734064892772394>"
+
 
 class ReportMessageType(Enum):
     # Careful when renaming, used by PSQL

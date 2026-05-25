@@ -1,9 +1,14 @@
-from discord import Interaction, SelectOption, ButtonStyle
+from discord import ButtonStyle, Interaction, SelectOption
 
 from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
-from barricade.discord.utils import CallableButton, CallableSelect, CustomException, View
 from barricade.db import session_factory
+from barricade.discord.utils import (
+    CallableButton,
+    CallableSelect,
+    CustomException,
+    View,
+)
 from barricade.enums import ReportReasonDetails, ReportReasonFlag
 
 
@@ -15,18 +20,21 @@ class ReasonsFilterView(View):
 
         self.select_all_button = CallableButton(self.select_all, label="All")
         self.select_none_button = CallableButton(self.select_none, label="None")
-        self.select_custom_button = CallableButton(self.select_custom, label="Custom...")
+        self.select_custom_button = CallableButton(
+            self.select_custom, label="Custom..."
+        )
 
         self.select_reasons_select = CallableSelect(
             self.select_reasons,
             options=[
                 SelectOption(
-                    label=reason.value.pretty_name, # type: ignore
-                    emoji=reason.value.emoji, # type: ignore
+                    label=reason.value.pretty_name,  # type: ignore
+                    emoji=reason.value.emoji,  # type: ignore
                     value=str(ReportReasonFlag[reason.name].value),
                 )
                 for reason in ReportReasonDetails
-            ] + [
+            ]
+            + [
                 SelectOption(
                     label="Custom",
                     emoji="🎲",
@@ -60,11 +68,13 @@ class ReasonsFilterView(View):
             self.select_custom_button.style = ButtonStyle.blurple
             self.add_item(self.select_reasons_select)
             for option in self.select_reasons_select.options:
-                option.default = (int(option.value) & self.community.reasons_filter) != 0
+                option.default = (
+                    int(option.value) & self.community.reasons_filter
+                ) != 0
         elif self.community.reasons_filter == 0:
             self.select_none_button.disabled = True
             self.select_none_button.style = ButtonStyle.green
-        
+
     async def send(self, interaction: Interaction):
         await interaction.response.send_message(
             content="Select which categories of reports you want your community to receive.",
@@ -75,13 +85,17 @@ class ReasonsFilterView(View):
     async def edit(self, interaction: Interaction):
         await interaction.response.edit_message(view=self)
 
-    async def persist_filter(self, interaction: Interaction, filter: ReportReasonFlag | None):
+    async def persist_filter(
+        self, interaction: Interaction, filter: ReportReasonFlag | None
+    ):
         async with session_factory.begin() as db:
             db_admin = await get_admin_by_id(db, interaction.user.id)
-            if not db_admin or not db_admin.community or db_admin.community_id != self.community.id:
-                raise CustomException(
-                    "You need to be a community admin to do this!"
-                )
+            if (
+                not db_admin
+                or not db_admin.community
+                or db_admin.community_id != self.community.id
+            ):
+                raise CustomException("You need to be a community admin to do this!")
             db_admin.community.reasons_filter = filter
         self.community.reasons_filter = filter
 
@@ -115,6 +129,3 @@ class ReasonsFilterView(View):
 
         await self.persist_filter(interaction, filter)
         await interaction.response.defer()
-
-    
-

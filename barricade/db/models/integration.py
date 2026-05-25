@@ -1,14 +1,15 @@
-from barricade.db import ModelBase
-from barricade.enums import IntegrationType
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, Boolean, ForeignKey, Enum
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from typing import Optional, TYPE_CHECKING
+from barricade.db import ModelBase
+from barricade.enums import IntegrationType
 
 if TYPE_CHECKING:
     from .community import Community
     from .player_ban import PlayerBan
+
 
 class Integration(ModelBase):
     __tablename__ = "integrations"
@@ -20,10 +21,12 @@ class Integration(ModelBase):
 
     api_key: Mapped[str]
     api_url: Mapped[str]
-    banlist_id: Mapped[Optional[str]]
+    banlist_id: Mapped[str | None]
 
     # Battlemetrics
-    organization_id: Mapped[Optional[str]]
+    organization_id: Mapped[str | None]
 
-    community: Mapped['Community'] = relationship(back_populates="integrations")
-    bans: Mapped[list['PlayerBan']] = relationship(back_populates="integration", cascade="all, delete-orphan")
+    community: Mapped["Community"] = relationship(back_populates="integrations")
+    bans: Mapped[list["PlayerBan"]] = relationship(
+        back_populates="integration", cascade="all, delete-orphan"
+    )

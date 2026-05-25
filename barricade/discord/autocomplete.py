@@ -1,26 +1,28 @@
 from discord import Interaction
 from discord.app_commands import Choice
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from barricade.db import models, session_factory
 from barricade.discord.utils import async_ttl_cache
 from barricade.enums import IntegrationType
 from barricade.integrations.manager import IntegrationManager
 
+
 @async_ttl_cache(size=100, seconds=60)
 async def _get_ttl_communities(name: str):
     async with session_factory() as db:
-        stmt = select(models.Community).where(
-            func.concat(
-                models.Community.tag,
-                " ",
-                models.Community.name
-            ).ilike(
-                "%" + name.replace(".", "\\.").replace("%", "\\.") + "%"
+        stmt = (
+            select(models.Community)
+            .where(
+                func.concat(models.Community.tag, " ", models.Community.name).ilike(
+                    "%" + name.replace(".", "\\.").replace("%", "\\.") + "%"
+                )
             )
-        ).limit(15)
+            .limit(15)
+        )
         result = await db.scalars(stmt)
         return result.all()
+
 
 @async_ttl_cache(size=100, seconds=60)
 async def _get_ttl_integrations_by_admin_id(admin_id: int):
@@ -28,12 +30,12 @@ async def _get_ttl_integrations_by_admin_id(admin_id: int):
         db_admin = await db.get(models.Admin, admin_id)
         if not db_admin or not db_admin.community_id:
             return []
-        
+
         im = IntegrationManager()
         return [
-            i for i in im.get_all()
-            if i.config.community_id == db_admin.community_id
+            i for i in im.get_all() if i.config.community_id == db_admin.community_id
         ]
+
 
 async def atcp_community(interaction: Interaction, current: str):
     communities = await _get_ttl_communities(current.lower())
@@ -42,6 +44,7 @@ async def atcp_community(interaction: Interaction, current: str):
         for community in communities
     ]
     return choices
+
 
 async def atcp_integration_enabled(interaction: Interaction, current: str):
     integrations = await _get_ttl_integrations_by_admin_id(interaction.user.id)
@@ -58,7 +61,7 @@ async def atcp_integration_enabled(interaction: Interaction, current: str):
         integration_id = str(integration.config.id)
         if current.lower() not in name.lower() and current not in integration_id:
             continue
-        
+
         choice = Choice(name=name, value=integration_id)
         choices.append(choice)
     return choices
