@@ -275,7 +275,7 @@ class CRCONIntegration(CustomIntegration):
             ),
         )
 
-    async def get_player_eos_id(self, player_id: str) -> str | None:
+    async def get_player_eos_ids(self, player_id: str) -> tuple[str | None, str | None]:
         resp = await self._make_request(
             "GET", "/get_player_profile", data=dict(player_id=player_id)
         )
@@ -285,6 +285,8 @@ class CRCONIntegration(CustomIntegration):
             self.logger.warning(
                 "%r: No profile found for player_id %s", self, player_id
             )
-            return None
+            return None, None
 
-        return result.get("soldier", {}).get("eos_id")
+        # TODO: Fetch HLLV EOS ID
+        soldier_data = result.get("soldier", {})
+        return soldier_data.get("eos_id"), None

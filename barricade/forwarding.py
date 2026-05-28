@@ -514,14 +514,15 @@ async def update_player_eos_id(
             and isinstance(integration, CRCONIntegration)
         ):
             try:
-                eos_id = await integration.get_player_eos_id(player_id)
-                if eos_id:
+                eos_ids = await integration.get_player_eos_ids(player_id)
+                if eos_ids:
                     await get_or_create_player(
                         db,
                         schemas.PlayerCreateParams(
                             id=player_id,
                             bm_rcon_url=None,
-                            eos_id=eos_id,
+                            hll_eos_id=eos_ids[0],
+                            hllv_eos_id=eos_ids[1],
                         ),
                     )
                     return True
@@ -533,7 +534,7 @@ async def update_player_eos_id(
                     integration,
                 )
 
-    return db_player is not None and db_player.eos_id is not None
+    return db_player is not None and db_player.hll_eos_id is not None
 
 
 async def update_player_eos_id_for_report(report: schemas.ReportWithToken) -> None:

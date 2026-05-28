@@ -1,10 +1,20 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ARRAY, TIMESTAMP, BigInteger, ForeignKey, Integer, String, func
+from sqlalchemy import (
+    ARRAY,
+    TIMESTAMP,
+    BigInteger,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
+from barricade.enums import Game
 
 if TYPE_CHECKING:
     from .player_report import PlayerReport
@@ -26,6 +36,7 @@ class Report(ModelBase):
     reasons_custom: Mapped[str | None]
     body: Mapped[str]
     attachment_urls: Mapped[list[str]] = mapped_column(ARRAY(String))
+    game: Mapped[Game] = mapped_column(Enum(Game), server_default=Game.HLL.name)
 
     token: Mapped["ReportToken"] = relationship(
         back_populates="report", cascade="all, delete"

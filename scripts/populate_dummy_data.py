@@ -125,6 +125,7 @@ async def main():
                         bm_rcon_url=None,
                     ),
                 ],
+                game=schemas.Game.HLL,
             ),
         )
         print("--", "Created report 1")
@@ -144,6 +145,7 @@ async def main():
                         bm_rcon_url=None,
                     ),
                 ],
+                game=schemas.Game.HLL,
             ),
         )
         print("--", "Created report 2")

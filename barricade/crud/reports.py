@@ -273,7 +273,8 @@ async def create_report(
             schemas.PlayerCreateParams(
                 id=player.player_id,
                 bm_rcon_url=player.bm_rcon_url,
-                eos_id=player.eos_id,
+                hll_eos_id=player.hll_eos_id,
+                hllv_eos_id=player.hllv_eos_id,
             ),
         )
         db_players.append(db_player)
@@ -338,7 +339,8 @@ async def edit_report(
                 schemas.PlayerCreateParams(
                     id=player.player_id,
                     bm_rcon_url=player.bm_rcon_url,
-                    eos_id=player.eos_id,
+                    hll_eos_id=player.hll_eos_id,
+                    hllv_eos_id=player.hllv_eos_id,
                 ),
             )
             db_pr = models.PlayerReport(
@@ -462,15 +464,15 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
                 )
             db_player.bm_rcon_url = player.bm_rcon_url
             dirty = True
-        if player.eos_id and player.eos_id != db_player.eos_id:
-            if player.eos_id:
+        if player.hll_eos_id and player.hll_eos_id != db_player.hll_eos_id:
+            if player.hll_eos_id:
                 logging.warning(
                     "Updating eos_id for player %s from %s to %s",
                     player.id,
-                    db_player.eos_id,
-                    player.eos_id,
+                    db_player.hll_eos_id,
+                    player.hll_eos_id,
                 )
-            db_player.eos_id = player.eos_id
+            db_player.hll_eos_id = player.hll_eos_id
             dirty = True
         if dirty:
             await db.flush()

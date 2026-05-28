@@ -14,6 +14,12 @@ class Platform(StrEnum):
     CONSOLE = "console"
 
 
+class Game(StrEnum):
+    # Careful when renaming, used by PSQL
+    HLL = "hll"
+    HLLV = "hllv"
+
+
 class PlayerAlertType(StrEnum):
     WATCHLISTED = "watchlisted"
     UNREVIEWED = "unreviewed"
@@ -129,6 +135,16 @@ class Emojis(StrEnum):
     REFRESH = "<:refresh:1283790096461594655>"
     ARROW_DOWN_RIGHT = "<:arrow_down_right:1357406683801849996>"
     EASY_ANTI_CHEAT = "<:easy_anti_cheat:1470734064892772394>"
+    PILL_HLL_1 = "<:pill_hll1:1509524428998971462>"
+    PILL_HLL_2 = "<:pill_hll2:1509524430190022766>"
+    PILL_HLL_3 = "<:pill_hll3:1509524431553298502>"
+    PILL_HLL_4 = "<:pill_hll4:1509524432643817532>"
+    PILL_HLL_5 = "<:pill_hll5:1509524433612837055>"
+    PILL_HLLV_1 = "<:pill_hllv1:1509524437257551942>"
+    PILL_HLLV_2 = "<:pill_hllv2:1509524438360522802>"
+    PILL_HLLV_3 = "<:pill_hllv3:1509524443909722183>"
+    PILL_HLLV_4 = "<:pill_hllv4:1509524445847486495>"
+    PILL_HLLV_5 = "<:pill_hllv5:1509524447227412540>"
 
 
 class ReportMessageType(Enum):

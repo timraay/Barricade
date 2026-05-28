@@ -12,7 +12,7 @@ from barricade.constants import (
 from barricade.discord.bot import bot
 from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
-from barricade.enums import Emojis, Platform, PlayerAlertType, ReportReasonFlag
+from barricade.enums import Emojis, Game, Platform, PlayerAlertType, ReportReasonFlag
 from barricade.utils import PlayerIDType, get_player_id_type
 
 
@@ -49,6 +49,36 @@ def get_t17_support_forward_channel() -> discord.TextChannel | None:
     return channel
 
 
+HLL_GAME_PILL = "".join(
+    [
+        Emojis.PILL_HLL_1,
+        Emojis.PILL_HLL_2,
+        Emojis.PILL_HLL_3,
+        Emojis.PILL_HLL_4,
+        Emojis.PILL_HLL_5,
+    ]
+)
+
+HLLV_GAME_PILL = "".join(
+    [
+        Emojis.PILL_HLLV_1,
+        Emojis.PILL_HLLV_2,
+        Emojis.PILL_HLLV_3,
+        Emojis.PILL_HLLV_4,
+        Emojis.PILL_HLLV_5,
+    ]
+)
+
+
+def get_game_pill(game: Game) -> str:
+    if game == Game.HLL:
+        return HLL_GAME_PILL
+    elif game == Game.HLLV:
+        return HLLV_GAME_PILL
+    else:
+        raise TypeError(f"Unknown game {game!r}") from None
+
+
 async def get_report_embed(
     report: schemas.ReportWithToken,
     responses: list[schemas.PendingResponse] | None = None,
@@ -58,7 +88,7 @@ async def get_report_embed(
 ) -> discord.Embed:
     embed = discord.Embed(
         colour=discord.Colour.dark_theme(),
-        description=esc_md(report.body),
+        description=esc_md(report.body).strip() + "\n### " + get_game_pill(report.game),
     )
     embed.set_author(
         icon_url=bot.user.avatar.url if bot.user.avatar else None,  # type: ignore
@@ -97,8 +127,8 @@ async def get_report_embed(
         if with_eos_ids and not is_steam:
             value += f"\n-# {Emojis.EASY_ANTI_CHEAT}"
             value += (
-                f"*`{player.player.eos_id}`*"
-                if player.player.eos_id
+                f"*`{player.player.hll_eos_id}`*"
+                if player.player.hll_eos_id
                 else "No EOS ID known"
             )
 
@@ -134,15 +164,24 @@ async def get_report_embed(
         if response and response.responded_by:
             value += f"\n-# Responded by **{esc_md(response.responded_by)}** {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
 
+        links = []
         if player_id_type == PlayerIDType.STEAM_64_ID:
-            value += "\n-# " + format_url(
-                "View on Steam",
-                f"https://steamcommunity.com/profiles/{player.player_id}",
+            links.append(
+                format_url(
+                    "Steam",
+                    f"https://steamcommunity.com/profiles/{player.player_id}",
+                )
             )
 
         bm_rcon_url = player.player.bm_rcon_url
         if bm_rcon_url:
-            value += "\n-# " + format_url("View on Battlemetrics", bm_rcon_url)
+            links.append(format_url("BM", bm_rcon_url))
+
+        links.append(
+            format_url("HLLR", f"https://hllrecords.com/profiles/{player.player_id}")
+        )
+
+        value += "\n-# " + " | ".join(links)
 
         embed.add_field(name=name, value=value, inline=True)
 

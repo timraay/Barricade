@@ -12,6 +12,7 @@ from pydantic import (
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import (
+    Game,
     IntegrationType,
     Platform,
     ReportMessageType,
@@ -144,7 +145,8 @@ class _CommunityBase(BaseModel):
 class _PlayerBase(BaseModel):
     id: str
     bm_rcon_url: str | None
-    eos_id: str | None
+    hll_eos_id: str | None
+    hllv_eos_id: str | None
 
 
 class _ReportTokenBase(BaseModel):
@@ -164,6 +166,7 @@ class _ReportBase(BaseModel):
     reasons_bitflag: ReportReasonFlag
     reasons_custom: str | None
     attachment_urls: list[str]
+    game: Game
 
 
 class _PlayerReportBase(BaseModel):
@@ -429,7 +432,8 @@ class PlayerCreateParams(_PlayerBase):
 
 class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: str | None
-    eos_id: str | None = None
+    hll_eos_id: str | None = None
+    hllv_eos_id: str | None = None
 
 
 class ReportEditParams(_ReportBase):
@@ -495,6 +499,7 @@ class ReportSubmissionData(BaseModel):
     ]
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
+    game: Game
 
 
 class ReportSubmission(BaseModel):
