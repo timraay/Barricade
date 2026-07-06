@@ -156,7 +156,9 @@ class CustomException(Exception):
 _DISCORD_LOGGER = logging.getLogger("discord")
 
 
-def get_error_embed_from_exc(error: Exception):
+def get_error_embed_from_exc(
+    interaction: Interaction | commands.Context, error: Exception
+):
     if isinstance(
         error, (app_commands.CommandInvokeError, commands.CommandInvokeError)
     ):
@@ -213,14 +215,18 @@ def get_error_embed_from_exc(error: Exception):
     else:
         embed = get_error_embed("An unexpected error occured!", esc_md(str(error)))
         _DISCORD_LOGGER.error(
-            "An unexpected error occured when handling an interaction", exc_info=error
+            "An unexpected error occured when handling an interaction (%s)",
+            ("@" + interaction.user.name)
+            if isinstance(interaction, Interaction) and interaction.user
+            else "Unknown user",
+            exc_info=error,
         )
 
     return embed
 
 
 async def handle_error(interaction: Interaction | commands.Context, error: Exception):
-    embed = get_error_embed_from_exc(error)
+    embed = get_error_embed_from_exc(interaction, error)
 
     if isinstance(interaction, Interaction):
         if interaction.response.is_done() or interaction.is_expired():
@@ -243,6 +249,13 @@ def handle_error_wrap(func):
 
 
 class View(ui.View):
+    async def on_error(
+        self, interaction: Interaction, error: Exception, item, /
+    ) -> None:
+        await handle_error(interaction, error)
+
+
+class LayoutView(ui.LayoutView):
     async def on_error(
         self, interaction: Interaction, error: Exception, item, /
     ) -> None:
