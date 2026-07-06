@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import BigInteger, Enum, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
@@ -28,6 +28,10 @@ class ReportMessage(ModelBase):
     community: Mapped["Community"] = relationship(back_populates="messages")
 
     __table_args__ = (
-        UniqueConstraint("report_id", "community_id"),
-        Index("ix_report_messages_report_id_community_id", "report_id", "community_id"),
+        Index(
+            "ix_report_messages_report_id_community_id",
+            "report_id",
+            "community_id",
+            unique=True,
+        ),
     )

@@ -94,13 +94,13 @@ async def _audit(*embeds: discord.Embed):
         return
     channel = bot.get_channel(DISCORD_AUDIT_CHANNEL_ID)
     if not channel:
-        logging.warn(
+        logging.warning(
             "Tried to send to audit but channel with ID %s could not be found",
             DISCORD_AUDIT_CHANNEL_ID,
         )
         return
     elif not isinstance(channel, discord.TextChannel):
-        logging.warn(
+        logging.warning(
             "Tried to send to audit but channel with ID %s is not a text channel",
             DISCORD_AUDIT_CHANNEL_ID,
         )
@@ -258,7 +258,7 @@ async def audit_report_create(
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
-    report_channel = get_report_channel(report.token.platform)
+    report_channel = get_report_channel(report.game)
     embed.add_field(
         name="Message",
         value=bot.get_partial_message(
@@ -283,7 +283,7 @@ async def audit_report_edit(
     await set_footer(embed, report.token.admin_id, by)
     add_community_field(embed, report.token.community)
     await add_admin_field(embed, report.token.admin)
-    report_channel = get_report_channel(report.token.platform)
+    report_channel = get_report_channel(report.game)
     embed.add_field(
         name="Message",
         value=bot.get_partial_message(

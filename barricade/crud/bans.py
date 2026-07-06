@@ -14,6 +14,7 @@ from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models
 from barricade.discord import bot
 from barricade.discord.views.player_review import PlayerReviewView
+from barricade.enums import Game
 from barricade.exceptions import AlreadyExistsError
 from barricade.logger import get_logger
 
@@ -72,12 +73,18 @@ async def get_ban_by_id(db: AsyncSession, ban_id: int, load_relations: bool = Fa
 
 
 async def get_ban_by_player_and_integration(
-    db: AsyncSession, player_id: str, integration_id: int, load_relations: bool = False
+    db: AsyncSession,
+    player_id: str,
+    integration_id: int,
+    game: Game | None = None,
+    load_relations: bool = False,
 ):
     stmt = select(models.PlayerBan).where(
         models.PlayerBan.player_id == player_id,
         models.PlayerBan.integration_id == integration_id,
     )
+    if game is not None:
+        stmt = stmt.where(models.PlayerBan.game == game)
     if load_relations:
         stmt = stmt.options(Load(models.PlayerBan).selectinload("*"))
     return await db.scalar(stmt)
@@ -86,12 +93,15 @@ async def get_ban_by_player_and_integration(
 async def get_bans_by_integration(
     db: AsyncSession,
     integration_id: int,
+    game: Game | None = None,
     limit: int | None = None,
     offset: int = 0,
 ):
     stmt = select(models.PlayerBan).where(
         models.PlayerBan.integration_id == integration_id
     )
+    if game is not None:
+        stmt = stmt.where(models.PlayerBan.game == game)
     if limit is not None:
         stmt = stmt.limit(limit).offset(offset)
 
@@ -200,21 +210,31 @@ async def get_player_bans_without_responses(
     return result.all()
 
 
-async def expire_bans_of_player(db: AsyncSession, player_id: str, community_id: int):
+async def expire_bans_of_player(
+    db: AsyncSession,
+    player_id: str,
+    community_id: int,
+    game: Game | None = None,
+):
+    # Update responses to
     stmt = (
         update(models.PlayerReportResponse)
         .values(banned=False, reject_reason=None)
         .where(
             models.PlayerReportResponse.banned.is_(True),
             models.PlayerReportResponse.community_id == community_id,
-            models.PlayerReportResponse.pr_id.in_(
-                select(models.PlayerReport.id).where(
-                    models.PlayerReport.player_id == player_id
-                )
+            models.PlayerReportResponse.player_report.has(
+                models.PlayerReport.player_id == player_id
             ),
         )
         .returning(models.PlayerReportResponse.pr_id)
     )
+    if game:
+        stmt = stmt.where(
+            models.PlayerReportResponse.player_report.has(
+                models.PlayerReport.report.has(models.Report.game == game)
+            )
+        )
 
     # Update rows
     resp = await db.execute(stmt)
@@ -262,7 +282,7 @@ async def expire_bans_of_player(db: AsyncSession, player_id: str, community_id: 
                 await message.edit(embed=embed, view=view)
             except discord.NotFound:
                 logger = get_logger(community_id)
-                logger.warn(
+                logger.warning(
                     "Could not find message %s/%s",
                     db_message.channel_id,
                     db_message.message_id,

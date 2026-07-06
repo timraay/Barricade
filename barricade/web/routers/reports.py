@@ -80,7 +80,6 @@ async def create_report(
         params=schemas.ReportTokenCreateParams(
             admin_id=db_admin.discord_id,
             community_id=db_admin.community_id,
-            platform=report.platform,
         ),
         by=(token.user.username if token.user else "Web Token"),
     )

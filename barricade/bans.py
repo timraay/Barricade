@@ -17,6 +17,7 @@ from barricade.db import models, session_factory
 from barricade.discord.communities import get_forward_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
+from barricade.enums import Game
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.integration import Integration
 from barricade.integrations.manager import IntegrationManager
@@ -129,6 +130,7 @@ async def on_player_unban(response: schemas.Response):
             integration,
             response.community,
             player_id,
+            game=db_ban.game,
         )
         coros.append(coro)
 
@@ -203,6 +205,7 @@ async def revoke_dangling_bans(
             integration,
             community,
             db_ban.player_id,
+            game=db_ban.game,
         )
         coros.append(coro)
 
@@ -226,6 +229,7 @@ async def revoke_ban(
     integration: Integration,
     community: schemas.CommunityRef,
     player_id: str,
+    game: Game | None = None,
 ):
     if not isinstance(integration.config, schemas.IntegrationConfig):
         raise ValueError("Integration needs to be saved first")
@@ -236,7 +240,7 @@ async def revoke_ban(
     )
 
     await forward_errors(
-        partial(integration.unban_player, player_id),
+        partial(integration.unban_player, player_id, game=game),
         player_id=player_id,
         integration=integration.config,
         community=community,

@@ -755,7 +755,7 @@ class ConfigureCustomIntegrationModal(Modal):
             self.integration_id = default_values.id
             self.api_url.default = default_values.api_url
             self.api_key.default = default_values.api_key
-            self.banlist_id.default = default_values.banlist_id
+            self.banlist_id.default = default_values.hll_banlist_id
         else:
             self.integration_id = None
 
@@ -769,7 +769,7 @@ class ConfigureCustomIntegrationModal(Modal):
             community_id=self.view.community.id,
             api_url=self.api_url.value,
             api_key=self.api_key.value,
-            banlist_id=self.banlist_id.value or None,
+            hll_banlist_id=self.banlist_id.value or None,
         )
         integration = CustomIntegration(config)
 

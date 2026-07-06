@@ -9,7 +9,7 @@ from typing import TypeVar
 from cachetools import TTLCache
 from cachetools.keys import hashkey
 
-from barricade.enums import PlayerIDType
+from barricade.enums import Game, PlayerIDType
 
 
 def async_ttl_cache(size: int, seconds: int):
@@ -86,3 +86,13 @@ def batched(iterable: Sequence[T], n=1) -> Iterable[Iterable[T]]:
     length = len(iterable)
     for ndx in range(0, length, n):
         yield iterable[ndx : min(ndx + n, length)]
+
+
+def game_switch(game: Game, hll_value: T, hllv_value: T) -> T:
+    match game:
+        case Game.HLL:
+            return hll_value
+        case Game.HLLV:
+            return hllv_value
+        case _:
+            raise ValueError(f"Unrecognized game: {game}")

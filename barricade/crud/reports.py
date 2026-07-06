@@ -16,8 +16,7 @@ from barricade.discord.audit import (
     audit_token_create,
 )
 from barricade.discord.reports import get_report_channel, get_report_embed
-from barricade.enums import Platform
-from barricade.exceptions import AlreadyExistsError, InvalidPlatformError, NotFoundError
+from barricade.exceptions import AlreadyExistsError, NotFoundError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
 
@@ -88,17 +87,6 @@ async def create_token(
         raise AlreadyExistsError(
             f"Admin belongs to community with ID {admin.community_id}, not {params.community_id}"
         )
-
-    if params.platform == Platform.PC:
-        if not admin.community.is_pc:
-            raise InvalidPlatformError(
-                f"Community with ID {admin.community_id} is not a PC community"
-            )
-    elif params.platform == Platform.CONSOLE:  # noqa: SIM102
-        if not admin.community.is_console:
-            raise InvalidPlatformError(
-                f"Community with ID {admin.community_id} is not a console community"
-            )
 
     db_token = models.ReportToken(**params.model_dump())
     db.add(db_token)
@@ -275,6 +263,7 @@ async def create_report(
                 bm_rcon_url=player.bm_rcon_url,
                 hll_eos_id=player.hll_eos_id,
                 hllv_eos_id=player.hllv_eos_id,
+                platform=player.platform,
             ),
         )
         db_players.append(db_player)
@@ -298,7 +287,7 @@ async def create_report(
     report = schemas.ReportWithToken.model_validate(db_report)
 
     embed = await get_report_embed(report)
-    channel = get_report_channel(report.token.platform)
+    channel = get_report_channel(report.game)
     message = await channel.send(embed=embed)
     db_report.message_id = message.id
 
@@ -341,6 +330,7 @@ async def edit_report(
                     bm_rcon_url=player.bm_rcon_url,
                     hll_eos_id=player.hll_eos_id,
                     hllv_eos_id=player.hllv_eos_id,
+                    platform=player.platform,
                 ),
             )
             db_pr = models.PlayerReport(
@@ -454,26 +444,20 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
     created = False
     if db_player:
         dirty = False
-        if player.bm_rcon_url and player.bm_rcon_url != db_player.bm_rcon_url:
-            if player.bm_rcon_url:
-                logging.warning(
-                    "Updating bm_rcon_url for player %s from %s to %s",
-                    player.id,
-                    db_player.bm_rcon_url,
-                    player.bm_rcon_url,
-                )
-            db_player.bm_rcon_url = player.bm_rcon_url
-            dirty = True
-        if player.hll_eos_id and player.hll_eos_id != db_player.hll_eos_id:
-            if player.hll_eos_id:
-                logging.warning(
-                    "Updating eos_id for player %s from %s to %s",
-                    player.id,
-                    db_player.hll_eos_id,
-                    player.hll_eos_id,
-                )
-            db_player.hll_eos_id = player.hll_eos_id
-            dirty = True
+        for attr in ("bm_rcon_url", "hll_eos_id", "hllv_eos_id", "platform"):
+            new_value = getattr(player, attr)
+            old_value = getattr(db_player, attr)
+            if new_value and new_value != old_value:
+                if old_value:
+                    logging.warning(
+                        "Updating %s for player %s from %s to %s",
+                        attr,
+                        player.id,
+                        old_value,
+                        new_value,
+                    )
+                setattr(db_player, attr, new_value)
+                dirty = True
         if dirty:
             await db.flush()
     else:

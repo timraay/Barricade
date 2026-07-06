@@ -5,33 +5,35 @@ from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
 from barricade.constants import (
-    DISCORD_CONSOLE_REPORTS_CHANNEL_ID,
-    DISCORD_PC_REPORTS_CHANNEL_ID,
+    DISCORD_HLL_REPORTS_CHANNEL_ID,
+    DISCORD_HLLV_REPORTS_CHANNEL_ID,
     T17_SUPPORT_DISCORD_CHANNEL_ID,
 )
 from barricade.discord.bot import bot
 from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
-from barricade.enums import Emojis, Game, Platform, PlayerAlertType, ReportReasonFlag
-from barricade.utils import PlayerIDType, get_player_id_type
+from barricade.enums import (
+    Emojis,
+    Game,
+    Platform,
+    PlayerAlertType,
+    PlayerPlatform,
+    ReportReasonFlag,
+)
+from barricade.utils import PlayerIDType, game_switch, get_player_id_type
 
 
-def get_report_channel(platform: Platform) -> discord.TextChannel:
-    if platform == Platform.PC:
-        channel_id = DISCORD_PC_REPORTS_CHANNEL_ID
-    elif platform == Platform.CONSOLE:
-        channel_id = DISCORD_CONSOLE_REPORTS_CHANNEL_ID
-    else:
-        raise TypeError(f"Unknown platform {platform!r}") from None
+def get_report_channel(game: Game) -> discord.TextChannel:
+    channel_id = game_switch(
+        game, DISCORD_HLL_REPORTS_CHANNEL_ID, DISCORD_HLLV_REPORTS_CHANNEL_ID
+    )
 
     channel = bot.primary_guild.get_channel(channel_id)
     if not channel:
-        raise RuntimeError(
-            f"{platform.name} report channel could not be found"
-        ) from None
+        raise RuntimeError(f"{game.name} report channel could not be found") from None
     elif not isinstance(channel, discord.TextChannel):
         raise RuntimeError(
-            f"{platform.name} report channel is not a text channel"
+            f"{game.name} report channel is not a text channel"
         ) from None
     return channel
 
@@ -71,12 +73,20 @@ HLLV_GAME_PILL = "".join(
 
 
 def get_game_pill(game: Game) -> str:
-    if game == Game.HLL:
-        return HLL_GAME_PILL
-    elif game == Game.HLLV:
-        return HLLV_GAME_PILL
-    else:
-        raise TypeError(f"Unknown game {game!r}") from None
+    return game_switch(game, HLL_GAME_PILL, HLLV_GAME_PILL)
+
+
+# TODO: Add more emojis
+def get_player_platform_emoji(
+    platform: PlayerPlatform | None, server_type: Platform, game: Game
+) -> str | None:
+    if platform == PlayerPlatform.STEAM:
+        return Emojis.STEAM
+
+    elif server_type == Platform.PC:
+        return Emojis.EPIC_XBOX
+
+    return None
 
 
 async def get_report_embed(
@@ -119,8 +129,11 @@ async def get_report_embed(
             elif response.banned is False:
                 name = f"**`{i}.`**{Emojis.HIGHLIGHT_GREEN}{esc_md(player.player_name)}"
 
-        if report.token.platform == Platform.PC:
-            value = f"{Emojis.STEAM if is_steam else Emojis.EPIC_XBOX} *`{player.player_id}`*"
+        emoji = get_player_platform_emoji(
+            player.player.platform, report.server_type, report.game
+        )
+        if emoji:
+            value = f"{emoji} *`{player.player_id}`*"
         else:
             value = f"*`{player.player_id}`*"
 

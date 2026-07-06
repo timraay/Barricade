@@ -24,7 +24,7 @@ from barricade.crud.responses import get_successful_responses_without_bans
 from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
-from barricade.enums import IntegrationType
+from barricade.enums import Game, IntegrationType
 from barricade.exceptions import (
     AlreadyBannedError,
     AlreadyExistsError,
@@ -280,7 +280,7 @@ class Integration(ABC):
 
     @is_saved
     async def get_ban(
-        self, db: AsyncSession, player_id: str
+        self, db: AsyncSession, player_id: str, game: Game | None = None
     ) -> models.PlayerBan | None:
         """Get a player ban.
 
@@ -290,6 +290,8 @@ class Integration(ABC):
             An asynchronous database session
         player_id : str
             The ID of a player
+        game : Game | None
+            The game the player is banned in. If None, any game is accepted.
 
         Returns
         -------
@@ -300,6 +302,7 @@ class Integration(ABC):
             db,
             player_id=player_id,
             integration_id=self.config.id,  # type: ignore
+            game=game,
         )
 
     @is_saved
@@ -444,9 +447,6 @@ class Integration(ABC):
                 for db_response in db_responses
             ]
 
-        for response in responses:
-            print(response)
-
         total = len(responses)
         try:
             await self.bulk_ban_players(responses=responses)
@@ -517,7 +517,7 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def unban_player(self, player_id: str):
+    async def unban_player(self, player_id: str, game: Game | None = None):
         """Instruct the remote integration to unban a player, should
         they be banned.
 
@@ -525,6 +525,8 @@ class Integration(ABC):
         ----------
         player_id : str
             The ID of the player to unban
+        game : Game | None
+            The game the player is banned in. If None, any game is accepted.
 
         Raises
         ------
@@ -556,7 +558,9 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def bulk_unban_players(self, player_ids: Sequence[str]):
+    async def bulk_unban_players(
+        self, player_ids: Sequence[str], game: Game | None = None
+    ):
         """Instruct the remote integration to unban multiple players.
         Depending on the implementation this may take a while.
 
@@ -565,8 +569,10 @@ class Integration(ABC):
 
         Parameters
         ----------
-        response : Sequence[str]
+        player_ids : Sequence[str]
             The IDs of the players to unban
+        game : Game | None
+            The game the players are banned in. If None, any game is accepted.
 
         Raises
         ------

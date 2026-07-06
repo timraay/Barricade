@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import itertools
 from collections.abc import AsyncGenerator, Sequence
 from datetime import UTC, datetime
 from typing import NamedTuple
@@ -10,26 +9,23 @@ import aiohttp
 
 from barricade import schemas
 from barricade.crud.bans import (
-    bulk_delete_bans,
     expire_bans_of_player,
     get_bans_by_integration,
 )
 from barricade.crud.communities import get_community_by_id
-from barricade.db import models, session_factory
+from barricade.db import session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.reports import get_report_channel
 from barricade.discord.utils import get_danger_embed
-from barricade.enums import Emojis, IntegrationType
+from barricade.enums import Emojis, Game, IntegrationType
 from barricade.exceptions import (
     IntegrationBanError,
     IntegrationBulkBanError,
     IntegrationFailureError,
-    IntegrationMissingPermissionsError,
     IntegrationValidationError,
     NotFoundError,
 )
 from barricade.integrations.battlemetrics.utils import (
-    Scope,
     find_player_id_in_attributes,
 )
 from barricade.integrations.battlemetrics.websocket import BattlemetricsWebsocket
@@ -38,9 +34,15 @@ from barricade.integrations.integration import (
     IntegrationMetaData,
     is_enabled,
 )
+from barricade.integrations.mixins import (
+    IntegrationBanListMixin,
+    IntegrationScopedMixin,
+)
+from barricade.integrations.scope import Scope
 from barricade.utils import (
     async_ttl_cache,
     batched,
+    game_switch,
     get_player_id_type,
     safe_create_task,
 )
@@ -74,7 +76,9 @@ class BattlemetricsBan(NamedTuple):
     has_player_linked: bool
 
 
-class BattlemetricsIntegration(Integration):
+class BattlemetricsIntegration(
+    IntegrationScopedMixin, IntegrationBanListMixin, Integration
+):
     BASE_API_URL = "https://api.battlemetrics.com"
     BASE_WS_URL = "wss://ws.battlemetrics.com?audit_log=id={}"
 
@@ -152,14 +156,7 @@ class BattlemetricsIntegration(Integration):
             raise IntegrationValidationError("Communities do not match")
 
         missing_optional_scopes = await self.validate_scopes()
-
-        if not self.config.banlist_id:
-            try:
-                await self.create_ban_list(community)
-            except Exception as e:
-                raise IntegrationValidationError("Failed to create ban list") from e
-        else:
-            await self.validate_ban_list(community)
+        await self.validate_ban_lists(community)
 
         return missing_optional_scopes
 
@@ -169,7 +166,7 @@ class BattlemetricsIntegration(Integration):
         self.logger.info("%r: Banning player %s", self, player_id)
 
         report = response.player_report.report
-        report_channel = get_report_channel(report.token.platform)
+        report_channel = get_report_channel(report.game)
 
         async with session_factory.begin() as db:
             db_ban = await self.get_ban(db, player_id)
@@ -197,10 +194,10 @@ class BattlemetricsIntegration(Integration):
             await self.set_ban_id(db, player_id, ban_id)
 
     @is_enabled
-    async def unban_player(self, player_id: str):
+    async def unban_player(self, player_id: str, game: Game | None = None):
         self.logger.info("%r: Unbanning player %s", self, player_id)
         async with session_factory.begin() as db:
-            db_ban = await self.get_ban(db, player_id)
+            db_ban = await self.get_ban(db, player_id, game=game)
             if db_ban is None:
                 raise NotFoundError("Ban does not exist")
 
@@ -236,7 +233,7 @@ class BattlemetricsIntegration(Integration):
                 for i, response in enumerate(responses, start=1):
                     player_id = response.player_report.player_id
                     report = response.player_report.report
-                    report_channel = get_report_channel(report.token.platform)
+                    report_channel = get_report_channel(report.game)
 
                     db_ban = await self.get_ban(db, player_id)
                     if db_ban is not None:
@@ -280,14 +277,16 @@ class BattlemetricsIntegration(Integration):
             )
 
     @is_enabled
-    async def bulk_unban_players(self, player_ids: Sequence[str]):
+    async def bulk_unban_players(
+        self, player_ids: Sequence[str], game: Game | None = None
+    ):
         self.logger.info("%r: Bulk unbanning players %s", self, player_ids)
         failed = []
         i = 0
         async with session_factory() as db:
             try:
                 for player_id in player_ids:
-                    db_ban = await self.get_ban(db, player_id)
+                    db_ban = await self.get_ban(db, player_id, game=game)
                     if not db_ban:
                         continue
 
@@ -324,48 +323,151 @@ class BattlemetricsIntegration(Integration):
         if not self.config.id:
             raise RuntimeError("Integration has not yet been saved")
 
-        remote_bans = await self.get_ban_list_bans()
-        unlinked_bans = [
-            ban for ban in remote_bans.values() if not ban.has_player_linked
-        ]
+        unlinked_bans: list[BattlemetricsBan] = []
 
         async with session_factory.begin() as db:
             db_community = await get_community_by_id(db, self.config.community_id)
             community = schemas.CommunityRef.model_validate(db_community)
 
-            async for db_ban in get_bans_by_integration(db, self.config.id):
-                remote_ban = remote_bans.pop(db_ban.remote_id, None)
-                if not remote_ban:
-                    await db.delete(db_ban)
-
-                elif remote_ban.expired:
-                    # The player was unbanned, change responses of all reports where
-                    # the player is banned
-                    async with session_factory.begin() as _db:
-                        await expire_bans_of_player(
-                            _db, db_ban.player_id, db_ban.integration.community_id
-                        )
-
-            for remote_ban in remote_bans.values():
-                if remote_ban.expired:
-                    continue
-
-                embed = get_danger_embed(
-                    "Found unrecognized ban on Battlemetrics ban list!",
-                    (
-                        f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/edit/{remote_ban.ban_id}) that Barricade does not recognize."
-                        " Please do not put any of your own bans on this ban list."
-                        "\n\n"
-                        "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
-                    ),
+            for game in Game:
+                remote_bans = await self.get_ban_list_bans(game)
+                unlinked_bans.extend(
+                    ban for ban in remote_bans.values() if not ban.has_player_linked
                 )
-                self.logger.warning(
-                    "Ban exists on the remote but not locally, expiring: %r", remote_ban
-                )
-                await self.expire_ban(remote_ban.ban_id)
-                safe_send_to_community(community, embed=embed)
+
+                async for db_ban in get_bans_by_integration(
+                    db, self.config.id, game=game
+                ):
+                    remote_ban = remote_bans.pop(db_ban.remote_id, None)
+                    if not remote_ban:
+                        await db.delete(db_ban)
+
+                    elif remote_ban.expired:
+                        # The player was unbanned, change responses of all reports where
+                        # the player is banned
+                        async with session_factory.begin() as _db:
+                            await expire_bans_of_player(
+                                _db,
+                                db_ban.player_id,
+                                db_ban.integration.community_id,
+                                game=game,
+                            )
+
+                for remote_ban in remote_bans.values():
+                    if remote_ban.expired:
+                        continue
+
+                    embed = get_danger_embed(
+                        "Found unrecognized ban on Battlemetrics ban list!",
+                        (
+                            f"-# Your Barricade ban list contained [an active ban](https://battlemetrics.com/rcon/bans/edit/{remote_ban.ban_id}) that Barricade does not recognize."
+                            " Please do not put any of your own bans on this ban list."
+                            "\n\n"
+                            "-# The ban has been expired. If you wish to restore it, move it to a different ban list first. If this is a Barricade ban, feel free to ignore this."
+                        ),
+                    )
+                    self.logger.warning(
+                        "Ban exists on the remote but not locally, expiring: %r",
+                        remote_ban,
+                    )
+                    await self.expire_ban(remote_ban.ban_id)
+                    safe_send_to_community(community, embed=embed)
 
         await self.link_bans_to_players(unlinked_bans)
+
+    # --- Scoped integration mixin
+
+    def get_required_scopes(self) -> set[Scope]:
+        return REQUIRED_SCOPES
+
+    def get_optional_scopes(self) -> set[Scope]:
+        return OPTIONAL_SCOPES
+
+    async def get_scopes(self) -> set[Scope]:
+        url = "https://www.battlemetrics.com/oauth/introspect"
+        data = {"token": self.config.api_key}
+        resp: dict = await self._make_request(method="POST", url=url, data=data)  # type: ignore
+
+        if resp["active"]:
+            return {Scope.from_string(s) for s in resp["scope"].split(" ")}
+        else:
+            # TODO: Create more specific exception class
+            raise IntegrationValidationError("Invalid API key")
+
+    # --- Ban list integration mixin
+
+    async def create_remote_ban_list(self, community: schemas.Community, game: Game):
+        data = {
+            "data": {
+                "type": "banList",
+                "attributes": {
+                    "name": f"{game.name} Barricade - {community.name} (ID: {community.id})",
+                    "action": "kick",
+                    "defaultIdentifiers": ["steamID", "hllWindowsID"],
+                    "defaultReasons": [],
+                    "defaultAutoAddEnabled": True,
+                },
+                "relationships": {
+                    "organization": {
+                        "data": {
+                            "type": "organization",
+                            "id": self.config.organization_id,
+                        }
+                    },
+                    "owner": {
+                        "data": {
+                            "type": "organization",
+                            "id": self.config.organization_id,
+                        }
+                    },
+                },
+            }
+        }
+
+        url = f"{self.BASE_API_URL}/ban-lists"
+        resp: dict = await self._make_request(method="POST", url=url, data=data)  # type: ignore
+
+        assert resp["data"]["type"] == "banList"
+        return resp["data"]["id"]
+
+    async def validate_remote_ban_list(self, banlist_id: str):
+        data = {"include": "owner"}
+
+        url = f"{self.BASE_API_URL}/ban-lists/{banlist_id}"
+        try:
+            # Fetch the ban list
+            resp: dict = await self._make_request(method="GET", url=url, data=data)  # type: ignore
+        except aiohttp.ClientResponseError as e:
+            if e.status == 404:
+                # The ban list no longer exists. Create a new one.
+                self.logger.error(
+                    "%r: Ban list #%s not found! Creating new list.",
+                    self,
+                    banlist_id,
+                )
+                raise IntegrationValidationError(
+                    "Ban list #%s not found", banlist_id
+                ) from None
+            else:
+                raise
+
+        # Make sure banlist UUID is the same
+        banlist_id = resp["data"]["id"]
+        if banlist_id != banlist_id:
+            raise IntegrationValidationError(
+                "Ban list UUID mismatch: Asked for %s but got %s",
+                banlist_id,
+                resp["data"]["id"],
+            )
+
+        # Make sure organization ID is the same
+        organization_id = resp["data"]["relationships"]["owner"]["data"]["id"]
+        if organization_id != self.config.organization_id:
+            raise IntegrationValidationError(
+                "Organization ID mismatch: Asked for %s but got %s",
+                self.config.organization_id,
+                resp["data"]["id"],
+            )
 
     # --- Battlemetrics API wrappers
 
@@ -462,7 +564,10 @@ class BattlemetricsIntegration(Integration):
                         }
                     },
                     "banList": {
-                        "data": {"type": "banList", "id": str(self.config.banlist_id)}
+                        "data": {
+                            "type": "banList",
+                            "id": str(self.config.hll_banlist_id),
+                        }
                     },
                 },
             }
@@ -503,7 +608,7 @@ class BattlemetricsIntegration(Integration):
         url = f"{self.BASE_API_URL}/bans/{ban_id}"
         await self._make_request(method="DELETE", url=url, handle_exc=handle_exc)
 
-    async def expire_ban(self, ban_id: str):
+    async def expire_ban(self, ban_id: str, handle_exc: bool = True):
         url = f"{self.BASE_API_URL}/bans/{ban_id}"
         await self._make_request(
             method="PATCH",
@@ -514,13 +619,23 @@ class BattlemetricsIntegration(Integration):
                     "attributes": {"expires": datetime.now(tz=UTC).isoformat()},
                 }
             },
+            handle_exc=handle_exc,
         )
 
-    async def get_ban_list_bans(self) -> dict[str, BattlemetricsBan]:
+    async def get_ban_list_bans(
+        self, game: Game, *, exclude_expired: bool = False
+    ) -> dict[str, BattlemetricsBan]:
+        banlist_id = game_switch(
+            game, self.config.hll_banlist_id, self.config.hllv_banlist_id
+        )
+
+        if banlist_id is None:
+            return {}
+
         data = {
-            "filter[banList]": str(self.config.banlist_id),
+            "filter[banList]": str(banlist_id),
             "page[size]": 100,
-            "filter[expired]": "true",
+            "filter[expired]": str(not exclude_expired).lower(),
         }
 
         url = f"{self.BASE_API_URL}/bans"
@@ -639,134 +754,6 @@ class BattlemetricsIntegration(Integration):
                 remote_id=remote_id,
                 player_id_data=player_id_data,
             )
-
-    async def create_ban_list(self, community: schemas.Community):
-        self.logger.info("%r: Creating new ban list", self)
-
-        if self.config.banlist_id:
-            self.logger.info("%s: Clearing bans from previous ban list")
-            async with session_factory.begin() as db:
-                await bulk_delete_bans(
-                    db, models.PlayerBan.integration_id == self.config.id
-                )
-
-        data = {
-            "data": {
-                "type": "banList",
-                "attributes": {
-                    "name": f"HLL Barricade - {community.name} (ID: {community.id})",
-                    "action": "kick",
-                    "defaultIdentifiers": ["steamID", "hllWindowsID"],
-                    "defaultReasons": [],
-                    "defaultAutoAddEnabled": True,
-                },
-                "relationships": {
-                    "organization": {
-                        "data": {
-                            "type": "organization",
-                            "id": self.config.organization_id,
-                        }
-                    },
-                    "owner": {
-                        "data": {
-                            "type": "organization",
-                            "id": self.config.organization_id,
-                        }
-                    },
-                },
-            }
-        }
-
-        url = f"{self.BASE_API_URL}/ban-lists"
-        resp: dict = await self._make_request(method="POST", url=url, data=data)  # type: ignore
-
-        assert resp["data"]["type"] == "banList"
-        self.config.banlist_id = resp["data"]["id"]
-
-    async def validate_ban_list(self, community: schemas.Community):
-        data = {"include": "owner"}
-
-        url = f"{self.BASE_API_URL}/ban-lists/{self.config.banlist_id}"
-        try:
-            # Fetch the ban list
-            resp: dict = await self._make_request(method="GET", url=url, data=data)  # type: ignore
-        except Exception as e:
-            if isinstance(e, aiohttp.ClientResponseError) and e.status == 404:
-                # The ban list no longer exists. Create a new one.
-                self.logger.error(
-                    "%r: Ban list #%s not found! Creating new list.",
-                    self,
-                    self.config.banlist_id,
-                )
-                try:
-                    await self.create_ban_list(community)
-                    return
-                except Exception as e:
-                    raise IntegrationValidationError(
-                        "Failed to recreate ban list"
-                    ) from e
-
-            raise IntegrationValidationError("Failed to retrieve ban list") from e
-
-        # Make sure banlist UUID is the same
-        banlist_id = resp["data"]["id"]
-        if banlist_id != self.config.banlist_id:
-            raise IntegrationValidationError(
-                "Ban list UUID mismatch: Asked for %s but got %s",
-                self.config.banlist_id,
-                resp["data"]["id"],
-            )
-
-        # Make sure organization ID is the same
-        organization_id = resp["data"]["relationships"]["owner"]["data"]["id"]
-        if organization_id != self.config.organization_id:
-            raise IntegrationValidationError(
-                "Organization ID mismatch: Asked for %s but got %s",
-                self.config.organization_id,
-                resp["data"]["id"],
-            )
-
-    async def get_api_scopes(self) -> set[Scope]:
-        """Retrieves the tokens scopes from the oauth.
-        Documentation: None.
-        Returns:
-            dict: The tokens data.
-        """
-        url = "https://www.battlemetrics.com/oauth/introspect"
-        data = {"token": self.config.api_key}
-        resp: dict = await self._make_request(method="POST", url=url, data=data)  # type: ignore
-
-        if resp["active"]:
-            return {Scope.from_string(s) for s in resp["scope"].split(" ")}
-        else:
-            # TODO: Create more specific exception class
-            raise Exception("Invalid API key")
-
-    async def validate_scopes(self) -> set[str]:
-        try:
-            scopes = await self.get_api_scopes()
-        except Exception as e:
-            raise IntegrationValidationError("Failed to retrieve API scopes") from e
-
-        params = self.config.model_dump()
-        missing_scopes = {s for s in itertools.chain(REQUIRED_SCOPES, OPTIONAL_SCOPES)}
-        for scope in scopes:
-            for expected_scope in list(missing_scopes):
-                if scope.covers(expected_scope, params=params):
-                    missing_scopes.remove(expected_scope)
-
-        missing_required_scopes = missing_scopes & REQUIRED_SCOPES
-        missing_optional_scopes = missing_scopes & OPTIONAL_SCOPES
-
-        if missing_required_scopes:
-            raise IntegrationMissingPermissionsError(
-                {str(s) for s in missing_required_scopes},
-                "Missing scopes: {}".format(
-                    ", ".join([str(s) for s in missing_scopes])
-                ),
-            )
-
-        return {str(s) for s in missing_optional_scopes}
 
     @async_ttl_cache(size=9999, seconds=60 * 60 * 24)
     async def get_server_ids_from_org(self) -> list[str]:

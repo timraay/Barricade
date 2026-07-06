@@ -2,12 +2,11 @@ import secrets
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import TIMESTAMP, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import TIMESTAMP, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.db import ModelBase
-from barricade.enums import Platform
 
 if TYPE_CHECKING:
     from .admin import Admin
@@ -27,9 +26,6 @@ class ReportToken(ModelBase):
     expires_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(True), server_default=(func.now() + REPORT_TOKEN_EXPIRE_DELTA)
     )  # type: ignore
-    platform: Mapped[Platform] = mapped_column(
-        Enum(Platform), default=Platform.PC, server_default=Platform.PC.name
-    )
 
     community: Mapped["Community"] = relationship(
         back_populates="tokens", lazy="selectin"

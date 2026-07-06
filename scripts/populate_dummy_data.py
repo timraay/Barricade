@@ -7,7 +7,7 @@ from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
 from barricade.db import create_tables, session_factory
 from barricade.discord import bot
-from barricade.enums import Platform, ReportReasonFlag
+from barricade.enums import Platform, PlayerPlatform, ReportReasonFlag
 
 
 async def main():
@@ -90,7 +90,6 @@ async def main():
             schemas.ReportTokenCreateParams(
                 community_id=c1.id,
                 admin_id=c1.owner_id,  # type: ignore
-                platform=Platform.PC,
             ),
         )
         print("--", "Created token 1")
@@ -100,7 +99,6 @@ async def main():
             schemas.ReportTokenCreateParams(
                 community_id=c2.id,
                 admin_id=c2.owner_id,  # type: ignore
-                platform=Platform.PC,
             ),
         )
         print("--", "Created token 2")
@@ -118,14 +116,17 @@ async def main():
                         player_id="11111111111111111",
                         player_name="Player 1",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.STEAM,
                     ),
                     schemas.PlayerReportCreateParams(
                         player_id="22222222222222222",
                         player_name="Player 2",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.EPIC,
                     ),
                 ],
                 game=schemas.Game.HLL,
+                server_type=Platform.PC,
             ),
         )
         print("--", "Created report 1")
@@ -143,9 +144,11 @@ async def main():
                         player_id="76561199023367826",
                         player_name="Abu",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.STEAM,
                     ),
                 ],
                 game=schemas.Game.HLL,
+                server_type=Platform.PC,
             ),
         )
         print("--", "Created report 2")

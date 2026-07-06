@@ -88,10 +88,8 @@ DISCORD_PC_ROLE_ID = get_env_int("DISCORD_PC_ROLE_ID", 0)
 # ID of the Console role
 DISCORD_CONSOLE_ROLE_ID = get_env_int("DISCORD_CONSOLE_ROLE_ID", 0)
 # IDs of the main report channels
-DISCORD_PC_REPORTS_CHANNEL_ID = get_env_int("DISCORD_PC_REPORTS_CHANNEL_ID", 0)
-DISCORD_CONSOLE_REPORTS_CHANNEL_ID = get_env_int(
-    "DISCORD_CONSOLE_REPORTS_CHANNEL_ID", 0
-)
+DISCORD_HLL_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLL_REPORTS_CHANNEL_ID", 0)
+DISCORD_HLLV_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLLV_REPORTS_CHANNEL_ID", 0)
 # ID of the channel to send community create requests to
 DISCORD_ENROLL_CHANNEL_ID = get_env_int("DISCORD_ENROLL_CHANNEL_ID", 0)
 # ID of the channel to send audit messages to

@@ -15,6 +15,7 @@ from barricade.enums import (
     Game,
     IntegrationType,
     Platform,
+    PlayerPlatform,
     ReportMessageType,
     ReportReasonFlag,
     ReportRejectReason,
@@ -39,7 +40,8 @@ class SafeIntegrationConfigParams(_ModelFromAttributes):
     api_url: str
 
     organization_id: str | None
-    banlist_id: str | None
+    hll_banlist_id: str | None
+    hllv_banlist_id: str | None
 
 
 class IntegrationConfigParams(SafeIntegrationConfigParams):
@@ -53,7 +55,8 @@ class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     integration_type: Literal[IntegrationType.BATTLEMETRICS] = (  # type: ignore
         IntegrationType.BATTLEMETRICS
     )
-    banlist_id: str | None = None
+    hll_banlist_id: str | None = None
+    hllv_banlist_id: str | None = None
 
 
 class CustomIntegrationConfigParams(IntegrationConfigParams):
@@ -61,7 +64,8 @@ class CustomIntegrationConfigParams(IntegrationConfigParams):
 
     integration_type: Literal[IntegrationType.CUSTOM] = IntegrationType.CUSTOM  # type: ignore
     organization_id: None = None  # type: ignore
-    banlist_id: str | None = None
+    hll_banlist_id: str | None = None
+    hllv_banlist_id: str | None = None
 
 
 class CRCONIntegrationConfigParams(CustomIntegrationConfigParams):
@@ -147,13 +151,13 @@ class _PlayerBase(BaseModel):
     bm_rcon_url: str | None
     hll_eos_id: str | None
     hllv_eos_id: str | None
+    platform: PlayerPlatform | None
 
 
 class _ReportTokenBase(BaseModel):
     community_id: int
     admin_id: int
     expires_at: datetime
-    platform: Platform
 
     @field_serializer("admin_id", when_used="json-unless-none")
     def convert_large_int_to_str(value: int):  # type: ignore
@@ -167,6 +171,7 @@ class _ReportBase(BaseModel):
     reasons_custom: str | None
     attachment_urls: list[str]
     game: Game
+    server_type: Platform
 
 
 class _PlayerReportBase(BaseModel):
@@ -185,6 +190,7 @@ class _ResponseBase(BaseModel):
 class _PlayerBanBase(BaseModel):
     player_id: str
     integration_id: int
+    game: Game
     remote_id: str
 
 
@@ -434,6 +440,7 @@ class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: str | None
     hll_eos_id: str | None = None
     hllv_eos_id: str | None = None
+    platform: PlayerPlatform | None
 
 
 class ReportEditParams(_ReportBase):
@@ -500,6 +507,7 @@ class ReportSubmissionData(BaseModel):
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
     game: Game
+    server_type: Platform = Field(alias="serverType")
 
 
 class ReportSubmission(BaseModel):

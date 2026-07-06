@@ -53,7 +53,7 @@ from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
 from barricade.discord.views.report_management import ReportManagementView
 from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
-from barricade.enums import Platform, PlayerAlertType, PlayerIDType, ReportMessageType
+from barricade.enums import PlayerAlertType, PlayerIDType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
@@ -74,10 +74,12 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
                 != 0,
             ),
         )
-        if report.token.platform == Platform.PC:
-            stmt = stmt.where(models.Community.is_pc.is_(True))
-        elif report.token.platform == Platform.CONSOLE:
-            stmt = stmt.where(models.Community.is_console.is_(True))
+
+        # TODO: Allow communities to filter on game and server type
+        # if report.token.platform == Platform.PC:
+        #     stmt = stmt.where(models.Community.is_pc.is_(True))
+        # elif report.token.platform == Platform.CONSOLE:
+        #     stmt = stmt.where(models.Community.is_console.is_(True))
 
         result = await db.scalars(stmt)
         db_communities = result.all()
@@ -116,7 +118,7 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
         embed = await get_report_embed(report)
-        channel = get_report_channel(report.token.platform)
+        channel = get_report_channel(report.game)
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
@@ -176,7 +178,7 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):
     try:
-        channel = get_report_channel(report.token.platform)
+        channel = get_report_channel(report.game)
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
@@ -523,6 +525,7 @@ async def update_player_eos_id(
                             bm_rcon_url=None,
                             hll_eos_id=eos_ids[0],
                             hllv_eos_id=eos_ids[1],
+                            platform=None,
                         ),
                     )
                     return True

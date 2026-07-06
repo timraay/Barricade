@@ -210,7 +210,7 @@ async def get_active_token(
     elif db_token.user is not None:
         permitted_scopes = Scopes(db_token.user.scopes)
     else:
-        logging.warn("No scopes found on token with ID %r", db_token.id)
+        logging.warning("No scopes found on token with ID %r", db_token.id)
         permitted_scopes = Scopes(0)
 
     required_scopes = Scopes.from_list(security_scopes.scopes)

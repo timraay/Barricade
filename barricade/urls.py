@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.constants import REPORT_FORM_URL
 from barricade.crud.reports import create_token
-from barricade.enums import Platform, ReportReasonFlag
+from barricade.enums import ReportReasonFlag
 
 
 class FormEntryID(IntEnum):
@@ -132,11 +132,10 @@ class URLFactory:
     class Key(NamedTuple):
         admin_id: int
         community_id: int
-        platform: Platform
 
         @classmethod
         def from_token(cls, token: schemas._ReportTokenBase):
-            return cls(token.admin_id, token.community_id, token.platform)
+            return cls(token.admin_id, token.community_id)
 
     _cache: ClassVar = TTLCache[Key, str](maxsize=999, ttl=60 * 60)
 

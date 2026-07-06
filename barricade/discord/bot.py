@@ -35,7 +35,7 @@ async def sync_commands():
         await asyncio.wait_for(bot.tree.sync(), timeout=5)
         logging.info("Synced app commands")
     except TimeoutError:
-        logging.warn(
+        logging.warning(
             "Didn't sync app commands. This was likely last done recently, resulting in rate limits."
         )
 

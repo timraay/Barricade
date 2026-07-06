@@ -47,7 +47,6 @@ class GetSubmissionURLView(View):
             params = schemas.ReportTokenCreateParams(
                 admin_id=admin.discord_id,
                 community_id=admin.community_id,
-                platform=self.platform,
             )
             url = await URLFactory.get(db, params, by=interaction.user)  # type: ignore
 

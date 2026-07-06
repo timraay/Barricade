@@ -10,19 +10,46 @@ class PlayerIDType(StrEnum):
 
 class Platform(StrEnum):
     # Careful when renaming, used by PSQL
-    PC = "pc"
-    CONSOLE = "console"
+    PC = "PC"
+    CONSOLE = "Console"
+    CROSSPLAY = "Crossplay"
+
+    def is_pc(self):
+        return self in (Platform.PC, Platform.CROSSPLAY)
+
+    def is_console(self):
+        return self in (Platform.CONSOLE, Platform.CROSSPLAY)
+
+
+class PlayerPlatform(StrEnum):
+    STEAM = "Steam"
+    EPIC = "Epic Games"
+    XBOX = "Xbox"
+    PLAYSTATION = "PlayStation"
+
+    def is_pc(self):
+        return self in (PlayerPlatform.STEAM, PlayerPlatform.EPIC, PlayerPlatform.XBOX)
+
+    def is_console(self):
+        return self in (PlayerPlatform.XBOX, PlayerPlatform.PLAYSTATION)
+
+    def is_valid_for_platform(self, platform: Platform):
+        if platform == Platform.PC:
+            return self.is_pc()
+        if platform == Platform.CONSOLE:
+            return self.is_console()
+        return True
 
 
 class Game(StrEnum):
     # Careful when renaming, used by PSQL
-    HLL = "hll"
-    HLLV = "hllv"
+    HLL = "HLL"
+    HLLV = "HLLV"
 
 
 class PlayerAlertType(StrEnum):
-    WATCHLISTED = "watchlisted"
-    UNREVIEWED = "unreviewed"
+    WATCHLISTED = "Watchlisted"
+    UNREVIEWED = "Unreviewed"
 
 
 class ReportRejectReason(StrEnum):
@@ -32,9 +59,9 @@ class ReportRejectReason(StrEnum):
 
 
 class IntegrationType(StrEnum):
-    BATTLEMETRICS = "battlemetrics"
-    COMMUNITY_RCON = "crcon"
-    CUSTOM = "custom"
+    BATTLEMETRICS = "Battlemetrics"
+    COMMUNITY_RCON = "CRCON"
+    CUSTOM = "Custom"
 
 
 class ReportReasonDetailsType(NamedTuple):
@@ -89,7 +116,7 @@ class ReportReasonFlag(IntFlag):
                     self |= reason
             if not reason:
                 if self & ReportReasonFlag.CUSTOM:
-                    logging.warn(
+                    logging.warning(
                         "Multiple custom reasons submitted: %s", ", ".join(reasons)
                     )
                 self |= ReportReasonFlag.CUSTOM

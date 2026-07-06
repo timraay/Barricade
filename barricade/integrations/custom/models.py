@@ -3,6 +3,8 @@ from enum import StrEnum
 
 import pydantic
 
+from barricade.enums import Game
+
 
 class ClientRequestType(StrEnum):
     BAN_PLAYERS = "ban_players"
@@ -34,6 +36,7 @@ class ResponseBody(pydantic.BaseModel):
 
 
 class UnbanPlayersRequestConfigPayload(pydantic.BaseModel):
+    game: Game
     banlist_id: str | None
 
 
