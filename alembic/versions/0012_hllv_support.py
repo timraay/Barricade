@@ -21,14 +21,14 @@ depends_on: str | Sequence[str] | None = None
 
 Game = postgresql.ENUM("HLL", "HLLV", name="game")
 PlayerPlatform = postgresql.ENUM(
-    "STEAM", "EPIC", "XBOX", "PLAYSTATION", name="player_platform"
+    "STEAM", "EPIC", "XBOX", "PLAYSTATION", name="playerplatform"
 )
 
 
 def upgrade() -> None:
     # Create game enum type
     Game.create(op.get_bind())
-    # Create player_platform enum type
+    # Create playerplatform enum type
     PlayerPlatform.create(op.get_bind())
     # Add "CROSSPLAY" member to platform enum type
     op.execute(sa.text("ALTER TYPE platform ADD VALUE IF NOT EXISTS 'CROSSPLAY'"))
@@ -141,7 +141,7 @@ def downgrade() -> None:
     op.drop_column("player_bans", "game")
     op.drop_column("reports", "game")
 
-    # Remove player_platform enum type
+    # Remove playerplatform enum type
     PlayerPlatform.drop(op.get_bind())
     # Remove game enum type
     Game.drop(op.get_bind())
