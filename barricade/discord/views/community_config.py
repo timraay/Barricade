@@ -1,7 +1,7 @@
 import re
 from collections.abc import Callable
 from functools import partial
-from typing import TypeVar
+from typing import TypeVar, assert_never
 
 import discord
 
@@ -261,4 +261,5 @@ def option_values_to_string(
                 community, value1, value2, can_inherit_from=option.can_inherit_from
             )
         case _:
+            assert_never(option.type)
             raise ValueError(f"Unknown option type: {option.type}")

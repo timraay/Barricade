@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from collections.abc import Iterable, Sequence
+from typing import assert_never
 
 import discord
 from cachetools import TTLCache
@@ -404,6 +405,7 @@ class PlayerAlert:
                     )
                 )
             case _:
+                assert_never(self.alert_type)
                 raise Exception(f'Unknown alert type "{self.alert_type}"')
 
         reports_urls = list(

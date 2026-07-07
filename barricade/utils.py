@@ -4,7 +4,7 @@ import logging
 import re
 from collections.abc import Coroutine, Iterable, Sequence
 from functools import wraps
-from typing import TypeVar
+from typing import TypeVar, assert_never
 
 from cachetools import TTLCache
 from cachetools.keys import hashkey
@@ -95,4 +95,5 @@ def game_switch(game: Game, hll_value: T, hllv_value: T) -> T:
         case Game.HLLV:
             return hllv_value
         case _:
+            assert_never(game)
             raise ValueError(f"Unrecognized game: {game}")
