@@ -23,6 +23,7 @@ from barricade.discord.views.channel_confirmation import (
     assert_community_guild,
     get_admin,
 )
+from barricade.discord.views.community_config import get_community_config_view
 from barricade.discord.views.community_overview import CommunityOverviewView
 from barricade.discord.views.integration_management import IntegrationManagementView
 from barricade.discord.views.reasons_filter import ReasonsFilterView
@@ -434,6 +435,24 @@ class CommunitiesCog(commands.Cog):
             )
 
             await interaction.response.send_message(embeds=embeds, ephemeral=True)
+
+    @config_group.command(
+        name="v2", description="See all your configured settings (v2)"
+    )
+    async def view_community_config_v2(self, interaction: Interaction):
+        async with session_factory() as db:
+            # Make sure the user is part of a community
+            db_admin = await get_admin(db, interaction.user.id)
+            assert db_admin.community is not None
+
+            community_id = db_admin.community.id
+
+            db.expire(db_admin)
+            db_community = await get_community_by_id(db, community_id)
+
+        community = schemas.Community.model_validate(db_community)
+        view = get_community_config_view(community)
+        await interaction.response.send_message(view=view, ephemeral=True)
 
     @app_commands.command(
         name="community", description="Get information about a community"

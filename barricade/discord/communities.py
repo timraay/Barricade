@@ -78,18 +78,25 @@ async def revoke_user_roles(user_id: int, strict: bool = False):
     return True
 
 
-def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
-    if not community.forward_guild_id or not community.forward_channel_id:
+def get_text_channel(
+    guild_id: int | None, channel_id: int | None
+) -> discord.TextChannel | None:
+    if not guild_id or not channel_id:
         return
 
-    guild = bot.get_guild(community.forward_guild_id)
+    guild = bot.get_guild(guild_id)
     if not guild:
-        return
+        return None
 
-    channel = guild.get_channel(community.forward_channel_id)
+    channel = guild.get_channel(channel_id)
     if channel and not isinstance(channel, discord.TextChannel):
-        raise RuntimeError(f"Forward channel {channel!r} is not a TextChannel")
+        raise RuntimeError(f"Channel {channel!r} is not a TextChannel")
+
     return channel
+
+
+def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    return get_text_channel(community.forward_guild_id, community.forward_channel_id)
 
 
 def get_confirmations_channel(
@@ -98,34 +105,16 @@ def get_confirmations_channel(
     if community.confirmations_channel_id is None:
         return get_forward_channel(community)
 
-    if not community.forward_guild_id or not community.confirmations_channel_id:
-        return
-
-    guild = bot.get_guild(community.forward_guild_id)
-    if not guild:
-        return
-
-    channel = guild.get_channel(community.confirmations_channel_id)
-    if channel and not isinstance(channel, discord.TextChannel):
-        raise RuntimeError(f"Confirmations channel {channel!r} is not a TextChannel")
-    return channel
+    return get_text_channel(
+        community.forward_guild_id, community.confirmations_channel_id
+    )
 
 
 def get_alerts_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
     if community.alerts_channel_id is None:
         return get_forward_channel(community)
 
-    if not community.forward_guild_id or not community.alerts_channel_id:
-        return
-
-    guild = bot.get_guild(community.forward_guild_id)
-    if not guild:
-        return
-
-    channel = guild.get_channel(community.alerts_channel_id)
-    if channel and not isinstance(channel, discord.TextChannel):
-        raise RuntimeError(f"Alerts channel {channel!r} is not a TextChannel")
-    return channel
+    return get_text_channel(community.forward_guild_id, community.alerts_channel_id)
 
 
 def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
