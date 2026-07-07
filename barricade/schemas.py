@@ -172,6 +172,8 @@ class _ReportBase(BaseModel):
     attachment_urls: list[str]
     game: Game
     server_type: Platform
+    edited_at: datetime | None
+    edited_by: str | None
 
 
 class _PlayerReportBase(BaseModel):
@@ -184,6 +186,7 @@ class _ResponseBase(BaseModel):
     community_id: int
     banned: bool
     reject_reason: ReportRejectReason | None
+    responded_at: datetime | None
     responded_by: str | None
 
 
@@ -444,17 +447,20 @@ class PlayerReportCreateParams(_PlayerReportBase):
 
 
 class ReportEditParams(_ReportBase):
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
+    edited_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
     players: list[PlayerReportCreateParams] = Field(min_length=1)
     attachment_urls: list[str] = Field(default_factory=list)
 
 
 class ReportCreateParams(ReportEditParams):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    edited_at: datetime | None = None
+    edited_by: str | None = None
     token_id: int
 
 
 class ReportCreateParamsTokenless(ReportEditParams):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     admin_id: int
     platform: Platform
 
@@ -476,6 +482,7 @@ class PendingResponse(_ResponseBase, _ModelFromAttributes):
     community: CommunityRef
     banned: bool | None = None  # type: ignore
     reject_reason: ReportRejectReason | None = None
+    responded_at: datetime | None = None
     responded_by: str | None = None
 
 

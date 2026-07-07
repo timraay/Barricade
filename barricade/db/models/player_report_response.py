@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import TIMESTAMP, Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
@@ -23,6 +24,7 @@ class PlayerReportResponse(ModelBase):
     reject_reason: Mapped[ReportRejectReason | None] = mapped_column(
         Enum(ReportRejectReason), nullable=True
     )
+    responded_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(True))
     responded_by: Mapped[str | None]
 
     player_report: Mapped["PlayerReport"] = relationship(

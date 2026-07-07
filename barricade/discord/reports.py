@@ -1,7 +1,6 @@
 import logging
 
 import discord
-from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
 from barricade.constants import (
@@ -10,14 +9,11 @@ from barricade.constants import (
     T17_SUPPORT_DISCORD_CHANNEL_ID,
 )
 from barricade.discord.bot import bot
-from barricade.discord.communities import get_admin_name
 from barricade.discord.utils import format_url
 from barricade.enums import (
     Emojis,
     Game,
-    Platform,
     PlayerAlertType,
-    PlayerPlatform,
     ReportReasonFlag,
 )
 from barricade.utils import PlayerIDType, game_switch, get_player_id_type
@@ -49,168 +45,6 @@ def get_t17_support_forward_channel() -> discord.TextChannel | None:
         logging.error("T17 Support forward channel is not a text channel")
         channel = None
     return channel
-
-
-HLL_GAME_PILL = "".join(
-    [
-        Emojis.PILL_HLL_1,
-        Emojis.PILL_HLL_2,
-        Emojis.PILL_HLL_3,
-        Emojis.PILL_HLL_4,
-        Emojis.PILL_HLL_5,
-    ]
-)
-
-HLLV_GAME_PILL = "".join(
-    [
-        Emojis.PILL_HLLV_1,
-        Emojis.PILL_HLLV_2,
-        Emojis.PILL_HLLV_3,
-        Emojis.PILL_HLLV_4,
-        Emojis.PILL_HLLV_5,
-    ]
-)
-
-
-def get_game_pill(game: Game) -> str:
-    return game_switch(game, HLL_GAME_PILL, HLLV_GAME_PILL)
-
-
-# TODO: Add more emojis
-def get_player_platform_emoji(
-    platform: PlayerPlatform | None, server_type: Platform, game: Game
-) -> str | None:
-    if platform == PlayerPlatform.STEAM:
-        return Emojis.STEAM
-
-    elif server_type == Platform.PC:
-        return Emojis.EPIC_XBOX
-
-    return None
-
-
-async def get_report_embed(
-    report: schemas.ReportWithToken,
-    responses: list[schemas.PendingResponse] | None = None,
-    stats: dict[int, schemas.ResponseStats] | None = None,
-    with_footer: bool = True,
-    with_eos_ids: bool = False,
-) -> discord.Embed:
-    embed = discord.Embed(
-        colour=discord.Colour.dark_theme(),
-        description=esc_md(report.body).strip() + "\n### " + get_game_pill(report.game),
-    )
-    embed.set_author(
-        icon_url=bot.user.avatar.url if bot.user.avatar else None,  # type: ignore
-        name="\n".join(
-            ReportReasonFlag(report.reasons_bitflag).to_list(
-                report.reasons_custom, with_emoji=True
-            )
-        ),
-    )
-
-    if responses and len(responses) != len(report.players):
-        raise ValueError(
-            f"Expected {len(report.players)} responses but got {len(responses)}"
-        )
-
-    response = None
-    for i, player in enumerate(report.players, 1):
-        player_id_type = get_player_id_type(player.player_id)
-        is_steam = player_id_type == PlayerIDType.STEAM_64_ID
-
-        if responses:
-            response = responses[i - 1]  # i starts at 1
-
-        name = f"**`{i}.`** {esc_md(player.player_name)}"
-        if response:
-            if response.banned is True:
-                name = f"**`{i}.`**{Emojis.HIGHLIGHT_RED}{esc_md(player.player_name)}"
-            elif response.banned is False:
-                name = f"**`{i}.`**{Emojis.HIGHLIGHT_GREEN}{esc_md(player.player_name)}"
-
-        emoji = get_player_platform_emoji(
-            player.player.platform, report.server_type, report.game
-        )
-        if emoji:
-            value = f"{emoji} *`{player.player_id}`*"
-        else:
-            value = f"*`{player.player_id}`*"
-
-        if with_eos_ids and not is_steam:
-            value += f"\n-# {Emojis.EASY_ANTI_CHEAT}"
-            value += (
-                f"*`{player.player.hll_eos_id}`*"
-                if player.player.hll_eos_id
-                else "No EOS ID known"
-            )
-
-        if stats and (stat := stats.get(player.id)):
-            num_responses = stat.num_banned + stat.num_rejected
-            if num_responses:
-                rate = stat.num_banned / num_responses
-                if rate >= 0.9:
-                    emoji = Emojis.TICK_YES
-                elif rate >= 0.7:
-                    emoji = Emojis.TICK_MAYBE
-                elif rate >= 0.5 or num_responses <= 5:
-                    emoji = Emojis.TICK_NO
-                else:
-                    emoji = "💀"
-
-                value += f"\n{emoji} Banned by **{rate:.0%}** ({stat.num_banned}/{num_responses})"
-
-                reject_reasons = [
-                    (reject_reason.value, amount)
-                    for reject_reason, amount in stat.reject_reasons.items()
-                ]
-                reject_reasons.append(
-                    ("Unbanned", stat.num_rejected - sum(stat.reject_reasons.values()))
-                )
-
-                for reject_reason, amount in sorted(
-                    reject_reasons, key=lambda x: x[1], reverse=True
-                ):
-                    if amount > 0:
-                        value += f"\n-# {Emojis.ARROW_DOWN_RIGHT}{Emojis.TICK_NO} {amount}x **{reject_reason}**"
-
-        if response and response.responded_by:
-            value += f"\n-# Responded by **{esc_md(response.responded_by)}** {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
-
-        links = []
-        if player_id_type == PlayerIDType.STEAM_64_ID:
-            links.append(
-                format_url(
-                    "Steam",
-                    f"https://steamcommunity.com/profiles/{player.player_id}",
-                )
-            )
-
-        bm_rcon_url = player.player.bm_rcon_url
-        if bm_rcon_url:
-            links.append(format_url("BM", bm_rcon_url))
-
-        links.append(
-            format_url("HLLR", f"https://hllrecords.com/profiles/{player.player_id}")
-        )
-
-        value += "\n-# " + " | ".join(links)
-
-        embed.add_field(name=name, value=value, inline=True)
-
-    if with_footer:
-        user = await bot.get_or_fetch_member(report.token.admin_id, strict=False)
-        avatar_url = user.avatar.url if user and user.avatar else None
-
-        admin_name = await get_admin_name(report.token.admin)
-
-        embed.timestamp = report.created_at
-        embed.set_footer(
-            text=f"Report by {admin_name} of {report.token.community.name} • {report.token.community.contact_url}",
-            icon_url=avatar_url,
-        )
-
-    return embed
 
 
 def get_alert_embed(

@@ -13,7 +13,7 @@ from barricade.crud.responses import get_community_responses_to_report
 from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models
 from barricade.discord import bot
-from barricade.discord.views.player_review import PlayerReviewView
+from barricade.discord.views.report_review import get_report_review_view
 from barricade.enums import Game
 from barricade.exceptions import AlreadyExistsError
 from barricade.logger import get_logger
@@ -272,14 +272,15 @@ async def expire_bans_of_player(
                 community_id=community_id,
             )
 
-            view = PlayerReviewView(responses, watchlisted_player_ids)
-            embed = await view.get_embed(report, responses)
+            view = await get_report_review_view(
+                report, responses, watchlisted_player_ids
+            )
 
             try:
                 message = bot.get_partial_message(
                     db_message.channel_id, db_message.message_id
                 )
-                await message.edit(embed=embed, view=view)
+                await message.edit(view=view)
             except discord.NotFound:
                 logger = get_logger(community_id)
                 logger.warning(

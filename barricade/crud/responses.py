@@ -177,6 +177,7 @@ async def get_pending_responses(
             models.PlayerReportResponse.pr_id,
             models.PlayerReportResponse.reject_reason,
             models.PlayerReportResponse.banned,
+            models.PlayerReportResponse.responded_at,
             models.PlayerReportResponse.responded_by,
         )
         .join(models.PlayerReport)
@@ -192,6 +193,7 @@ async def get_pending_responses(
 
         response.banned = row.banned
         response.reject_reason = row.reject_reason
+        response.responded_at = row.responded_at
         response.responded_by = row.responded_by
 
     return list(responses.values())

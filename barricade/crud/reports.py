@@ -15,7 +15,7 @@ from barricade.discord.audit import (
     audit_report_edit,
     audit_token_create,
 )
-from barricade.discord.reports import get_report_channel, get_report_embed
+from barricade.discord.reports import get_report_channel
 from barricade.exceptions import AlreadyExistsError, NotFoundError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
@@ -286,9 +286,13 @@ async def create_report(
 
     report = schemas.ReportWithToken.model_validate(db_report)
 
-    embed = await get_report_embed(report)
+    from barricade.discord.views.report_public_review import (
+        get_report_public_review_view,
+    )
+
+    view = await get_report_public_review_view(report)
     channel = get_report_channel(report.game)
-    message = await channel.send(embed=embed)
+    message = await channel.send(view=view)
     db_report.message_id = message.id
 
     await db.commit()

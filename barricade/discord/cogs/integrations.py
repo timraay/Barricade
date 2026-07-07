@@ -59,7 +59,7 @@ class IntegrationsCog(commands.Cog):
         try:
             num_success, num_total = await integration.repopulate()
         except Exception as e:
-            embed = get_error_embed_from_exc(e)
+            embed = get_error_embed_from_exc(interaction, e)
         else:
             embed = get_success_embed(
                 title="Repopulated ban list!",

@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 from barricade import schemas
 from barricade.constants import DISCORD_AUDIT_CHANNEL_ID
-from barricade.discord.reports import get_report_channel, get_report_embed
+from barricade.discord.reports import get_report_channel
+from barricade.discord.views.report import get_plain_report_view
 
 from .bot import bot
 
@@ -89,25 +90,43 @@ def get_avatar_url(user_id: int | None):
     return user.display_avatar.url
 
 
-async def _audit(*embeds: discord.Embed):
+def get_audit_channel() -> discord.TextChannel | None:
     if not DISCORD_AUDIT_CHANNEL_ID:
-        return
+        return None
     channel = bot.get_channel(DISCORD_AUDIT_CHANNEL_ID)
     if not channel:
         logging.warning(
-            "Tried to send to audit but channel with ID %s could not be found",
+            "Tried to get audit channel but channel with ID %s could not be found",
             DISCORD_AUDIT_CHANNEL_ID,
         )
-        return
+        return None
     elif not isinstance(channel, discord.TextChannel):
         logging.warning(
-            "Tried to send to audit but channel with ID %s is not a text channel",
+            "Tried to get audit channel but channel with ID %s is not a text channel",
             DISCORD_AUDIT_CHANNEL_ID,
         )
+        return None
+    return channel
+
+
+async def _audit(*embeds: discord.Embed):
+    channel = get_audit_channel()
+    if not channel:
         return
 
     try:
         await channel.send(embeds=embeds)
+    except Exception:
+        logging.exception("Failed to audit message")
+
+
+async def _audit_v2(view: discord.ui.LayoutView):
+    channel = get_audit_channel()
+    if not channel:
+        return
+
+    try:
+        await channel.send(view=view)
     except Exception:
         logging.exception("Failed to audit message")
 
@@ -311,6 +330,7 @@ async def audit_report_delete(
     await add_admin_field(embed, report.token.admin)
     embed.add_field(name="Report", value="See below")
     payload = get_payload_embed(schemas.SafeReportWithToken(**report.model_dump()))
-    report_embed = await get_report_embed(report, stats=stats, with_footer=False)
+    report_view = await get_plain_report_view(report, stats=stats)
 
-    await _audit(embed, payload, report_embed)
+    await _audit(embed, payload)
+    await _audit_v2(report_view)

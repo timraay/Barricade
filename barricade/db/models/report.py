@@ -32,6 +32,8 @@ class Report(ModelBase):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(True), server_default=func.now()
     )
+    edited_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(True))
+    edited_by: Mapped[str | None] = mapped_column(String)
     reasons_bitflag: Mapped[int] = mapped_column(Integer)
     reasons_custom: Mapped[str | None]
     body: Mapped[str]

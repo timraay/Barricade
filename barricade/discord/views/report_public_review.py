@@ -7,14 +7,14 @@ from barricade import schemas
 from barricade.crud.reports import get_report_by_id
 from barricade.crud.responses import bulk_get_response_stats
 from barricade.db import session_factory
-from barricade.discord.reports import get_report_embed
-from barricade.discord.utils import CustomException, View, handle_error_wrap
+from barricade.discord.utils import CustomException, LayoutView, handle_error_wrap
+from barricade.discord.views.report import get_plain_report_view
 from barricade.enums import Emojis
 
 
-class T17SupportPlayerReportResponseButton(
+class ReportPublicReviewButton(
     discord.ui.DynamicItem[discord.ui.Button],
-    template=r"t17prr:(?P<command>\w+):(?P<report_id>\d+)",
+    template=r"publicprr:(?P<command>\w+):(?P<report_id>\d+)",
 ):
     def __init__(
         self,
@@ -25,7 +25,7 @@ class T17SupportPlayerReportResponseButton(
         self.command = command
         self.report_id = report_id
 
-        button.custom_id = f"t17prr:{self.command}:{self.report_id}"
+        button.custom_id = f"publicprr:{self.command}:{self.report_id}"
 
         super().__init__(button)
 
@@ -62,28 +62,25 @@ class T17SupportPlayerReportResponseButton(
             report = schemas.ReportWithToken.model_validate(db_report)
             stats = await bulk_get_response_stats(db, report.players)
 
-        view = T17SupportPlayerReviewView(report=report)
-        embed = await T17SupportPlayerReviewView.get_embed(report, stats=stats)
-        await interaction.response.edit_message(embed=embed, view=view)
+        view = await get_report_public_review_view(report, stats=stats)
+        await interaction.response.edit_message(view=view)
 
 
-class T17SupportPlayerReviewView(View):
-    def __init__(self, report: schemas.ReportWithToken):
-        super().__init__(timeout=None)
-        self.add_item(
-            T17SupportPlayerReportResponseButton(
-                button=discord.ui.Button(
-                    emoji=Emojis.REFRESH, style=ButtonStyle.gray, row=1
-                ),
-                command="refresh",
-                report_id=report.id,
-            )
-        )
-
-    @staticmethod
-    async def get_embed(
-        report: schemas.ReportWithToken,
-        stats: dict[int, schemas.ResponseStats] | None = None,
-    ):
-        embed = await get_report_embed(report, stats=stats, with_eos_ids=True)
-        return embed
+async def get_report_public_review_view(
+    report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
+) -> LayoutView:
+    view = await get_plain_report_view(
+        report=report,
+        stats=stats,
+        with_eos_ids=True,
+        refresh_button=ReportPublicReviewButton(
+            button=discord.ui.Button(
+                emoji=Emojis.REFRESH,
+                style=ButtonStyle.gray,
+            ),
+            command="refresh",
+            report_id=report.id,
+        ),
+    )
+    return view

@@ -45,14 +45,16 @@ from barricade.discord.communities import (
 from barricade.discord.reports import (
     get_alert_embed,
     get_report_channel,
-    get_report_embed,
     get_t17_support_forward_channel,
 )
 from barricade.discord.utils import View
-from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
-from barricade.discord.views.report_management import ReportManagementView
-from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
+from barricade.discord.views.report_management import get_report_management_view
+from barricade.discord.views.report_public_review import get_report_public_review_view
+from barricade.discord.views.report_review import get_report_review_view
+from barricade.discord.views.report_t17_support_review import (
+    get_report_t17_support_review_view,
+)
 from barricade.enums import PlayerAlertType, PlayerIDType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
@@ -117,12 +119,12 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
 @add_hook(EventHooks.report_edit)
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
-        embed = await get_report_embed(report)
+        view = await get_report_public_review_view(report)
         channel = get_report_channel(report.game)
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
-        await message.edit(embed=embed)
+        await message.edit(view=view)
     except discord.HTTPException:
         pass
 
@@ -358,12 +360,13 @@ class PlayerAlert:
             if not message:
                 # Message doesn't exist and couldn't be sent to forward channel either.
                 # Try sending to alerts channel instead.
-                view = PlayerReviewView(
-                    responses=responses,
+                view = await get_report_review_view(
+                    report,
+                    responses,
                     watchlisted_player_ids=watchlisted_player_ids,
+                    stats=stats,
                 )
-                embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
-                message = await channel.send(embed=embed, view=view)
+                message = await channel.send(view=view)
 
             if message:
                 # Remember the message
@@ -639,44 +642,53 @@ async def send_or_edit_report_review_message(
         raise ValueError("Report owner should not be able to review their own report")
 
     async with session_factory.begin() as db:
-        view = PlayerReviewView(
-            responses=responses,
+        view = await get_report_review_view(
+            report,
+            responses,
             watchlisted_player_ids=watchlisted_player_ids or set(),
+            stats=stats,
         )
-        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         return await send_or_edit_message(
             db,
             report=report,
             community=community,
             message_type=ReportMessageType.REVIEW,
             channel=get_forward_channel(community),
-            embed=embed,
             view=view,
         )
 
 
 async def send_or_edit_report_management_message(
     report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
 ):
     community = report.token.community
     admin = report.token.admin
 
     user = await bot.get_or_fetch_member(admin.discord_id)
-    content = f"{user.mention} your report was submitted! (ID: #{report.id})"
+    view = await get_report_management_view(report, stats=stats)
+
+    # Insert message at the start of the view.
+    # This requires temporarily removing all existing elements.
+    view_items = view.children
+    view.clear_items()
+    view.add_item(
+        discord.ui.TextDisplay(
+            f"{user.mention} your report was submitted! (ID: #{report.id})"
+        )
+    )
+    for item in view_items:
+        view.add_item(item)
 
     async with session_factory.begin() as db:
-        view = ReportManagementView(report)
-        embed = await ReportManagementView.get_embed(report)
         return await send_or_edit_message(
             db,
             report=report,
             community=community,
             message_type=ReportMessageType.MANAGE,
             channel=get_confirmations_channel(community),
-            embed=embed,
             view=view,
             admin=admin,
-            content=content,
             allowed_mentions=discord.AllowedMentions(users=[user]),
         )
 
@@ -686,15 +698,13 @@ async def send_or_edit_t17_support_report_review_message(
     stats: dict[int, schemas.ResponseStats] | None = None,
 ):
     async with session_factory.begin() as db:
-        view = T17SupportPlayerReviewView(report)
-        embed = await T17SupportPlayerReviewView.get_embed(report, stats=stats)
+        view = await get_report_t17_support_review_view(report, stats=stats)
         return await send_or_edit_message(
             db,
             report=report,
             community=None,
             message_type=ReportMessageType.T17_SUPPORT,
             channel=get_t17_support_forward_channel(),
-            embed=embed,
             view=view,
         )
 
@@ -705,9 +715,7 @@ async def send_or_edit_message(
     community: schemas.CommunityRef | None,
     message_type: ReportMessageType,
     channel: discord.TextChannel | None,
-    embed: discord.Embed,
-    view: discord.ui.View,
-    content: str | None = None,
+    view: discord.ui.LayoutView,
     admin: schemas.AdminRef | None = None,
     allowed_mentions: discord.AllowedMentions = discord.AllowedMentions.none(),  # noqa: B008
 ):
@@ -734,8 +742,6 @@ async def send_or_edit_message(
         try:
             # Edit the message
             message = await message.edit(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )
@@ -749,8 +755,6 @@ async def send_or_edit_message(
         try:
             # Send message
             message = await channel.send(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )
@@ -777,8 +781,6 @@ async def send_or_edit_message(
         try:
             user = await bot.get_or_fetch_member(admin.discord_id)
             message = await user.send(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )

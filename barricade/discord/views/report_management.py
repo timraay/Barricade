@@ -12,16 +12,17 @@ from barricade.crud.reports import delete_report, get_report_by_id
 from barricade.crud.responses import bulk_get_response_stats
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
-from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
+    LayoutView,
     View,
     format_url,
     get_danger_embed,
     get_success_embed,
     handle_error_wrap,
 )
+from barricade.discord.views.report import get_plain_report_view
 from barricade.enums import Emojis
 from barricade.urls import get_report_edit_url
 
@@ -74,9 +75,8 @@ class ReportManagementButton(
             match self.command:
                 case "refresh":
                     stats = await bulk_get_response_stats(db, report.players)
-                    view = ReportManagementView(report)
-                    embed = await view.get_embed(report, stats=stats)
-                    await interaction.edit_original_response(embed=embed, view=view)
+                    view = await get_report_management_view(report, stats=stats)
+                    await interaction.edit_original_response(view=view)
 
                 case "del":
 
@@ -144,45 +144,50 @@ class ReportManagementButton(
                     raise ValueError(f"Unknown command {self.command!r}")
 
 
-class ReportManagementView(View):
-    def __init__(self, report: schemas.ReportRef):
-        super().__init__(timeout=None)
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.blurple,
-                    label="Edit report",
-                ),
-                command="edit",
-                report_id=report.id,
-            )
-        )
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.red,
-                    label="Delete report",
-                ),
-                command="del",
-                report_id=report.id,
-            )
-        )
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.grey,
-                    emoji=Emojis.REFRESH,
-                ),
-                command="refresh",
-                report_id=report.id,
-            )
-        )
+async def get_report_management_view(
+    report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
+    with_refresh_button: bool = True,
+) -> LayoutView:
+    action_row = discord.ui.ActionRow()
 
-    @staticmethod
-    async def get_embed(
-        report: schemas.ReportWithToken,
-        stats: dict[int, schemas.ResponseStats] | None = None,
-    ):
-        embed = await get_report_embed(report, stats=stats, with_footer=False)
-        embed.color = discord.Colour(0xFEE75C)  # yellow
-        return embed
+    action_row.add_item(
+        ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.blurple,
+                label="Edit report",
+            ),
+            command="edit",
+            report_id=report.id,
+        )
+    )
+    action_row.add_item(
+        ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.red,
+                label="Delete report",
+            ),
+            command="del",
+            report_id=report.id,
+        )
+    )
+
+    # Create view
+    view = await get_plain_report_view(
+        report,
+        stats=stats,
+        container_color=discord.Colour(0xFEE75C),  # yellow
+        action_row=action_row,
+        refresh_button=ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.grey,
+                emoji=Emojis.REFRESH,
+            ),
+            command="refresh",
+            report_id=report.id,
+        )
+        if with_refresh_button
+        else None,
+    )
+
+    return view

@@ -51,27 +51,29 @@ class Bot(commands.Bot):
         await sync_commands()
 
         from barricade.discord.views.enroll import EnrollAcceptView, EnrollView
-        from barricade.discord.views.player_review import (
-            PlayerReportResponseButton,
-            PlayerReportSelect,
-            PlayerToggleWatchlistButton,
-        )
         from barricade.discord.views.report_management import ReportManagementButton
-        from barricade.discord.views.submit_report import GetSubmissionURLView
-        from barricade.discord.views.t17_support_player_review import (
-            T17SupportPlayerReportResponseButton,
+        from barricade.discord.views.report_public_review import (
+            ReportPublicReviewButton,
         )
+        from barricade.discord.views.report_review import (
+            PlayerToggleWatchlistButton,
+            ReportReviewButton,
+        )
+        from barricade.discord.views.report_t17_support_review import (
+            ReportT17SupportReviewButton,
+        )
+        from barricade.discord.views.submit_report import GetSubmissionURLView
 
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
         self.add_view(GetSubmissionURLView(Platform.PC))
         self.add_view(GetSubmissionURLView(Platform.CONSOLE))
         self.add_dynamic_items(
-            PlayerReportResponseButton,
+            ReportReviewButton,
             PlayerToggleWatchlistButton,
-            PlayerReportSelect,
             ReportManagementButton,
-            T17SupportPlayerReportResponseButton,
+            ReportPublicReviewButton,
+            ReportT17SupportReviewButton,
         )
 
     @property
