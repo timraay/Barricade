@@ -95,33 +95,31 @@ def get_text_channel(
     return channel
 
 
-def get_forward_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
-    return get_text_channel(community.forward_guild_id, community.forward_channel_id)
+def get_reports_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
+    return get_text_channel(community.guild_id, community.hll_reports_channel_id)
 
 
 def get_confirmations_channel(
     community: schemas.CommunityRef,
 ) -> discord.TextChannel | None:
-    if community.confirmations_channel_id is None:
-        return get_forward_channel(community)
+    if community.hll_confirmations_channel_id is None:
+        return get_reports_channel(community)
 
-    return get_text_channel(
-        community.forward_guild_id, community.confirmations_channel_id
-    )
+    return get_text_channel(community.guild_id, community.hll_confirmations_channel_id)
 
 
 def get_alerts_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
-    if community.alerts_channel_id is None:
-        return get_forward_channel(community)
+    if community.hll_alerts_channel_id is None:
+        return get_reports_channel(community)
 
-    return get_text_channel(community.forward_guild_id, community.alerts_channel_id)
+    return get_text_channel(community.guild_id, community.hll_alerts_channel_id)
 
 
 def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
     role_id = (
-        community.admin_role_id
-        if community.alerts_role_id is None
-        else community.alerts_role_id
+        community.hll_admin_role_id
+        if community.hll_alerts_role_id is None
+        else community.hll_alerts_role_id
     )
 
     if role_id:
@@ -131,7 +129,7 @@ def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
 
 
 def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
-    channel = get_forward_channel(community)
+    channel = get_reports_channel(community)
     if not channel:
         return
     safe_create_task(
@@ -146,12 +144,12 @@ async def assert_has_admin_role(
     member: discord.Member, community: schemas.CommunityRef
 ):
     # Make sure user has the Admin role
-    if not community.admin_role_id:
+    if not community.hll_admin_role_id:
         raise CustomException(
             "You are not permitted to do that!",
             f"Ask <@{community.owner_id}> to configure an Admin role.",
         )
-    if not discord.utils.get(member.roles, id=community.admin_role_id):  # type: ignore
+    if not discord.utils.get(member.roles, id=community.hll_admin_role_id):  # type: ignore
         raise CustomException(
             "You are not permitted to do that!",
             "You do not have this community's configured Admin role.",

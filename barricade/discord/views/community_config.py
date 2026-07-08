@@ -1,9 +1,10 @@
 import re
 from collections.abc import Callable
 from functools import partial
-from typing import TypeVar, assert_never
+from typing import Generic, TypeVar, assert_never
 
 import discord
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.config import (
@@ -12,11 +13,16 @@ from barricade.config import (
     ConfigOptionCategory,
     ConfigOptionType,
 )
-from barricade.crud.communities import get_community_by_id
+from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.communities import get_text_channel
-from barricade.discord.utils import CustomException, LayoutView, handle_error_wrap
-from barricade.enums import ReportReasonFlag
+from barricade.discord.utils import (
+    CustomException,
+    LayoutView,
+    Modal,
+    handle_error_wrap,
+)
+from barricade.enums import ReportReasonDetails, ReportReasonFlag
 
 T = TypeVar("T")
 
@@ -70,12 +76,51 @@ class CommunityConfigCategoryButton(
         await interaction.response.edit_message(view=view)
 
 
-# class CommunityConfigEditButton(
-#     discord.ui.DynamicItem[discord.ui.Button],
-#     template=r"community:(?P<community_id>):config:edit:(?P<field>)",
-# ):
-#     # TODO
-#     pass
+class CommunityConfigEditButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"community:(?P<community_id>\d+):config:edit:(?P<option_id>\w+)",
+):
+    def __init__(
+        self,
+        community_id: int,
+        option: ConfigOption,
+        button: discord.ui.Button | None = None,
+    ):
+        self.community_id = community_id
+        self.option = option
+
+        if not button:
+            button = discord.ui.Button(
+                style=discord.ButtonStyle.blurple,
+                label="Edit",
+            )
+        button.custom_id = f"community:{self.community_id}:config:edit:{self.option.id}"
+        super().__init__(button)
+
+    @classmethod
+    async def from_custom_id(  # type: ignore
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Button,
+        match: re.Match[str],
+        /,
+    ):
+        return cls(
+            community_id=int(match["community_id"]),
+            option=CONFIG_OPTIONS[match["option_id"]],
+            button=item,
+        )
+
+    @handle_error_wrap
+    async def callback(self, interaction: discord.Interaction):
+        async with session_factory() as db:
+            db_community = await get_community_by_id(db, self.community_id)
+            if not db_community:
+                raise CustomException("Community not found")
+            community = schemas.Community.model_validate(db_community)
+
+        modal = get_community_config_edit_modal(community, self.option)
+        await interaction.response.send_modal(modal)
 
 
 class CommunityConfigView(LayoutView):
@@ -111,7 +156,7 @@ class CommunityConfigView(LayoutView):
         container.add_item(discord.ui.TextDisplay(f"## {self.category.value}"))
 
         is_first_option = True
-        for option in CONFIG_OPTIONS:
+        for option in CONFIG_OPTIONS.values():
             if option.category != self.category:
                 continue
 
@@ -129,14 +174,11 @@ class CommunityConfigView(LayoutView):
             container.add_item(title_display)
 
             value_string = option_values_to_string(self.community, option)
-            value_display = discord.ui.TextDisplay(f">>> {value_string}")
+            value_display = discord.ui.TextDisplay(value_string)
             container.add_item(
                 discord.ui.Section(
                     value_display,
-                    accessory=discord.ui.Button(
-                        style=discord.ButtonStyle.blurple,
-                        label="Edit",
-                    ),
+                    accessory=CommunityConfigEditButton(self.community.id, option),  # type: ignore
                 )
             )
 
@@ -150,33 +192,38 @@ def get_community_config_view(
     return CommunityConfigView(community, category)
 
 
+def quote_block(value: str) -> str:
+    # Start each line with "> "
+    return "> " + "\n> ".join(value.split("\n"))
+
+
 def combine_option_value_strings(
-    value_to_string_func: Callable[[T], str],
-    value1: T,
+    value_to_string_func: Callable[[T | None], str],
+    value1: T | None,
     value2: T | None,
     can_inherit_from: str | None = None,
-    multiline: bool = False,
+    multiline: bool = True,
 ) -> str:
     if value1 is None and value2 is None and can_inherit_from:
         # Inherit from parent
-        return f"Same as **{can_inherit_from}**"
+        return f"-# > Same as **{can_inherit_from}**"
 
-    if value2 is None:
-        # value2 inherits from value1
-        return value_to_string_func(value1)
+    if value1 == value2:
+        # value is equal for both games
+        return f">>> {value_to_string_func(value1)}"
 
     display1 = value_to_string_func(value1)
     display2 = value_to_string_func(value2)
 
     if multiline:
-        return f"{display1}\n-# **HLL (WWII)\n{display2}\n-# **HLL: Vietnam**"
-    return f"{display1} {display2}\n-# **HLL (WWII) | HLL: Vietnam"
+        return f"{quote_block(display1)}\n-# **HLL (WWII)**\n{quote_block(display2)}\n-# **HLL: Vietnam**"
+    return f"> {display1} {display2}\n-# **HLL (WWII)**  |  **HLL: Vietnam**"
 
 
 def _text_channel_value_to_string(
     community: schemas.Community, value: int | None
 ) -> str:
-    channel = get_text_channel(community.forward_guild_id, value)
+    channel = get_text_channel(community.guild_id, value)
     if channel:
         return channel.mention
     elif value:
@@ -214,11 +261,11 @@ def role_values_to_string(
 
 
 def _reason_filter_value_to_string(value: ReportReasonFlag | None) -> str:
-    if not value:
+    if not value or value == ReportReasonFlag.all():
         return "All"
     elif value == 0:
         return "None"
-    return "\n- ".join(value.to_list(custom_msg="Custom", with_emoji=True))
+    return "-# - " + "\n-# - ".join(value.to_list(custom_msg="Custom", with_emoji=True))
 
 
 def reason_filter_values_to_string(
@@ -260,6 +307,325 @@ def option_values_to_string(
             return reason_filter_values_to_string(
                 community, value1, value2, can_inherit_from=option.can_inherit_from
             )
+        case _:
+            assert_never(option.type)
+            raise ValueError(f"Unknown option type: {option.type}")
+
+
+class _CommunityConfigEditModal(Generic[T], Modal):
+    def __init__(
+        self,
+        community: schemas.Community,
+        option: ConfigOption[T],
+    ):
+        super().__init__(title=f"Edit {option.name}")
+        self.community = community
+        self.option = option
+
+        value1, value2 = self.option.get_values(self.community)
+        self._is_split = self.can_split and value1 != value2
+
+        self.setup_modal()
+
+    def setup_modal(self) -> None:
+        self.clear_items()
+
+        self.add_item(
+            discord.ui.TextDisplay(
+                f"### {self.option.name}\n*{self.option.description}*"
+            )
+        )
+
+        is_inheriting = self.is_inheriting
+        is_split = self.is_split
+
+        self.inherit_checkbox = discord.ui.Checkbox(default=is_inheriting)
+        self.split_checkbox = discord.ui.Checkbox(default=is_split)
+        self.setup_modal_components()
+
+        component1, component2 = self.get_components()
+
+        if not is_inheriting:
+            if self.is_split:
+                self.add_item(
+                    discord.ui.Label(
+                        text="HLL (WWII)",
+                        component=component1,
+                    )
+                )
+                self.add_item(
+                    discord.ui.Label(
+                        text="HLL: Vietnam",
+                        component=component2,
+                    )
+                )
+            else:
+                self.add_item(
+                    discord.ui.Label(
+                        text="New value",
+                        component=component1,
+                    )
+                )
+
+        if self.can_split and not is_split:
+            self.add_item(
+                discord.ui.Label(
+                    text="Show more options",
+                    description="Add separate controls for HLL (WWII) and HLL: Vietnam",
+                    component=self.split_checkbox,
+                )
+            )
+
+        if self.can_inherit:
+            self.add_item(
+                discord.ui.Label(
+                    text="Inherit values",
+                    description=f"Use the same {'values' if self.option.is_game_dependent() else 'value'} as {self.option.can_inherit_from}",
+                    component=self.inherit_checkbox,
+                )
+            )
+
+    @property
+    def can_inherit(self) -> bool:
+        # Modal submit interactions cannot open a new model.
+        # Setting this to false disables the controls that depend on this functionality.
+        return False
+        return self.option.can_inherit_from is not None
+
+    @property
+    def is_inheriting(self) -> bool:
+        if not self.can_inherit:
+            return False
+
+        value1, value2 = self.option.get_values(self.community)
+        return value1 is None and value2 is None
+
+    @property
+    def can_split(self) -> bool:
+        return self.option.is_game_dependent() and not self.is_inheriting
+
+    @property
+    def is_split(self) -> bool:
+        if not self.can_split:  # noqa: SIM103
+            return False
+
+        # Modal submit interactions cannot open a new model.
+        # Setting this to false disables the controls that depend on this functionality.
+        return True
+        return self._is_split
+
+    def setup_modal_components(self) -> None:
+        raise NotImplementedError
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        raise NotImplementedError
+
+    def _get_values(
+        self, raw_value1: T, raw_value2: T | None
+    ) -> tuple[T | None, T | None]:
+        if self.inherit_checkbox.value:
+            return None, None
+
+        if not self.option.is_game_dependent():
+            return raw_value1, None
+        elif self.is_split:
+            return raw_value1, raw_value2
+        else:
+            return raw_value1, raw_value1
+
+    def get_values(self) -> tuple[T | None, T | None]:
+        raise NotImplementedError
+
+    async def refresh_community(self, db: AsyncSession) -> schemas.Community:
+        db_community = await get_community_by_id(db, self.community.id)
+        if not db_community:
+            raise CustomException("Community not found")
+        self.community = schemas.Community.model_validate(db_community)
+        return self.community
+
+    async def save_community(self, db: AsyncSession):
+        db_community = await get_community_by_id(db, self.community.id)
+        if not db_community:
+            raise CustomException("Community not found")
+        await edit_community(
+            db, db_community, schemas.CommunityEditParams.model_validate(self.community)
+        )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # was_inheriting = self.is_inheriting
+        # was_split = self.is_split
+
+        # Update community
+        async with session_factory.begin() as db:
+            await self.refresh_community(db)
+
+            value1, value2 = self.get_values()
+            self.option.set_values(self.community, value1, value2)
+
+            await self.save_community(db)
+
+        view = get_community_config_view(self.community, self.option.category)
+
+        # Modal submit interactions cannot open a new model.
+        """
+        if was_inheriting != self.is_inheriting:
+            # If inheritance was toggled on/off, send a new modal
+            self.setup_modal()
+            await interaction.response.send_modal(self)
+            # Also update the original message in case the user cancels the modal
+            await interaction.edit_original_response(view=view)
+        elif was_split is False and self.split_checkbox.value is True:
+            # If split was toggled on, send a new modal
+            self._is_split = True
+            self.setup_modal()
+            await interaction.response.send_modal(self)
+            # Also update the original message in case the user cancels the modal
+            await interaction.edit_original_response(view=view)
+        else:
+            # Otherwise refresh the config view
+            await interaction.response.edit_message(view=view)
+        """
+
+        await interaction.response.edit_message(view=view)
+
+
+class CommunityConfigEditTextChannelModal(_CommunityConfigEditModal[int]):
+    def setup_modal_components(self) -> None:
+        value1, value2 = self.option.get_values(self.community)
+
+        self.select1 = discord.ui.ChannelSelect(
+            channel_types=[discord.ChannelType.text],
+            placeholder="No text channel selected",
+            required=False,
+            default_values=[discord.Object(value1)] if value1 else [],
+        )
+
+        self.select2 = discord.ui.ChannelSelect(
+            channel_types=[discord.ChannelType.text],
+            placeholder="No text channel selected",
+            required=False,
+            default_values=[discord.Object(value2)] if value2 else [],
+        )
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        return self.select1, self.select2
+
+    def get_values(self) -> tuple[int | None, int | None]:
+        raw_value1 = self.select1.values[0].id if self.select1.values else 0
+        raw_value2 = self.select2.values[0].id if self.select2.values else 0
+        return self._get_values(raw_value1, raw_value2)
+
+
+class CommunityConfigEditRoleModal(_CommunityConfigEditModal[int | None]):
+    def setup_modal_components(self) -> None:
+        value1, value2 = self.option.get_values(self.community)
+
+        self.select1 = discord.ui.RoleSelect(
+            placeholder="No role selected",
+            required=False,
+            default_values=[discord.Object(value1)] if value1 else [],
+        )
+
+        self.select2 = discord.ui.RoleSelect(
+            placeholder="No role selected",
+            required=False,
+            default_values=[discord.Object(value2)] if value2 else [],
+        )
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        return self.select1, self.select2
+
+    def get_values(self) -> tuple[int | None, int | None]:
+        raw_value1 = self.select1.values[0].id if self.select1.values else 0
+        raw_value2 = self.select2.values[0].id if self.select2.values else 0
+        return self._get_values(raw_value1, raw_value2)
+
+
+class CommunityConfigEditReasonFilterModal(
+    _CommunityConfigEditModal[ReportReasonFlag | None]
+):
+    def setup_modal_components(self) -> None:
+        value1, value2 = self.option.get_values(self.community)
+
+        options = [
+            discord.SelectOption(
+                label=reason.value.pretty_name,
+                emoji=reason.value.emoji,
+                value=reason.value.pretty_name,
+            )
+            for reason in ReportReasonDetails
+        ] + [
+            discord.SelectOption(
+                label="Custom",
+                emoji="🎲",
+                value="Custom",
+            )
+        ]
+
+        select1_options = [option.copy() for option in options]
+        select1_default_values = (
+            value1.to_list(custom_msg="Custom")
+            if value1 and value1 != ReportReasonFlag.all()
+            else []
+        )
+        for option in select1_options:
+            if option.value in select1_default_values:
+                option.default = True
+
+        select2_options = [option.copy() for option in options]
+        select2_default_values = (
+            value2.to_list(custom_msg="Custom")
+            if value2 and value2 != ReportReasonFlag.all()
+            else []
+        )
+        for option in select2_options:
+            if option.value in select2_default_values:
+                option.default = True
+
+        self.select1 = discord.ui.Select(
+            placeholder="All reasons allowed",
+            required=False,
+            min_values=0,
+            max_values=len(options),
+            options=select1_options,
+        )
+
+        self.select2 = discord.ui.Select(
+            placeholder="All reasons allowed",
+            required=False,
+            min_values=0,
+            max_values=len(options),
+            options=select2_options,
+        )
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        return self.select1, self.select2
+
+    def get_values(self) -> tuple[ReportReasonFlag | None, ReportReasonFlag | None]:
+        raw_value1 = (
+            ReportReasonFlag.from_list(self.select1.values)[0]
+            if self.select1.values
+            else ReportReasonFlag.all()
+        )
+        raw_value2 = (
+            ReportReasonFlag.from_list(self.select2.values)[0]
+            if self.select2.values
+            else ReportReasonFlag.all()
+        )
+        return self._get_values(raw_value1, raw_value2)
+
+
+def get_community_config_edit_modal(
+    community: schemas.Community,
+    option: ConfigOption,
+) -> _CommunityConfigEditModal:
+    match option.type:
+        case ConfigOptionType.TEXT_CHANNEL:
+            return CommunityConfigEditTextChannelModal(community, option)
+        case ConfigOptionType.ROLE:
+            return CommunityConfigEditRoleModal(community, option)
+        case ConfigOptionType.REASON_FILTER:
+            return CommunityConfigEditReasonFilterModal(community, option)
         case _:
             assert_never(option.type)
             raise ValueError(f"Unknown option type: {option.type}")

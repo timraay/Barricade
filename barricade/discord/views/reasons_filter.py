@@ -16,7 +16,7 @@ class ReasonsFilterView(View):
     def __init__(self, community: schemas.CommunityRef):
         super().__init__(timeout=300)
         self.community = community
-        self.is_custom = bool(community.reasons_filter)
+        self.is_custom = bool(community.hll_reason_filter)
 
         self.select_all_button = CallableButton(self.select_all, label="All")
         self.select_none_button = CallableButton(self.select_none, label="None")
@@ -60,7 +60,7 @@ class ReasonsFilterView(View):
         self.select_custom_button.style = ButtonStyle.gray
         self.remove_item(self.select_reasons_select)
 
-        if self.community.reasons_filter is None:
+        if self.community.hll_reason_filter is None:
             self.select_all_button.disabled = True
             self.select_all_button.style = ButtonStyle.green
         elif self.is_custom:
@@ -69,9 +69,9 @@ class ReasonsFilterView(View):
             self.add_item(self.select_reasons_select)
             for option in self.select_reasons_select.options:
                 option.default = (
-                    int(option.value) & self.community.reasons_filter
+                    int(option.value) & self.community.hll_reason_filter
                 ) != 0
-        elif self.community.reasons_filter == 0:
+        elif self.community.hll_reason_filter == 0:
             self.select_none_button.disabled = True
             self.select_none_button.style = ButtonStyle.green
 
@@ -96,8 +96,8 @@ class ReasonsFilterView(View):
                 or db_admin.community_id != self.community.id
             ):
                 raise CustomException("You need to be a community admin to do this!")
-            db_admin.community.reasons_filter = filter
-        self.community.reasons_filter = filter
+            db_admin.community.hll_reason_filter = filter
+        self.community.hll_reason_filter = filter
 
     async def select_all(self, interaction: Interaction):
         await self.persist_filter(interaction, None)
@@ -112,7 +112,7 @@ class ReasonsFilterView(View):
         await self.edit(interaction)
 
     async def select_custom(self, interaction: Interaction):
-        if self.community.reasons_filter is None:
+        if self.community.hll_reason_filter is None:
             await self.persist_filter(interaction, ReportReasonFlag.all())
         else:
             await self.persist_filter(interaction, ReportReasonFlag(0))

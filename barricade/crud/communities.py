@@ -191,14 +191,14 @@ async def get_community_by_name(
 async def get_community_by_guild_id(
     db: AsyncSession, guild_id: int, load_relations: bool = False
 ):
-    """Look up a community by its forward Guild ID.
+    """Look up a community by its Guild ID.
 
     Parameters
     ----------
     db : AsyncSession
         An asynchronous database session
     guild_id : int
-        The ID of the forward guild
+        The ID of the guild
     load_relations : bool, optional
         Whether to also load relational properties, by default False
 
@@ -218,7 +218,7 @@ async def get_community_by_guild_id(
 
     stmt = (
         select(models.Community)
-        .where(models.Community.forward_guild_id == guild_id)
+        .where(models.Community.guild_id == guild_id)
         .options(*options)
     )
     return await db.scalar(stmt)

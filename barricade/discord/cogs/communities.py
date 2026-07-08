@@ -12,7 +12,7 @@ from barricade.discord.autocomplete import atcp_community
 from barricade.discord.communities import (
     get_alerts_channel,
     get_confirmations_channel,
-    get_forward_channel,
+    get_reports_channel,
 )
 from barricade.discord.utils import CustomException, get_command_mention
 from barricade.discord.views.channel_confirmation import (
@@ -153,8 +153,8 @@ class CommunitiesCog(commands.Cog):
             await assert_community_guild(db_admin.community, interaction)
 
             if (
-                db_admin.community.forward_guild_id
-                and db_admin.community.forward_guild_id != channel.guild.id
+                db_admin.community.guild_id
+                and db_admin.community.guild_id != channel.guild.id
             ):
                 raise CustomException(
                     "Channel must be in the same server as your Reports feed!",
@@ -199,8 +199,8 @@ class CommunitiesCog(commands.Cog):
             await assert_community_guild(db_admin.community, interaction)
 
             if (
-                db_admin.community.forward_guild_id
-                and db_admin.community.forward_guild_id != channel.guild.id
+                db_admin.community.guild_id
+                and db_admin.community.guild_id != channel.guild.id
             ):
                 raise CustomException(
                     "Channel must be in the same server as your Reports feed!",
@@ -241,8 +241,8 @@ class CommunitiesCog(commands.Cog):
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
 
-            if db_admin.community.forward_guild_id:
-                guild = self.bot.get_guild(db_admin.community.forward_guild_id)
+            if db_admin.community.guild_id:
+                guild = self.bot.get_guild(db_admin.community.guild_id)
                 if guild and guild != role.guild:
                     raise CustomException(
                         "Role must be from the same server as your Reports feed!",
@@ -262,8 +262,8 @@ class CommunitiesCog(commands.Cog):
             assert db_admin.community is not None
             await assert_community_guild(db_admin.community, interaction)
 
-            if db_admin.community.forward_guild_id:
-                guild = self.bot.get_guild(db_admin.community.forward_guild_id)
+            if db_admin.community.guild_id:
+                guild = self.bot.get_guild(db_admin.community.guild_id)
                 if guild and guild != role.guild:
                     raise CustomException(
                         "Role must be from the same server as your feeds!",
@@ -310,53 +310,53 @@ class CommunitiesCog(commands.Cog):
             db_admin = await get_admin(db, interaction.user.id)
             community = schemas.CommunityRef.model_validate(db_admin.community)
 
-            reports_channel = get_forward_channel(community)
+            reports_channel = get_reports_channel(community)
             if reports_channel:
                 reports_channel_mention = reports_channel.mention
-            elif community.forward_channel_id:
+            elif community.hll_reports_channel_id:
                 reports_channel_mention = "Unknown"
             else:
                 reports_channel_mention = "None"
 
             confirmations_channel = get_confirmations_channel(community)
-            if community.confirmations_channel_id is None:
+            if community.hll_confirmations_channel_id is None:
                 confirmations_channel_mention = "Same as **Reports feed**"
             elif confirmations_channel:
                 confirmations_channel_mention = confirmations_channel.mention
-            elif community.confirmations_channel_id:
+            elif community.hll_confirmations_channel_id:
                 confirmations_channel_mention = "Unknown"
             else:
                 confirmations_channel_mention = "None"
 
             alerts_channel = get_alerts_channel(community)
-            if community.alerts_channel_id is None:
+            if community.hll_alerts_channel_id is None:
                 alerts_channel_mention = "Same as **Reports feed**"
             elif alerts_channel:
                 alerts_channel_mention = alerts_channel.mention
-            elif community.alerts_channel_id:
+            elif community.hll_alerts_channel_id:
                 alerts_channel_mention = "Unknown"
             else:
                 alerts_channel_mention = "None"
 
-            if community.admin_role_id:
-                admin_role_mention = f"<@&{community.admin_role_id}>"
+            if community.hll_admin_role_id:
+                admin_role_mention = f"<@&{community.hll_admin_role_id}>"
             else:
                 admin_role_mention = "None"
 
-            if community.alerts_role_id is None:
+            if community.hll_alerts_role_id is None:
                 alerts_role_mention = "Same as **Admin role**"
-            elif community.alerts_role_id:
-                alerts_role_mention = f"<@&{community.alerts_role_id}>"
+            elif community.hll_alerts_role_id:
+                alerts_role_mention = f"<@&{community.hll_alerts_role_id}>"
             else:
                 alerts_role_mention = "None"
 
-            if community.reasons_filter is None:
+            if community.hll_reason_filter is None:
                 reports_filter = "All"
-            elif community.reasons_filter is None:
+            elif community.hll_reason_filter is None:
                 reports_filter = "None"
             else:
                 reports_filter = "\n- ".join(
-                    community.reasons_filter.to_list(
+                    community.hll_reason_filter.to_list(
                         custom_msg="Custom", with_emoji=True
                     )
                 )

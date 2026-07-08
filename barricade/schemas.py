@@ -125,21 +125,32 @@ class _CommunityBase(BaseModel):
     is_pc: bool
     is_console: bool
 
-    forward_guild_id: int | None
-    forward_channel_id: int | None
-    admin_role_id: int | None
-    reasons_filter: ReportReasonFlag | None
-    confirmations_channel_id: int | None
-    alerts_channel_id: int | None
-    alerts_role_id: int | None
+    guild_id: int | None
+    hll_reports_channel_id: int | None
+    hll_alerts_channel_id: int | None
+    hll_confirmations_channel_id: int | None
+    hll_admin_role_id: int | None
+    hll_alerts_role_id: int | None
+    hll_reason_filter: ReportReasonFlag | None
+    hllv_reports_channel_id: int | None
+    hllv_alerts_channel_id: int | None
+    hllv_confirmations_channel_id: int | None
+    hllv_admin_role_id: int | None
+    hllv_alerts_role_id: int | None
+    hllv_reason_filter: ReportReasonFlag | None
 
     @field_serializer(
-        "forward_guild_id",
-        "forward_channel_id",
-        "admin_role_id",
-        "confirmations_channel_id",
-        "alerts_channel_id",
-        "alerts_role_id",
+        "guild_id",
+        "hll_reports_channel_id",
+        "hll_alerts_channel_id",
+        "hll_confirmations_channel_id",
+        "hll_admin_role_id",
+        "hll_alerts_role_id",
+        "hllv_reports_channel_id",
+        "hllv_alerts_channel_id",
+        "hllv_confirmations_channel_id",
+        "hllv_admin_role_id",
+        "hllv_alerts_role_id",
         when_used="json-unless-none",
     )
     def convert_large_int_to_str(value: int):  # type: ignore
@@ -230,12 +241,17 @@ class CommunityRef(_CommunityBase, _ModelFromAttributes):
     owner_id: int | None
 
     @field_serializer(
-        "forward_guild_id",
-        "forward_channel_id",
-        "admin_role_id",
-        "confirmations_channel_id",
-        "alerts_channel_id",
-        "alerts_role_id",
+        "guild_id",
+        "hll_reports_channel_id",
+        "hll_alerts_channel_id",
+        "hll_confirmations_channel_id",
+        "hll_admin_role_id",
+        "hll_alerts_role_id",
+        "hllv_reports_channel_id",
+        "hllv_alerts_channel_id",
+        "hllv_confirmations_channel_id",
+        "hllv_admin_role_id",
+        "hllv_alerts_role_id",
         "owner_id",
         when_used="json-unless-none",
     )
@@ -404,13 +420,19 @@ class AdminCreateParams(_AdminBase):
 class CommunityEditParams(
     _CommunityBase, _ModelFromAttributes, validate_assignment=True
 ):
-    forward_guild_id: int | None
-    forward_channel_id: int | None
-    admin_role_id: int | None
-    reasons_filter: ReportReasonFlag | None
-    confirmations_channel_id: int | None
-    alerts_channel_id: int | None
-    alerts_role_id: int | None
+    guild_id: int | None
+    hll_reports_channel_id: int | None
+    hll_alerts_channel_id: int | None
+    hll_confirmations_channel_id: int | None
+    hll_admin_role_id: int | None
+    hll_alerts_role_id: int | None
+    hll_reason_filter: ReportReasonFlag | None
+    hllv_reports_channel_id: int | None
+    hllv_alerts_channel_id: int | None
+    hllv_confirmations_channel_id: int | None
+    hllv_admin_role_id: int | None
+    hllv_alerts_role_id: int | None
+    hllv_reason_filter: ReportReasonFlag | None
 
     @field_validator("contact_url")
     @classmethod
@@ -421,13 +443,19 @@ class CommunityEditParams(
 class CommunityCreateParams(CommunityEditParams):
     owner_id: int
     owner_name: str
-    forward_guild_id: int | None = None
-    forward_channel_id: int | None = None
-    admin_role_id: int | None = None
-    reasons_filter: ReportReasonFlag | None = None
-    confirmations_channel_id: int | None = None
-    alerts_channel_id: int | None = None
-    alerts_role_id: int | None = None
+    guild_id: int | None = None
+    hll_reports_channel_id: int | None = None
+    hll_alerts_channel_id: int | None = None
+    hll_confirmations_channel_id: int | None = None
+    hll_admin_role_id: int | None = None
+    hll_alerts_role_id: int | None = None
+    hll_reason_filter: ReportReasonFlag | None = None
+    hllv_reports_channel_id: int | None = None
+    hllv_alerts_channel_id: int | None = None
+    hllv_confirmations_channel_id: int | None = None
+    hllv_admin_role_id: int | None = None
+    hllv_alerts_role_id: int | None = None
+    hllv_reason_filter: ReportReasonFlag | None = None
 
     @field_validator("contact_url")
     @classmethod

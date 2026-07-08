@@ -41,7 +41,7 @@ class AdminRoleConfirmationView(View):
             assert db_admin.community is not None
 
             await assert_community_guild(db_admin.community, interaction)
-            db_admin.community.admin_role_id = self.role.id
+            db_admin.community.hll_admin_role_id = self.role.id
             await db.flush()
 
             await interaction.response.edit_message(
@@ -100,7 +100,7 @@ class AlertsRoleConfirmationView(View):
             assert db_admin.community is not None
 
             await assert_community_guild(db_admin.community, interaction)
-            db_admin.community.alerts_role_id = (
+            db_admin.community.hll_alerts_role_id = (
                 self.role.id if self.role else None if self.default else 0
             )
             await db.flush()

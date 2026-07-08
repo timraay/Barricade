@@ -22,79 +22,6 @@ from barricade.constants import DISCORD_GUILD_ID
 from barricade.utils import async_ttl_cache
 
 
-class CallableButton(ui.Button):
-    def __init__(
-        self,
-        callback: Callable[[Interaction], Awaitable[Any]],
-        *args: Any,
-        style: ButtonStyle = ButtonStyle.secondary,
-        label: str | None = None,
-        disabled: bool = False,
-        custom_id: str | None = None,
-        url: str | None = None,
-        emoji: str | Emoji | PartialEmoji | None = None,
-        row: int | None = None,
-        single_use: bool = False,
-        **kwargs: Any,
-    ):
-        super().__init__(
-            style=style,
-            label=label,
-            disabled=disabled,
-            custom_id=custom_id,
-            url=url,
-            emoji=emoji,
-            row=row,
-        )
-        self._callback = callback
-        self._args = args
-        self._kwargs = kwargs
-
-        self.single_use = single_use
-        self._has_been_used = False
-
-    async def callback(self, interaction: Interaction):
-        if self.single_use:
-            if self._has_been_used:
-                raise ExpiredButtonError
-            await self._callback(interaction, *self._args, **self._kwargs)
-            self._has_been_used = True
-
-        else:
-            await self._callback(interaction, *self._args, **self._kwargs)
-
-
-class CallableSelect(ui.Select):
-    def __init__(
-        self,
-        callback: Callable[[Interaction, list[str]], Awaitable[Any]],
-        *args,
-        custom_id: str = MISSING,
-        placeholder: str | None = None,
-        min_values: int = 1,
-        max_values: int = 1,
-        options: list[SelectOption] = MISSING,
-        disabled: bool = False,
-        row: int | None = None,
-        **kwargs,
-    ):
-        super().__init__(
-            custom_id=custom_id,
-            placeholder=placeholder,
-            min_values=min_values,
-            max_values=max_values,
-            options=options,
-            disabled=disabled,
-            row=row,
-        )
-        self._callback = callback
-        self._args = args
-        self._kwargs = kwargs
-
-    async def callback(self, interaction: Interaction):
-        await self._callback(interaction, self.values, *self._args, **self._kwargs)
-
-
 def get_neutral_embed(title: str, description: str | None = None):
     embed = discord.Embed()
     embed.set_author(name=title)
@@ -265,6 +192,98 @@ class LayoutView(ui.LayoutView):
 class Modal(ui.Modal):
     async def on_error(self, interaction: Interaction, error: Exception, /) -> None:
         await handle_error(interaction, error)
+
+
+class CallableButton(ui.Button):
+    def __init__(
+        self,
+        callback: Callable[[Interaction], Awaitable[Any]],
+        *args: Any,
+        style: ButtonStyle = ButtonStyle.secondary,
+        label: str | None = None,
+        disabled: bool = False,
+        custom_id: str | None = None,
+        url: str | None = None,
+        emoji: str | Emoji | PartialEmoji | None = None,
+        row: int | None = None,
+        single_use: bool = False,
+        **kwargs: Any,
+    ):
+        super().__init__(
+            style=style,
+            label=label,
+            disabled=disabled,
+            custom_id=custom_id,
+            url=url,
+            emoji=emoji,
+            row=row,
+        )
+        self._callback = callback
+        self._args = args
+        self._kwargs = kwargs
+
+        self.single_use = single_use
+        self._has_been_used = False
+
+    async def callback(self, interaction: Interaction):
+        if self.single_use:
+            if self._has_been_used:
+                raise ExpiredButtonError
+            await self._callback(interaction, *self._args, **self._kwargs)
+            self._has_been_used = True
+
+        else:
+            await self._callback(interaction, *self._args, **self._kwargs)
+
+
+class CallableSelect(ui.Select):
+    def __init__(
+        self,
+        callback: Callable[[Interaction, list[str]], Awaitable[Any]],
+        *args,
+        custom_id: str = MISSING,
+        placeholder: str | None = None,
+        min_values: int = 1,
+        max_values: int = 1,
+        options: list[SelectOption] = MISSING,
+        disabled: bool = False,
+        row: int | None = None,
+        **kwargs,
+    ):
+        super().__init__(
+            custom_id=custom_id,
+            placeholder=placeholder,
+            min_values=min_values,
+            max_values=max_values,
+            options=options,
+            disabled=disabled,
+            row=row,
+        )
+        self._callback = callback
+        self._args = args
+        self._kwargs = kwargs
+
+    async def callback(self, interaction: Interaction):
+        await self._callback(interaction, self.values, *self._args, **self._kwargs)
+
+
+class CallableModal(ui.Modal):
+    def __init__(
+        self,
+        callback: Callable[[Interaction], Awaitable[Any]],
+        *args,
+        title: str,
+        custom_id: str = MISSING,
+        timeout: float | None = 180.0,
+        **kwargs,
+    ):
+        super().__init__(title=title, custom_id=custom_id, timeout=timeout)
+        self._callback = callback
+        self._args = args
+        self._kwargs = kwargs
+
+    async def on_submit(self, interaction: Interaction):
+        await self._callback(interaction, *self._args, **self._kwargs)
 
 
 @async_ttl_cache(size=100, seconds=60 * 60 * 24)

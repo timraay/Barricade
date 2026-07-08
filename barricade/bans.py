@@ -14,7 +14,7 @@ from barricade.crud.bans import (
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import models, session_factory
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
 from barricade.enums import Game
@@ -39,7 +39,7 @@ async def forward_errors(
             "Failed to forward request: %s", type(e).__name__
         )
         if not excs or isinstance(e, excs):
-            channel = get_forward_channel(community)
+            channel = get_reports_channel(community)
             if not channel:
                 return
 

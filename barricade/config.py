@@ -22,12 +22,17 @@ class ConfigOptionType(StrEnum):
 
 
 class ConfigOption(BaseModel, Generic[T]):
+    id: str
     name: str
     description: str
     type: ConfigOptionType
     category: ConfigOptionCategory
     property_ids: tuple[str, str | None]
     can_inherit_from: str | None = None
+    nullable: bool = False
+
+    def is_game_dependent(self) -> bool:
+        return self.property_ids[1] is not None
 
     @field_validator("property_ids", mode="after")
     @classmethod
@@ -41,14 +46,14 @@ class ConfigOption(BaseModel, Generic[T]):
             raise ValueError(f"Property {property_id2} does not exist on CommunityRef")
         return property_ids
 
-    def get_values(self, community: schemas.CommunityRef) -> tuple[T, T | None]:
+    def get_values(self, community: schemas.CommunityRef) -> tuple[T | None, T | None]:
         property_id1, property_id2 = self.property_ids
         value1 = getattr(community, property_id1)
         value2 = getattr(community, property_id2) if property_id2 else None
         return value1, value2
 
     def set_values(
-        self, community: schemas.CommunityRef, value1: T, value2: T | None = None
+        self, community: schemas.CommunityRef, value1: T | None, value2: T | None = None
     ):
         property_id1, property_id2 = self.property_ids
         setattr(community, property_id1, value1)
@@ -56,53 +61,85 @@ class ConfigOption(BaseModel, Generic[T]):
             setattr(community, property_id2, value2)
 
 
-CONFIG_OPTIONS: list[ConfigOption] = [
-    # Channels
-    ConfigOption(
-        name="Reports Feed",
-        description="The text channel where you receive new reports.",
-        type=ConfigOptionType.TEXT_CHANNEL,
-        category=ConfigOptionCategory.CHANNELS,
-        property_ids=("forward_channel_id", None),
-    ),
-    ConfigOption(
-        name="Alerts Feed",
-        description="The text channel where you receive alerts.",
-        type=ConfigOptionType.TEXT_CHANNEL,
-        category=ConfigOptionCategory.CHANNELS,
-        property_ids=("alerts_channel_id", None),
-        can_inherit_from="Reports Feed",
-    ),
-    ConfigOption(
-        name="Confirmations Feed",
-        description="The text channel where you receive confirmations of reports you submit.",
-        type=ConfigOptionType.TEXT_CHANNEL,
-        category=ConfigOptionCategory.CHANNELS,
-        property_ids=("confirmations_channel_id", None),
-        can_inherit_from="Reports Feed",
-    ),
-    # Roles
-    ConfigOption(
-        name="Admin Role",
-        description="The role that can review reports.",
-        type=ConfigOptionType.ROLE,
-        category=ConfigOptionCategory.ROLES,
-        property_ids=("admin_role_id", None),
-    ),
-    ConfigOption(
-        name="Alerts Role",
-        description="The role that gets notified by alerts.",
-        type=ConfigOptionType.ROLE,
-        category=ConfigOptionCategory.ROLES,
-        property_ids=("alerts_role_id", None),
-        can_inherit_from="Admin Role",
-    ),
-    # Filters
-    ConfigOption(
-        name="Report Reason Filter",
-        description="Which categories of reports to receive.",
-        type=ConfigOptionType.REASON_FILTER,
-        category=ConfigOptionCategory.FILTERS,
-        property_ids=("reasons_filter", None),
-    ),
-]
+CONFIG_OPTIONS: dict[str, ConfigOption] = {
+    option.id: option
+    for option in [
+        # Channels
+        # TODO: Handle guild_id
+        ConfigOption(
+            id="reports_channel_id",
+            name="Reports Channel",
+            description="The text channel where you receive new reports.",
+            type=ConfigOptionType.TEXT_CHANNEL,
+            category=ConfigOptionCategory.CHANNELS,
+            property_ids=(
+                "hll_reports_channel_id",
+                "hllv_reports_channel_id",
+            ),
+            nullable=True,
+        ),
+        ConfigOption(
+            id="alerts_channel_id",
+            name="Alerts Channel",
+            description="The text channel where you receive alerts.",
+            type=ConfigOptionType.TEXT_CHANNEL,
+            category=ConfigOptionCategory.CHANNELS,
+            property_ids=(
+                "hll_alerts_channel_id",
+                "hllv_alerts_channel_id",
+            ),
+            can_inherit_from="Reports Channel",
+            nullable=True,
+        ),
+        ConfigOption(
+            id="confirmations_channel_id",
+            name="Confirmations Channel",
+            description="The text channel where you receive confirmations of reports you submit.",
+            type=ConfigOptionType.TEXT_CHANNEL,
+            category=ConfigOptionCategory.CHANNELS,
+            property_ids=(
+                "hll_confirmations_channel_id",
+                "hllv_confirmations_channel_id",
+            ),
+            can_inherit_from="Reports Channel",
+            nullable=True,
+        ),
+        # Roles
+        ConfigOption(
+            id="admin_role_id",
+            name="Admin Role",
+            description="The role that can review reports.",
+            type=ConfigOptionType.ROLE,
+            category=ConfigOptionCategory.ROLES,
+            property_ids=(
+                "hll_admin_role_id",
+                "hllv_admin_role_id",
+            ),
+        ),
+        ConfigOption(
+            id="alerts_role_id",
+            name="Alerts Role",
+            description="The role that gets notified by alerts.",
+            type=ConfigOptionType.ROLE,
+            category=ConfigOptionCategory.ROLES,
+            property_ids=(
+                "hll_alerts_role_id",
+                "hllv_alerts_role_id",
+            ),
+            can_inherit_from="Admin Role",
+            nullable=True,
+        ),
+        # Filters
+        ConfigOption(
+            id="reasons_filter",
+            name="Report Reason Filter",
+            description="Which categories of reports to receive.",
+            type=ConfigOptionType.REASON_FILTER,
+            category=ConfigOptionCategory.FILTERS,
+            property_ids=(
+                "hll_reason_filter",
+                "hllv_reason_filter",
+            ),
+        ),
+    ]
+}

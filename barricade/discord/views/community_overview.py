@@ -6,7 +6,7 @@ from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
@@ -91,14 +91,14 @@ class CommunityOverviewView(View):
             color=Color.blurple(),
         )
 
-        channel = get_forward_channel(self.community)
+        channel = get_reports_channel(self.community)
         if channel:
             embed.set_thumbnail(
                 url=channel.guild.icon.url if channel.guild.icon else None
             )
 
         if self.is_admin or self.is_owner:
-            if not self.community.forward_channel_id:
+            if not self.community.hll_reports_channel_id:
                 channel_mention = "⚠️ *No reports channel*"
             elif not channel:
                 channel_mention = "⚠️ *Unknown reports channel*"

@@ -30,9 +30,9 @@ async def assert_community_guild(
     db_community: models.Community, interaction: Interaction
 ):
     assert interaction.guild is not None
-    if not db_community.forward_guild_id:
-        db_community.forward_guild_id = interaction.guild.id
-    elif db_community.forward_guild_id != interaction.guild.id:
+    if not db_community.guild_id:
+        db_community.guild_id = interaction.guild.id
+    elif db_community.guild_id != interaction.guild.id:
         raise CustomException(
             "Your community was already (partially) configured in another Discord server!",
             (
@@ -40,11 +40,11 @@ async def assert_community_guild(
                 f" {await get_command_mention(interaction.client.tree, 'config', 'update-guild')} command."  # type: ignore
             ),
         )
-    elif db_community.admin_role_id and not discord.utils.get(
-        interaction.guild.roles, id=db_community.admin_role_id
+    elif db_community.hll_admin_role_id and not discord.utils.get(
+        interaction.guild.roles, id=db_community.hll_admin_role_id
     ):
         # If the admin role is no longer part of the updated guild, remove it
-        db_community.admin_role_id = None
+        db_community.hll_admin_role_id = None
 
 
 class UpdateGuildConfirmationView(View):
@@ -81,12 +81,12 @@ class UpdateGuildConfirmationView(View):
             assert db_admin.community is not None
             db_community = db_admin.community
 
-            db_community.forward_guild_id = self.guild.id
-            db_community.forward_channel_id = None
-            db_community.confirmations_channel_id = None
-            db_community.alerts_channel_id = None
-            db_community.admin_role_id = None
-            db_community.alerts_role_id = None
+            db_community.guild_id = self.guild.id
+            db_community.hll_reports_channel_id = None
+            db_community.hll_confirmations_channel_id = None
+            db_community.hll_alerts_channel_id = None
+            db_community.hll_admin_role_id = None
+            db_community.hll_alerts_role_id = None
             await db.flush()
 
             await interaction.response.edit_message(
@@ -141,7 +141,9 @@ class ReportChannelConfirmationView(View):
             db_community = db_admin.community
 
             await assert_community_guild(db_community, interaction)
-            db_community.forward_channel_id = self.channel.id if self.channel else None
+            db_community.hll_reports_channel_id = (
+                self.channel.id if self.channel else None
+            )
             await db.flush()
 
             await interaction.response.edit_message(
@@ -206,7 +208,7 @@ class ConfirmationsChannelConfirmationView(View):
             db_community = db_admin.community
 
             await assert_community_guild(db_community, interaction)
-            db_community.confirmations_channel_id = (
+            db_community.hll_confirmations_channel_id = (
                 self.channel.id if self.channel else None if self.default else 0
             )
             await db.flush()
@@ -275,7 +277,7 @@ class AlertsChannelConfirmationView(View):
             db_community = db_admin.community
 
             await assert_community_guild(db_community, interaction)
-            db_community.alerts_channel_id = (
+            db_community.hll_alerts_channel_id = (
                 self.channel.id if self.channel else None if self.default else 0
             )
             await db.flush()

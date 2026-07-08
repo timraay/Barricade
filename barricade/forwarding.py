@@ -41,7 +41,7 @@ from barricade.discord.communities import (
     get_alerts_channel,
     get_alerts_role_mention,
     get_confirmations_channel,
-    get_forward_channel,
+    get_reports_channel,
 )
 from barricade.discord.reports import (
     get_alert_embed,
@@ -68,12 +68,12 @@ from barricade.utils import get_player_id_type
 async def forward_report_to_communities(report: schemas.ReportWithToken):
     async with session_factory.begin() as db:
         stmt = select(models.Community).where(
-            models.Community.forward_guild_id.is_not(None),
-            models.Community.forward_channel_id.is_not(None),
+            models.Community.guild_id.is_not(None),
+            models.Community.hll_reports_channel_id.is_not(None),
             models.Community.id != report.token.community_id,
             or_(
-                models.Community.reasons_filter.is_(None),
-                models.Community.reasons_filter.bitwise_and(report.reasons_bitflag)
+                models.Community.hll_reason_filter.is_(None),
+                models.Community.hll_reason_filter.bitwise_and(report.reasons_bitflag)
                 != 0,
             ),
         )
@@ -467,7 +467,7 @@ async def send_optional_player_alert_to_community(
                     community = schemas.CommunityRef.model_validate(db_community)
 
                 db_reports = await get_reports_for_player_with_no_community_review(
-                    db, player_id, community_id, community.reasons_filter
+                    db, player_id, community_id, community.hll_reason_filter
                 )
                 reports = [
                     schemas.ReportWithToken.model_validate(db_report)
@@ -655,7 +655,7 @@ async def send_or_edit_report_review_message(
             report=report,
             community=community,
             message_type=ReportMessageType.REVIEW,
-            channel=get_forward_channel(community),
+            channel=get_reports_channel(community),
             view=view,
         )
 
@@ -772,8 +772,8 @@ async def send_or_edit_message(
         if community:
             logger.warning(
                 "Forward channel %s/%s could not be found",
-                community.forward_guild_id,
-                community.forward_channel_id,
+                community.guild_id,
+                community.hll_reports_channel_id,
             )
         else:
             logger.warning("Forward channel could not be found")
