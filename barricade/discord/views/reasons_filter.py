@@ -1,3 +1,5 @@
+from typing import assert_never
+
 from discord import ButtonStyle, Interaction, SelectOption
 
 from barricade import schemas
@@ -9,14 +11,19 @@ from barricade.discord.utils import (
     CustomException,
     View,
 )
-from barricade.enums import ReportReasonDetails, ReportReasonFlag
+from barricade.enums import Game, ReportReasonDetails, ReportReasonFlag
+from barricade.utils import game_switch
 
 
 class ReasonsFilterView(View):
-    def __init__(self, community: schemas.CommunityRef):
+    def __init__(self, community: schemas.CommunityRef, game: Game):
         super().__init__(timeout=300)
         self.community = community
-        self.is_custom = bool(community.hll_reason_filter)
+        self.game = game
+        self.reason_filter = game_switch(
+            game, community.hll_reason_filter, community.hllv_reason_filter
+        )
+        self.is_custom = bool(self.reason_filter)
 
         self.select_all_button = CallableButton(self.select_all, label="All")
         self.select_none_button = CallableButton(self.select_none, label="None")
@@ -60,7 +67,7 @@ class ReasonsFilterView(View):
         self.select_custom_button.style = ButtonStyle.gray
         self.remove_item(self.select_reasons_select)
 
-        if self.community.hll_reason_filter is None:
+        if self.reason_filter is None:
             self.select_all_button.disabled = True
             self.select_all_button.style = ButtonStyle.green
         elif self.is_custom:
@@ -68,10 +75,8 @@ class ReasonsFilterView(View):
             self.select_custom_button.style = ButtonStyle.blurple
             self.add_item(self.select_reasons_select)
             for option in self.select_reasons_select.options:
-                option.default = (
-                    int(option.value) & self.community.hll_reason_filter
-                ) != 0
-        elif self.community.hll_reason_filter == 0:
+                option.default = (int(option.value) & self.reason_filter) != 0
+        elif self.reason_filter == 0:
             self.select_none_button.disabled = True
             self.select_none_button.style = ButtonStyle.green
 
@@ -96,8 +101,17 @@ class ReasonsFilterView(View):
                 or db_admin.community_id != self.community.id
             ):
                 raise CustomException("You need to be a community admin to do this!")
-            db_admin.community.hll_reason_filter = filter
-        self.community.hll_reason_filter = filter
+
+            match self.game:
+                case Game.HLL:
+                    db_admin.community.hll_reason_filter = filter
+                    self.community.hll_reason_filter = filter
+                case Game.HLLV:
+                    db_admin.community.hllv_reason_filter = filter
+                    self.community.hllv_reason_filter = filter
+                case _:
+                    assert_never(self.game)
+                    raise ValueError("Unrecognized game!")
 
     async def select_all(self, interaction: Interaction):
         await self.persist_filter(interaction, None)
@@ -112,7 +126,7 @@ class ReasonsFilterView(View):
         await self.edit(interaction)
 
     async def select_custom(self, interaction: Interaction):
-        if self.community.hll_reason_filter is None:
+        if self.reason_filter is None:
             await self.persist_filter(interaction, ReportReasonFlag.all())
         else:
             await self.persist_filter(interaction, ReportReasonFlag(0))

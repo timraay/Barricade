@@ -87,6 +87,11 @@ class UpdateGuildConfirmationView(View):
             db_community.hll_alerts_channel_id = None
             db_community.hll_admin_role_id = None
             db_community.hll_alerts_role_id = None
+            db_community.hllv_reports_channel_id = None
+            db_community.hllv_confirmations_channel_id = None
+            db_community.hllv_alerts_channel_id = None
+            db_community.hllv_admin_role_id = None
+            db_community.hllv_alerts_role_id = None
             await db.flush()
 
             await interaction.response.edit_message(

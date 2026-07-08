@@ -42,7 +42,7 @@ class PlayerPlatform(StrEnum):
 
 
 class Game(StrEnum):
-    # Careful when renaming, used by PSQL
+    # Careful when renaming, used by PSQL & Integration API
     HLL = "HLL"
     HLLV = "HLLV"
 

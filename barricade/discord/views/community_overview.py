@@ -14,7 +14,7 @@ from barricade.discord.utils import (
     View,
     get_command_mention,
 )
-from barricade.enums import Emojis
+from barricade.enums import Emojis, Game
 
 
 class CommunityOverviewView(View):
@@ -91,7 +91,8 @@ class CommunityOverviewView(View):
             color=Color.blurple(),
         )
 
-        channel = get_reports_channel(self.community)
+        # TODO: Update community overview embed to support multiple games
+        channel = get_reports_channel(self.community, Game.HLL)
         if channel:
             embed.set_thumbnail(
                 url=channel.guild.icon.url if channel.guild.icon else None

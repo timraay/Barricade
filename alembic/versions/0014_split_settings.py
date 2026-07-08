@@ -34,6 +34,18 @@ def upgrade() -> None:
     op.add_column('communities', sa.Column('hllv_admin_role_id', sa.BigInteger(), nullable=True))
     op.add_column('communities', sa.Column('hllv_alerts_role_id', sa.BigInteger(), nullable=True))
     op.add_column('communities', sa.Column('hllv_reason_filter', sa.Integer(), nullable=True))
+    # Duplicate "hll" value into "hllv" columns for existing communities
+    op.execute(
+        """
+        UPDATE communities
+        SET hllv_reports_channel_id = hll_reports_channel_id,
+            hllv_alerts_channel_id = hll_alerts_channel_id,
+            hllv_confirmations_channel_id = hll_confirmations_channel_id,
+            hllv_admin_role_id = hll_admin_role_id,
+            hllv_alerts_role_id = hll_alerts_role_id,
+            hllv_reason_filter = hll_reason_filter
+        """
+    )
     op.drop_index(op.f('ix_communities_forward_guild_id'), table_name='communities')
     op.create_index(op.f('ix_communities_guild_id'), 'communities', ['guild_id'], unique=True)
     # fmt: on

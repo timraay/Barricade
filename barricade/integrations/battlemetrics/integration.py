@@ -371,7 +371,7 @@ class BattlemetricsIntegration(
                         remote_ban,
                     )
                     await self.expire_ban(remote_ban.ban_id)
-                    safe_send_to_community(community, embed=embed)
+                    safe_send_to_community(community, game, embed=embed)
 
         await self.link_bans_to_players(unlinked_bans)
 
@@ -756,11 +756,14 @@ class BattlemetricsIntegration(
             )
 
     @async_ttl_cache(size=9999, seconds=60 * 60 * 24)
-    async def get_server_ids_from_org(self) -> list[str]:
+    async def get_server_ids_from_org(self, game: Game) -> list[str]:
+        game_id = game_switch(game, "hll", "hllv")
+        # TODO: Verify whether hllv ID is correct
+
         data = {
             "filter[organizations]": self.config.organization_id,
             "filter[rcon]": "true",
-            "filter[game]": "hll",
+            "filter[game]": game_id,
         }
 
         url = f"{self.BASE_API_URL}/servers"

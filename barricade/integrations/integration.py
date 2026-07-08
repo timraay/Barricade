@@ -245,6 +245,7 @@ class Integration(ABC):
 
                 safe_send_to_community(
                     community,
+                    game=None,
                     embed=get_danger_embed(
                         f"Your {self.meta.name} integration was disabled!", description
                     ),
@@ -431,7 +432,7 @@ class Integration(ABC):
 
     @is_saved
     @is_enabled
-    async def repopulate(self):
+    async def repopulate(self, game: Game | None = None) -> tuple[int, int]:
         assert self.config.id is not None
 
         async with session_factory() as db:
@@ -441,6 +442,7 @@ class Integration(ABC):
                 db,
                 community_id=self.config.community_id,
                 integration_id=self.config.id,
+                game=game,
             )
             responses = [
                 schemas.ResponseWithToken.model_validate(db_response)

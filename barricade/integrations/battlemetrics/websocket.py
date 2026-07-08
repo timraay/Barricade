@@ -6,6 +6,7 @@ from uuid import UUID
 
 import pydantic
 
+from barricade.enums import Game
 from barricade.exceptions import IntegrationCommandError
 from barricade.forwarding import send_optional_player_alert_to_community
 from barricade.integrations.battlemetrics.models import (
@@ -39,10 +40,21 @@ class BattlemetricsWebsocket(Websocket):
         )
         self.logger.info("Authorized Battlemetrics websocket")
 
-        server_ids = await self.integration.get_server_ids_from_org()
+        self.server_ids = {
+            server_id: game
+            for game, server_ids in zip(
+                Game,
+                await asyncio.gather(
+                    *[self.integration.get_server_ids_from_org(game) for game in Game]
+                ),
+                strict=True,
+            )
+            for server_id in server_ids
+        }
+
         await self.execute(
             ClientRequestType.join,
-            payload=[f"server:updates:{server_id}" for server_id in server_ids],
+            payload=[f"server:updates:{server_id}" for server_id in self.server_ids],
         )
 
     async def handle_message(self, message: str | bytes):
@@ -187,6 +199,11 @@ class BattlemetricsWebsocket(Websocket):
         if not player_ids:
             return
 
+        server_id = payload["id"]
+        game = self.server_ids[server_id]
+
         await send_optional_player_alert_to_community(
-            self.integration.config.community_id, player_ids
+            self.integration.config.community_id,
+            player_ids,
+            game,
         )

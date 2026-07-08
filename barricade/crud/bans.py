@@ -111,7 +111,10 @@ async def get_bans_by_integration(
 
 
 async def get_player_bans_for_community(
-    db: AsyncSession, player_id: str, community_id: int
+    db: AsyncSession,
+    player_id: str,
+    community_id: int,
+    game: Game | None = None,
 ):
     stmt = (
         select(models.PlayerBan)
@@ -122,6 +125,8 @@ async def get_player_bans_for_community(
         )
         .options(joinedload(models.PlayerBan.integration))
     )
+    if game:
+        stmt = stmt.where(models.PlayerBan.game == game)
     result = await db.scalars(stmt)
     return result.all()
 
@@ -160,6 +165,7 @@ async def get_player_bans_without_responses(
     db: AsyncSession,
     player_ids: Sequence[str] | None = None,
     community_id: int | None = None,
+    game: Game | None = None,
 ):
     """Get a list of player bans whose community has not responded to any reports
     or has not chosen to ban them.
@@ -174,6 +180,8 @@ async def get_player_bans_without_responses(
         A list of player IDs to filter by, by default None
     community_id : int | None, optional
         The ID of a community to filter results by, by default None
+    game : Game | None, optional
+        The game to filter results by, by default None
 
     Returns
     -------
@@ -205,6 +213,9 @@ async def get_player_bans_without_responses(
 
     if community_id is not None:
         stmt = stmt.where(models.Integration.community_id == community_id)
+
+    if game is not None:
+        stmt = stmt.where(models.PlayerBan.game == game)
 
     result = await db.scalars(stmt)
     return result.all()

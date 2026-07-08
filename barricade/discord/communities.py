@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import discord
 
 from barricade import schemas
@@ -9,8 +11,9 @@ from barricade.constants import (
 )
 from barricade.discord.bot import bot
 from barricade.discord.utils import CustomException
+from barricade.enums import Game
 from barricade.logger import get_logger
-from barricade.utils import safe_create_task
+from barricade.utils import game_switch, safe_create_task
 
 
 def get_admin_roles() -> tuple[discord.Role, discord.Role, discord.Role, discord.Role]:
@@ -95,49 +98,93 @@ def get_text_channel(
     return channel
 
 
-def get_reports_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
-    return get_text_channel(community.guild_id, community.hll_reports_channel_id)
+def get_reports_channel(
+    community: schemas.CommunityRef, game: Game
+) -> discord.TextChannel | None:
+    reports_channel_id = game_switch(
+        game, community.hll_reports_channel_id, community.hllv_reports_channel_id
+    )
+    return get_text_channel(community.guild_id, reports_channel_id)
 
 
 def get_confirmations_channel(
-    community: schemas.CommunityRef,
+    community: schemas.CommunityRef, game: Game
 ) -> discord.TextChannel | None:
-    if community.hll_confirmations_channel_id is None:
-        return get_reports_channel(community)
-
-    return get_text_channel(community.guild_id, community.hll_confirmations_channel_id)
-
-
-def get_alerts_channel(community: schemas.CommunityRef) -> discord.TextChannel | None:
-    if community.hll_alerts_channel_id is None:
-        return get_reports_channel(community)
-
-    return get_text_channel(community.guild_id, community.hll_alerts_channel_id)
-
-
-def get_alerts_role_mention(community: schemas.CommunityRef) -> str | None:
-    role_id = (
-        community.hll_admin_role_id
-        if community.hll_alerts_role_id is None
-        else community.hll_alerts_role_id
+    confirmations_channel_id = game_switch(
+        game,
+        community.hll_confirmations_channel_id,
+        community.hllv_confirmations_channel_id,
     )
+    if confirmations_channel_id is None:
+        return get_reports_channel(community, game)
 
+    return get_text_channel(community.guild_id, confirmations_channel_id)
+
+
+def get_alerts_channel(
+    community: schemas.CommunityRef, game: Game
+) -> discord.TextChannel | None:
+    alerts_channel_id = game_switch(
+        game, community.hll_alerts_channel_id, community.hllv_alerts_channel_id
+    )
+    if alerts_channel_id is None:
+        return get_reports_channel(community, game)
+
+    return get_text_channel(community.guild_id, alerts_channel_id)
+
+
+def _get_role_mention(role_id: int | None) -> str | None:
     if role_id:
         return f"<@&{role_id}>"
     else:
         return None
 
 
-def safe_send_to_community(community: schemas.CommunityRef, *args, **kwargs):
-    channel = get_reports_channel(community)
-    if not channel:
-        return
-    safe_create_task(
-        channel.send(*args, **kwargs),
-        err_msg=f"Failed to send message to {community!r}",
-        name=f"communitymessage_{community.id}",
-        logger=get_logger(community.id),
+def get_admin_role_mention(community: schemas.CommunityRef, game: Game) -> str | None:
+    role_id = game_switch(
+        game, community.hll_admin_role_id, community.hllv_admin_role_id
     )
+    return _get_role_mention(role_id)
+
+
+def get_alerts_role_mention(community: schemas.CommunityRef, game: Game) -> str | None:
+    role_id = game_switch(
+        game, community.hll_alerts_role_id, community.hllv_alerts_role_id
+    )
+    if role_id is None:
+        return get_admin_role_mention(community, game)
+    return _get_role_mention(role_id)
+
+
+def safe_send_to_community(
+    community: schemas.CommunityRef,
+    game: Game | None,
+    *args,
+    channel_fn: Callable[
+        [schemas.CommunityRef, Game], discord.TextChannel | None
+    ] = get_reports_channel,
+    **kwargs,
+):
+    channels: list[discord.TextChannel] = []
+    if game:
+        # Find single channel
+        channel = channel_fn(community, game)
+        if channel:
+            channels.append(channel)
+    else:
+        # Find all channels. Remove duplicates.
+        for game in Game:
+            channel = channel_fn(community, game)
+            if channel and channel not in channels:
+                channels.append(channel)
+
+    for channel in channels:
+        safe_create_task(
+            channel.send(*args, **kwargs),
+            err_msg=f"Failed to send message to {community!r}",
+            name=f"communitymessage_{community.id}",
+            logger=get_logger(community.id),
+        )
 
 
 async def assert_has_admin_role(

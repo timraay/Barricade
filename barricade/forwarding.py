@@ -4,7 +4,6 @@ from collections.abc import Iterable, Sequence
 from typing import assert_never
 
 import discord
-from cachetools import TTLCache
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,29 +55,40 @@ from barricade.discord.views.report_review import get_report_review_view
 from barricade.discord.views.report_t17_support_review import (
     get_report_t17_support_review_view,
 )
-from barricade.enums import PlayerAlertType, PlayerIDType, ReportMessageType
+from barricade.enums import Game, PlayerAlertType, PlayerIDType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
 from barricade.urls import URLFactory
-from barricade.utils import get_player_id_type
+from barricade.utils import game_switch, get_player_id_type
 
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
+    reports_channel_id_column = game_switch(
+        report.game,
+        models.Community.hll_reports_channel_id,
+        models.Community.hllv_reports_channel_id,
+    )
+
+    reason_filter_column = game_switch(
+        report.game,
+        models.Community.hll_reason_filter,
+        models.Community.hllv_reason_filter,
+    )
+
     async with session_factory.begin() as db:
         stmt = select(models.Community).where(
             models.Community.guild_id.is_not(None),
-            models.Community.hll_reports_channel_id.is_not(None),
+            reports_channel_id_column.is_not(None),
             models.Community.id != report.token.community_id,
             or_(
-                models.Community.hll_reason_filter.is_(None),
-                models.Community.hll_reason_filter.bitwise_and(report.reasons_bitflag)
-                != 0,
+                reason_filter_column.is_(None),
+                reason_filter_column.bitwise_and(report.reasons_bitflag) != 0,
             ),
         )
 
-        # TODO: Allow communities to filter on game and server type
+        # TODO: Allow communities to filter on crossplay settings
         # if report.token.platform == Platform.PC:
         #     stmt = stmt.where(models.Community.is_pc.is_(True))
         # elif report.token.platform == Platform.CONSOLE:
@@ -331,11 +341,13 @@ class PlayerAlert:
         community: schemas.CommunityRef,
         reports: Iterable[schemas.ReportWithToken],
         alert_type: PlayerAlertType,
+        game: Game,
     ) -> None:
         self.player_id = player_id
         self.community = community
         self.reports = sorted(reports, key=lambda x: x.created_at)
         self.alert_type = alert_type
+        self.game = game
 
     async def send(self, db: AsyncSession, channel: discord.TextChannel):
         # Locate all the messages, resending as necessary, and updating them with the most
@@ -383,7 +395,7 @@ class PlayerAlert:
         )
 
         view = View()
-        mention = get_alerts_role_mention(self.community)
+        mention = get_alerts_role_mention(self.community, self.game)
         match self.alert_type:
             case PlayerAlertType.UNREVIEWED:
                 if mention:
@@ -425,15 +437,11 @@ class PlayerAlert:
         )
 
 
-__community_alerts_enabled = TTLCache[int, bool](maxsize=9999, ttl=60 * 10)
-
-
 async def send_optional_player_alert_to_community(
-    community_id: int, player_ids: Sequence[str]
+    community_id: int,
+    player_ids: Sequence[str],
+    game: Game,
 ):
-    if __community_alerts_enabled.get(community_id) is False:
-        return
-
     alerts: list[PlayerAlert] = []
     community: schemas.CommunityRef | None = None
 
@@ -458,9 +466,11 @@ async def send_optional_player_alert_to_community(
                     community=community,
                     reports=reports,
                     alert_type=PlayerAlertType.WATCHLISTED,
+                    game=game,
                 )
                 alerts.append(alert)
 
+            # TODO: Add config option to disable cross-game report alerts
             elif await is_player_reported(db, player_id):
                 if not community:
                     db_community = await get_community_by_id(db, community_id)
@@ -479,12 +489,13 @@ async def send_optional_player_alert_to_community(
                     community=community,
                     reports=reports,
                     alert_type=PlayerAlertType.UNREVIEWED,
+                    game=game,
                 )
                 alerts.append(alert)
 
         if alerts:
             assert community is not None
-            channel = get_alerts_channel(community)
+            channel = get_alerts_channel(community, game)
             if not channel:
                 # We have nowhere to send the alert, so we just ignore
                 return
@@ -655,7 +666,7 @@ async def send_or_edit_report_review_message(
             report=report,
             community=community,
             message_type=ReportMessageType.REVIEW,
-            channel=get_reports_channel(community),
+            channel=get_reports_channel(community, report.game),
             view=view,
         )
 
@@ -688,7 +699,7 @@ async def send_or_edit_report_management_message(
             report=report,
             community=community,
             message_type=ReportMessageType.MANAGE,
-            channel=get_confirmations_channel(community),
+            channel=get_confirmations_channel(community, report.game),
             view=view,
             admin=admin,
             allowed_mentions=discord.AllowedMentions(users=[user]),

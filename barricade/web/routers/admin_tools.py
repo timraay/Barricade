@@ -19,7 +19,7 @@ from barricade.discord.utils import (
     get_question_embed,
     get_success_embed,
 )
-from barricade.enums import IntegrationType
+from barricade.enums import Game, IntegrationType
 from barricade.integrations.manager import IntegrationManager
 from barricade.web.scopes import Scopes
 from barricade.web.security import get_active_token
@@ -83,6 +83,7 @@ async def forward_message(
     type: Annotated[MessageType, Body()] = MessageType.NEUTRAL,
     filters: Annotated[MessageFilters, Body()] = MessageFilters(),  # noqa: B008
     notify: Annotated[bool, Body()] = False,
+    game: Annotated[Game | None, Body()] = None,
 ) -> int:
     embed = type.to_embed(title, description)
     success_count = 0
@@ -96,14 +97,30 @@ async def forward_message(
     for db_community in db_communities:
         community = schemas.Community.model_validate(db_community)
         if filters.apply(community):
-            channel = get_confirmations_channel(community)
-            if channel:
-                content = get_alerts_role_mention(community) if notify else None
+            # Get all channels that need sending to
+            channels = [
+                (
+                    get_confirmations_channel(community, g),
+                    get_alerts_role_mention(community, g) if notify else None,
+                )
+                for g in Game
+                if g == game or game is None
+            ]
+
+            # Remove duplicates & nulls, aggregrate role mentions
+            grouped_channels: dict[discord.TextChannel, set[str]] = {}
+            for channel, role_mention in channels:
+                if channel:
+                    role_mentions = grouped_channels.setdefault(channel, set())
+                    if role_mention:
+                        role_mentions.add(role_mention)
+
+            # Send to each channel
+            for channel, role_mentions in grouped_channels.items():
+                content = " ".join(role_mentions) if role_mentions else None
                 try:
                     await channel.send(
-                        content=content,
-                        embed=embed,
-                        allowed_mentions=allowed_mentions,
+                        content=content, embed=embed, allowed_mentions=allowed_mentions
                     )
                 except Exception:
                     pass

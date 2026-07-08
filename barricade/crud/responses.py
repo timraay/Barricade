@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
-from barricade.enums import ReportReasonFlag, ReportRejectReason
+from barricade.enums import Game, ReportReasonFlag, ReportRejectReason
 from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
@@ -204,6 +204,7 @@ async def get_reports_for_player_with_no_community_review(
     player_id: str,
     community_id: int,
     reasons_filter: ReportReasonFlag | None = None,
+    game: Game | None = None,
 ):
     """Get all reports of a specific player which the given community has not yet responded to.
 
@@ -218,6 +219,9 @@ async def get_reports_for_player_with_no_community_review(
     reasons_filter : ReportReasonFlag | None
         Filter out reports whose reasons do not overlap with the filter. If None, no filter
         will be applied. By default None.
+    game : Game | None
+        Only find reports for the given game. If None, will find reports for all games. By
+        default None.
 
     Returns
     -------
@@ -247,12 +251,18 @@ async def get_reports_for_player_with_no_community_review(
             models.Report.reasons_bitflag.bitwise_and(reasons_filter) != 0
         )
 
+    if game is not None:
+        stmt = stmt.where(models.Report.game == game)
+
     result = await db.scalars(stmt)
     return result.all()
 
 
 async def get_successful_responses_without_bans(
-    db: AsyncSession, community_id: int, integration_id: int
+    db: AsyncSession,
+    community_id: int,
+    integration_id: int,
+    game: Game | None = None,
 ):
     """Find all players that an integration has not banned yet, that should
     be banned. Returns one response with token for each player found.
@@ -267,6 +277,9 @@ async def get_successful_responses_without_bans(
         The ID of the community
     integration_id : int
         The ID of the integration
+    game : Game | None
+        If provided, only find responses for reports of this game. If None,
+        find responses for all games. By default None.
 
     Returns
     -------
@@ -297,6 +310,9 @@ async def get_successful_responses_without_bans(
             .selectinload(models.Report.token)
         )
     )
+
+    if game is not None:
+        stmt = stmt.join(models.PlayerReport.report).where(models.Report.game == game)
 
     result = await db.scalars(stmt)
     return result.all()

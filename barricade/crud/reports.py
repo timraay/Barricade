@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, selectinload
 
@@ -16,6 +16,7 @@ from barricade.discord.audit import (
     audit_token_create,
 )
 from barricade.discord.reports import get_report_channel
+from barricade.enums import Game
 from barricade.exceptions import AlreadyExistsError, NotFoundError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
@@ -221,8 +222,23 @@ async def get_reports_for_player(
     return result.all()
 
 
-async def is_player_reported(db: AsyncSession, player_id: str):
-    stmt = select(exists().where(models.PlayerReport.player_id == player_id))
+async def is_player_reported(
+    db: AsyncSession,
+    player_id: str,
+    game: Game | None = None,
+):
+    stmt = (
+        select(1)
+        .select_from(models.PlayerReport)
+        .where(
+            models.PlayerReport.player_id == player_id,
+        )
+    )
+
+    if game is not None:
+        stmt = stmt.join(models.PlayerReport.report).where(models.Report.game == game)
+
+    stmt = select(stmt.exists())
     result = await db.scalar(stmt)
     return bool(result)
 

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pydantic
 
+from barricade.enums import Game
 from barricade.exceptions import IntegrationCommandError
 from barricade.forwarding import send_optional_player_alert_to_community
 from barricade.integrations.custom.models import (
@@ -30,7 +31,7 @@ class CustomWebsocket(Websocket):
         super().__init__(address=address, token=token, logger=logger)
         self._waiters: dict[int, asyncio.Future[dict]] = {}
         self._counter = itertools.count()
-        self.integration = None
+        self.integration: CustomIntegration | None = None
 
     @classmethod
     def from_integration(cls, integration: "CustomIntegration"):
@@ -188,6 +189,15 @@ class CustomWebsocket(Websocket):
         if not player_ids:
             raise WebsocketRequestException("Missing player_ids")
 
+        assert payload is not None
+        game_id = str(payload.get("game", Game.HLL.value))
+        try:
+            game = Game(game_id)
+        except ValueError:
+            raise WebsocketRequestException("Invalid game") from None
+
         await send_optional_player_alert_to_community(
-            self.integration.config.community_id, player_ids
+            self.integration.config.community_id,
+            player_ids,
+            game=game,
         )

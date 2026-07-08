@@ -177,7 +177,7 @@ class CRCONIntegration(
                         remote_ban,
                     )
                     await self.expire_ban(remote_ban["id"])
-                    safe_send_to_community(community, embed=embed)
+                    safe_send_to_community(community, embed=embed, game=game)
 
     # --- Scoped integration mixin
 
