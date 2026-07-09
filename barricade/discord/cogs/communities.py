@@ -16,7 +16,6 @@ from barricade.discord.views.channel_confirmation import (
 )
 from barricade.discord.views.community_config import get_community_config_view
 from barricade.discord.views.community_overview import CommunityOverviewView
-from barricade.discord.views.integration_management import IntegrationManagementView
 
 if TYPE_CHECKING:
     from barricade.discord.bot import Bot
@@ -59,29 +58,11 @@ class CommunitiesCog(commands.Cog):
     def __init__(self, bot: "Bot"):
         self.bot = bot
 
-    @config_group.command(
-        name="integrations",
-        description="Enable, disable, or configure your integrations",
-    )
-    async def manage_integrations(self, interaction: Interaction):
-        async with session_factory() as db:
-            # Make sure the user is part of a community
-            db_admin = await get_admin(db, interaction.user.id)
-            assert db_admin.community is not None
-
-            community_id = db_admin.community.id
-
-            db.expire(db_admin)
-            db_community = await get_community_by_id(db, community_id)
-            community = schemas.Community.model_validate(db_community)
-            view = IntegrationManagementView(community)
-            await view.send(interaction)
-
-    @config_group.command(
-        name="update-guild",
+    @app_commands.command(
+        name="migrate-guild",
         description="Move your configurations over to this Discord server",
     )
-    async def update_guild(self, interaction: Interaction):
+    async def migrate_guild(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             await get_admin(db, interaction.user.id)
@@ -89,10 +70,8 @@ class CommunitiesCog(commands.Cog):
             view = UpdateGuildConfirmationView(interaction.guild)
             await view.send(interaction)
 
-    @config_group.command(
-        name="v2", description="See all your configured settings (v2)"
-    )
-    async def view_community_config_v2(self, interaction: Interaction):
+    @app_commands.command(name="config", description="Open the configuration menu")
+    async def view_community_config(self, interaction: Interaction):
         async with session_factory() as db:
             # Make sure the user is part of a community
             db_admin = await get_admin(db, interaction.user.id)

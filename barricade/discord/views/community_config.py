@@ -4,6 +4,7 @@ from functools import partial
 from typing import Generic, TypeVar, assert_never
 
 import discord
+from discord.utils import escape_markdown as esc_md
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
@@ -15,6 +16,7 @@ from barricade.config import (
 )
 from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
+from barricade.discord.bot import bot
 from barricade.discord.communities import (
     assert_has_admin_role,
     get_text_channel,
@@ -24,6 +26,7 @@ from barricade.discord.utils import (
     CustomException,
     LayoutView,
     Modal,
+    get_command_mention,
     handle_error_wrap,
 )
 from barricade.enums import ReportReasonDetails, ReportReasonFlag
@@ -122,6 +125,7 @@ class CommunityConfigEditButton(
             assert_has_admin_role(interaction.user, community)
 
         modal = get_community_config_edit_modal(community, self.option)
+        await modal.assert_is_allowed_in_guild(interaction.guild)
         await interaction.response.send_modal(modal)
 
 
@@ -452,6 +456,38 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         self.community = await get_community(db, self.community.id)
         return self.community
 
+    async def assert_is_allowed_in_guild(
+        self, guild: discord.Guild | None, *, save: bool = False
+    ):
+        if not self.option.is_bound_to_guild:
+            return
+
+        if guild is None:
+            raise CustomException(
+                "Expected interaction to occur within a Discord server"
+            )
+
+        if self.community.guild_id is None:
+            if save:
+                self.community.guild_id = guild.id
+            return
+
+        if self.community.guild_id == guild.id:
+            return
+
+        migrate_command_mention = await get_command_mention(bot.tree, "migrate-guild")
+        raise CustomException(
+            "Community not bound to this Discord server",
+            (
+                "Each Barricade community can only be associated with one Discord server."
+                "\n\n"
+                "Please try again in the following server:"
+                f"\n> {esc_md(guild.name)}"
+                "\n\n"
+                f"Want to use a different server? You can use {migrate_command_mention} to migrate."
+            ),
+        )
+
     async def save_community(self, db: AsyncSession):
         db_community = await get_community_by_id(db, self.community.id)
         if not db_community:
@@ -467,6 +503,8 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         # Update community
         async with session_factory.begin() as db:
             await self.refresh_community(db)
+
+            await self.assert_is_allowed_in_guild(interaction.guild, save=True)
 
             value1, value2 = self.get_values()
             self.option.set_values(self.community, value1, value2)
@@ -505,14 +543,14 @@ class CommunityConfigEditTextChannelModal(_CommunityConfigEditModal[int]):
         self.select1 = discord.ui.ChannelSelect(
             channel_types=[discord.ChannelType.text],
             placeholder="No text channel selected",
-            required=False,
+            required=not self.option.is_nullable,
             default_values=[discord.Object(value1)] if value1 else [],
         )
 
         self.select2 = discord.ui.ChannelSelect(
             channel_types=[discord.ChannelType.text],
             placeholder="No text channel selected",
-            required=False,
+            required=not self.option.is_nullable,
             default_values=[discord.Object(value2)] if value2 else [],
         )
 
@@ -531,13 +569,13 @@ class CommunityConfigEditRoleModal(_CommunityConfigEditModal[int | None]):
 
         self.select1 = discord.ui.RoleSelect(
             placeholder="No role selected",
-            required=False,
+            required=not self.option.is_nullable,
             default_values=[discord.Object(value1)] if value1 else [],
         )
 
         self.select2 = discord.ui.RoleSelect(
             placeholder="No role selected",
-            required=False,
+            required=not self.option.is_nullable,
             default_values=[discord.Object(value2)] if value2 else [],
         )
 

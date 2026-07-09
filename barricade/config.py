@@ -29,7 +29,8 @@ class ConfigOption(BaseModel, Generic[T]):
     category: ConfigOptionCategory
     property_ids: tuple[str, str | None]
     can_inherit_from: str | None = None
-    nullable: bool = False
+    is_bound_to_guild: bool = True
+    is_nullable: bool = False
 
     def is_game_dependent(self) -> bool:
         return self.property_ids[1] is not None
@@ -65,7 +66,6 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
     option.id: option
     for option in [
         # Channels
-        # TODO: Handle guild_id
         ConfigOption(
             id="reports_channel_id",
             name="Reports Channel",
@@ -76,7 +76,7 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
                 "hll_reports_channel_id",
                 "hllv_reports_channel_id",
             ),
-            nullable=True,
+            is_nullable=True,
         ),
         ConfigOption(
             id="alerts_channel_id",
@@ -89,7 +89,7 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
                 "hllv_alerts_channel_id",
             ),
             can_inherit_from="Reports Channel",
-            nullable=True,
+            is_nullable=True,
         ),
         ConfigOption(
             id="confirmations_channel_id",
@@ -102,7 +102,7 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
                 "hllv_confirmations_channel_id",
             ),
             can_inherit_from="Reports Channel",
-            nullable=True,
+            is_nullable=True,
         ),
         # Roles
         ConfigOption(
@@ -127,7 +127,7 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
                 "hllv_alerts_role_id",
             ),
             can_inherit_from="Admin Role",
-            nullable=True,
+            is_nullable=True,
         ),
         # Filters
         ConfigOption(
