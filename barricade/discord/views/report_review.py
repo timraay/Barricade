@@ -24,6 +24,7 @@ from barricade.crud.responses import (
 from barricade.crud.watchlists import filter_watchlisted_player_ids
 from barricade.db import models, session_factory
 from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.crud_utils import get_community
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
@@ -189,25 +190,20 @@ class ReportReviewButton(
                 banned=banned,
                 reject_reason=self.reject_reason,
                 responded_at=datetime.now(tz=UTC),
-                responded_by=interaction.user.display_name,
+                responded_by=interaction.user.id if interaction.user else None,
             )
             async with session_factory() as db:
-                db_community = await get_community_by_id(db, self.community_id)
-                if not db_community:
-                    raise CustomException("Community not found")
-
-                await assert_has_admin_role(
-                    interaction.user,  # type: ignore
-                    schemas.CommunityRef.model_validate(db_community),
-                )
+                community = await get_community(db, self.community_id)
+                assert isinstance(interaction.user, discord.Member)
+                assert_has_admin_role(interaction.user, community)
 
                 # Make sure that there is at least one enabled integration
                 if banned:
                     err_msg = None
-                    if not db_community.integrations:
+                    if not community.integrations:
                         err_msg = "No integrations have been added yet!"
                     elif not any(
-                        integration.enabled for integration in db_community.integrations
+                        integration.enabled for integration in community.integrations
                     ):
                         err_msg = "No integrations are enabled!"
 

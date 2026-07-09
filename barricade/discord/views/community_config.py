@@ -15,7 +15,11 @@ from barricade.config import (
 )
 from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
-from barricade.discord.communities import get_text_channel
+from barricade.discord.communities import (
+    assert_has_admin_role,
+    get_text_channel,
+)
+from barricade.discord.crud_utils import get_community
 from barricade.discord.utils import (
     CustomException,
     LayoutView,
@@ -67,12 +71,11 @@ class CommunityConfigCategoryButton(
     @handle_error_wrap
     async def callback(self, interaction: discord.Interaction):
         async with session_factory() as db:
-            db_community = await get_community_by_id(db, self.community_id)
-            if not db_community:
-                raise CustomException("Community not found")
-            community = schemas.Community.model_validate(db_community)
+            community = await get_community(db, self.community_id)
+            assert isinstance(interaction.user, discord.Member)
+            assert_has_admin_role(interaction.user, community)
 
-        view = get_community_config_view(community, self.category)
+        view = await get_community_config_view(community, self.category)
         await interaction.response.edit_message(view=view)
 
 
@@ -114,10 +117,9 @@ class CommunityConfigEditButton(
     @handle_error_wrap
     async def callback(self, interaction: discord.Interaction):
         async with session_factory() as db:
-            db_community = await get_community_by_id(db, self.community_id)
-            if not db_community:
-                raise CustomException("Community not found")
-            community = schemas.Community.model_validate(db_community)
+            community = await get_community(db, self.community_id)
+            assert isinstance(interaction.user, discord.Member)
+            assert_has_admin_role(interaction.user, community)
 
         modal = get_community_config_edit_modal(community, self.option)
         await interaction.response.send_modal(modal)
@@ -132,7 +134,10 @@ class CommunityConfigView(LayoutView):
         super().__init__(timeout=None)
         self.community = community
         self.category = category
+        self.setup_view()
 
+    def setup_view(self) -> None:
+        self.clear_items()
         self.add_item(self._get_category_select_container())
         self.add_item(self._get_main_container())
 
@@ -185,10 +190,17 @@ class CommunityConfigView(LayoutView):
         return container
 
 
-def get_community_config_view(
+async def get_community_config_view(
     community: schemas.Community,
     category: ConfigOptionCategory = ConfigOptionCategory.CHANNELS,
 ) -> LayoutView:
+    if category == ConfigOptionCategory.INTEGRATIONS:
+        from barricade.discord.views.integration_config import IntegrationConfigView
+
+        view = IntegrationConfigView(community)
+        await view.prepare()
+        return view
+
     return CommunityConfigView(community, category)
 
 
@@ -437,10 +449,7 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         raise NotImplementedError
 
     async def refresh_community(self, db: AsyncSession) -> schemas.Community:
-        db_community = await get_community_by_id(db, self.community.id)
-        if not db_community:
-            raise CustomException("Community not found")
-        self.community = schemas.Community.model_validate(db_community)
+        self.community = await get_community(db, self.community.id)
         return self.community
 
     async def save_community(self, db: AsyncSession):
@@ -464,7 +473,7 @@ class _CommunityConfigEditModal(Generic[T], Modal):
 
             await self.save_community(db)
 
-        view = get_community_config_view(self.community, self.option.category)
+        view = await get_community_config_view(self.community, self.option.category)
 
         # Modal submit interactions cannot open a new model.
         """

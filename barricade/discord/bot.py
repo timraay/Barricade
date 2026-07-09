@@ -55,6 +55,10 @@ class Bot(commands.Bot):
             CommunityConfigEditButton,
         )
         from barricade.discord.views.enroll import EnrollAcceptView, EnrollView
+        from barricade.discord.views.integration_config import (
+            IntegrationAddSelect,
+            IntegrationConfigButton,
+        )
         from barricade.discord.views.report_management import ReportManagementButton
         from barricade.discord.views.report_public_review import (
             ReportPublicReviewButton,
@@ -75,6 +79,8 @@ class Bot(commands.Bot):
         self.add_dynamic_items(
             CommunityConfigCategoryButton,
             CommunityConfigEditButton,
+            IntegrationConfigButton,
+            IntegrationAddSelect,
             ReportReviewButton,
             PlayerToggleWatchlistButton,
             ReportManagementButton,

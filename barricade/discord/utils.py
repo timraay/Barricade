@@ -1,5 +1,6 @@
 import functools
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -306,3 +307,11 @@ async def get_command_mention(
 
 def format_url(text: str, url: str):
     return f"[**{text}** 🡥]({url})"
+
+
+RE_USER_MENTION = re.compile(r"<@!?(\d+)>")
+
+
+def get_user_id_from_mention(text: str) -> int | None:
+    match = RE_USER_MENTION.match(text)
+    return int(match.group(1)) if match else None

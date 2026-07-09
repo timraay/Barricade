@@ -15,7 +15,7 @@ class IntegrationManager(Singleton):
         return integration
 
     def get_by_config(
-        self, config: schemas.IntegrationConfig
+        self, config: schemas.IntegrationConfigParams
     ) -> Optional["Integration"]:
         # Make sure config has an ID
         if config.id is None:
@@ -23,7 +23,7 @@ class IntegrationManager(Singleton):
 
         integration = self.get_by_id(config.id)
         if integration:
-            integration.config = integration.meta.config_cls.model_validate(config)
+            integration.replace_config(config)
         return integration
 
     def get_all(self):

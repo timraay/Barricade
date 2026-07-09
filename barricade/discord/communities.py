@@ -187,9 +187,7 @@ def safe_send_to_community(
         )
 
 
-async def assert_has_admin_role(
-    member: discord.Member, community: schemas.CommunityRef
-):
+def assert_has_admin_role(member: discord.Member, community: schemas.CommunityRef):
     # Make sure user has the Admin role
     if not community.hll_admin_role_id:
         raise CustomException(

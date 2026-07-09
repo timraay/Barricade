@@ -46,7 +46,7 @@ class ReportsCog(commands.Cog):
                     raise access_denied_exc
 
                 community = schemas.CommunityRef.model_validate(db_community)
-                await assert_has_admin_role(interaction.user, community)  # type: ignore
+                assert_has_admin_role(interaction.user, community)  # type: ignore
 
             db_reports = await get_reports_for_player(
                 db, player_id=player_id, load_token=True

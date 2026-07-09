@@ -104,7 +104,7 @@ class CommunitiesCog(commands.Cog):
             db_community = await get_community_by_id(db, community_id)
 
         community = schemas.Community.model_validate(db_community)
-        view = get_community_config_view(community)
+        view = await get_community_config_view(community)
         await interaction.response.send_message(view=view, ephemeral=True)
 
     @app_commands.command(

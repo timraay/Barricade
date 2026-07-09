@@ -5,8 +5,7 @@ import discord
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
-from barricade.discord.communities import get_admin_name
-from barricade.discord.utils import LayoutView, format_url
+from barricade.discord.utils import LayoutView, format_url, get_user_id_from_mention
 from barricade.enums import (
     Emojis,
     Game,
@@ -202,8 +201,13 @@ async def get_plain_report_view(
 
         # Responded by
         if response and response.responded_by:
-            # TODO: Use user mentions? Check whether components v2 has fixed the cache bug
-            content = f"\n-# Reviewed by **{esc_md(response.responded_by)}**"
+            # TODO: Persist user mentions instead of names
+            editor_name = (
+                response.responded_by
+                if get_user_id_from_mention(response.responded_by)
+                else f"**{esc_md(response.responded_by)}**"
+            )
+            content = f"\n-# Reviewed by {editor_name}"
             if response.responded_at:
                 content += f" on {discord.utils.format_dt(response.responded_at, 'f')}"
             content += f" {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
@@ -219,13 +223,15 @@ async def get_plain_report_view(
     view.add_item(container)
 
     # Created/edited at
-    admin_name = await get_admin_name(report.token.admin)
     community_url = report.token.community.contact_url
-    if not community_url.startswith(("http://", "https://")):
+    if (
+        not community_url.startswith(("http://", "https://"))
+        and " " not in community_url
+    ):
         community_url = "https://" + community_url
 
     content = (
-        f"-# Reported by {admin_name}"
+        f"-# Reported by <@{report.token.admin_id}>"
         f" of [{report.token.community.name}]({community_url})"
         f" on {discord.utils.format_dt(report.created_at, 'f')}"
     )
@@ -233,6 +239,13 @@ async def get_plain_report_view(
     if report.edited_by or report.edited_at:
         content += "\nLast edited"
         if report.edited_by:
+            # TODO: Persist user mentions instead of names
+            editor_name = (
+                report.edited_by
+                if get_user_id_from_mention(report.edited_by)
+                else f"**{esc_md(report.edited_by)}**"
+            )
+            content = f"\n-# Reviewed by {editor_name}"
             content += f" by {report.edited_by}"
         if report.edited_at:
             content += f" on {discord.utils.format_dt(report.edited_at, 'f')}"

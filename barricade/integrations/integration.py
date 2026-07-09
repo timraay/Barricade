@@ -74,15 +74,15 @@ class Integration(ABC):
     meta: IntegrationMetaData
 
     def __init__(self, config: schemas.IntegrationConfigParams):
-        if config.id is not None:
-            existing = IntegrationManager().get_by_id(config.id)
-            if existing:
-                config = self.meta.config_cls.model_validate(
-                    {
-                        **existing.config.model_dump(),
-                        **config.model_dump(exclude_unset=True),
-                    }
-                )
+        # if config.id is not None:
+        #     existing = IntegrationManager().get_by_id(config.id)
+        #     if existing:
+        #         config = self.meta.config_cls.model_validate(
+        #             {
+        #                 **existing.config.model_dump(),
+        #                 **config.model_dump(exclude_unset=True),
+        #             }
+        #         )
         self.config = config
 
         self.task: asyncio.Task | None = None
@@ -93,6 +93,17 @@ class Integration(ABC):
         return f"{type(self).__name__}[id={self.config.id}]"
 
     # --- Integration state
+
+    def replace_config(self, config: schemas.IntegrationConfigParams):
+        if self.config.id != config.id:
+            raise ValueError(
+                f"Integration IDs cannot be changed (from {self.config.id} to {config.id})"
+            )
+        if self.config.integration_type != config.integration_type:
+            raise ValueError(
+                f"Integration types cannot be changed (from {self.config.integration_type} to {config.integration_type})"
+            )
+        self.config = self.meta.config_cls.model_validate(config)
 
     async def create(self):
         if self.config.id is not None:

@@ -6,14 +6,14 @@ from discord import ButtonStyle, Interaction, ui
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
-from barricade.crud.communities import get_community_by_id
 from barricade.crud.watchlists import (
     create_watchlist,
     get_watchlist_by_player_and_community,
 )
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
-from barricade.discord.utils import CustomException, View, handle_error_wrap
+from barricade.discord.crud_utils import get_community
+from barricade.discord.utils import View, handle_error_wrap
 from barricade.exceptions import AlreadyExistsError
 
 
@@ -77,14 +77,9 @@ class PlayerToggleWatchlistButton(
     @handle_error_wrap
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            db_community = await get_community_by_id(db, self.community_id)
-            if not db_community:
-                raise CustomException("Community not found")
-
-            await assert_has_admin_role(
-                interaction.user,  # type: ignore
-                schemas.CommunityRef.model_validate(db_community),
-            )
+            community = await get_community(db, self.community_id)
+            assert isinstance(interaction.user, discord.Member)
+            assert_has_admin_role(interaction.user, community)
 
             assert interaction.message is not None
 

@@ -70,7 +70,7 @@ class ReportManagementButton(
                 )
             report = schemas.ReportWithRelations.model_validate(db_report)
             if interaction.user.id != report.token.admin_id:
-                await assert_has_admin_role(interaction.user, report.token.community)  # type: ignore
+                assert_has_admin_role(interaction.user, report.token.community)  # type: ignore
 
             match self.command:
                 case "refresh":
