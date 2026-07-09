@@ -103,7 +103,7 @@ class ReportReasonDetailsType(NamedTuple):
 
 
 class ReportReasonDetails(Enum):
-    HACKING = ReportReasonDetailsType(pretty_name="Hacking", emoji="👾")
+    HACKING = ReportReasonDetailsType(pretty_name="Hacking", emoji="🪄")
     TEAMKILLING_GRIEFING = ReportReasonDetailsType(
         pretty_name="Teamkilling / Griefing", emoji="🧨"
     )
