@@ -122,3 +122,6 @@ MAX_INTEGRATION_LIMIT = get_env_int("MAX_INTEGRATION_LIMIT", 3)
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"
 # Time it takes for report tokens (used for submitting reports) to expire
 REPORT_TOKEN_EXPIRE_DELTA = timedelta(hours=1)
+
+# Steam API key. Currently optional but might become required in the future.
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")

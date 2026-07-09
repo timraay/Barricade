@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from typing import TypeAlias
 
@@ -13,6 +14,7 @@ from barricade.enums import (
     PlayerPlatform,
     ReportReasonFlag,
 )
+from barricade.steam import get_steam_avatar_url
 from barricade.utils import PlayerIDType, game_switch, get_player_id_type
 
 HLL_GAME_PILL = "".join(
@@ -106,8 +108,21 @@ async def get_plain_report_view(
         discord.ui.TextDisplay(f"-# **Description**\n{report.body.strip()}")
     )
 
+    # Get player avatars
+    try:
+        player_avatar_urls: list[str | None] = await asyncio.wait_for(
+            asyncio.gather(
+                *(get_steam_avatar_url(player.player_id) for player in report.players)
+            ),
+            timeout=1.5,
+        )
+    except TimeoutError:
+        player_avatar_urls = [None] * len(report.players)
+
     # Reported player(s)
-    for i, player in enumerate(report.players, 1):
+    for i, (player, player_avatar_url) in enumerate(
+        zip(report.players, player_avatar_urls, strict=True), 1
+    ):
         # Add separator between players
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large)
@@ -199,7 +214,15 @@ async def get_plain_report_view(
 
         content += "\nView on " + " | ".join(links)
         # TODO: Add Steam profile as thumbnail image where possible
-        container.add_item(discord.ui.TextDisplay(content))
+        if player_avatar_url:
+            container.add_item(
+                discord.ui.Section(
+                    discord.ui.TextDisplay(content),
+                    accessory=discord.ui.Thumbnail(player_avatar_url),
+                )
+            )
+        else:
+            container.add_item(discord.ui.TextDisplay(content))
 
         # Buttons
         if player_action_row_factory:
