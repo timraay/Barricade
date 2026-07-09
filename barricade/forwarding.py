@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.constants import (
     T17_SUPPORT_CUTOFF_DATE,
-    T17_SUPPORT_DISCORD_CHANNEL_ID,
+    T17_SUPPORT_HLL_CHANNEL_ID,
+    T17_SUPPORT_HLLV_CHANNEL_ID,
     T17_SUPPORT_NUM_ALLOWED_REJECTS,
     T17_SUPPORT_NUM_REQUIRED_RESPONSES,
     T17_SUPPORT_REASON_MASK,
@@ -607,7 +608,12 @@ async def collect_eos_ids_on_report_edit(report: schemas.ReportWithRelations, _)
 
 
 def might_forward_to_staff(report: schemas.ReportWithToken) -> bool:
-    if not T17_SUPPORT_DISCORD_CHANNEL_ID:
+    support_channel_id = game_switch(
+        report.game,
+        T17_SUPPORT_HLL_CHANNEL_ID,
+        T17_SUPPORT_HLLV_CHANNEL_ID,
+    )
+    if not support_channel_id:
         return False
 
     if (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) == 0:
@@ -634,11 +640,12 @@ def should_forward_to_staff(
     return False
 
 
-if T17_SUPPORT_DISCORD_CHANNEL_ID:
+if T17_SUPPORT_HLL_CHANNEL_ID or T17_SUPPORT_HLLV_CHANNEL_ID:
 
     @add_hook(EventHooks.player_ban)
     async def send_cheating_report_to_staff(response: schemas.ResponseWithToken):
-        channel = get_t17_support_forward_channel()
+        game = response.player_report.report.game
+        channel = get_t17_support_forward_channel(game)
         if not channel:
             return
 
@@ -734,7 +741,7 @@ async def send_or_edit_t17_support_report_review_message(
             report=report,
             community=None,
             message_type=ReportMessageType.T17_SUPPORT,
-            channel=get_t17_support_forward_channel(),
+            channel=get_t17_support_forward_channel(report.game),
             view=view,
         )
 

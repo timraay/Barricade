@@ -6,7 +6,8 @@ from barricade import schemas
 from barricade.constants import (
     DISCORD_HLL_REPORTS_CHANNEL_ID,
     DISCORD_HLLV_REPORTS_CHANNEL_ID,
-    T17_SUPPORT_DISCORD_CHANNEL_ID,
+    T17_SUPPORT_HLL_CHANNEL_ID,
+    T17_SUPPORT_HLLV_CHANNEL_ID,
 )
 from barricade.discord.bot import bot
 from barricade.discord.utils import format_url
@@ -34,11 +35,12 @@ def get_report_channel(game: Game) -> discord.TextChannel:
     return channel
 
 
-def get_t17_support_forward_channel() -> discord.TextChannel | None:
-    if not T17_SUPPORT_DISCORD_CHANNEL_ID:
-        return None
+def get_t17_support_forward_channel(game: Game) -> discord.TextChannel | None:
+    channel_id = game_switch(
+        game, T17_SUPPORT_HLL_CHANNEL_ID, T17_SUPPORT_HLLV_CHANNEL_ID
+    )
 
-    channel = bot.primary_guild.get_channel(T17_SUPPORT_DISCORD_CHANNEL_ID)
+    channel = bot.primary_guild.get_channel(channel_id)
     if not channel:
         logging.warning("T17 Support forward channel could not be found")
     elif not isinstance(channel, discord.TextChannel):

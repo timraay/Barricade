@@ -95,8 +95,9 @@ DISCORD_ENROLL_CHANNEL_ID = get_env_int("DISCORD_ENROLL_CHANNEL_ID", 0)
 # ID of the channel to send audit messages to
 DISCORD_AUDIT_CHANNEL_ID = get_env_int("DISCORD_AUDIT_CHANNEL_ID", 0)
 
-# ID of the channel to send reports to that are of interest to T17 support
-T17_SUPPORT_DISCORD_CHANNEL_ID = get_env_int("T17_SUPPORT_DISCORD_CHANNEL_ID", 0)
+# IDs of the channels to send reports to that are of interest to T17 support
+T17_SUPPORT_HLL_CHANNEL_ID = get_env_int("T17_SUPPORT_HLL_CHANNEL_ID", 0)
+T17_SUPPORT_HLLV_CHANNEL_ID = get_env_int("T17_SUPPORT_HLLV_CHANNEL_ID", 0)
 # A mask of report reasons. Only reports whose reasons overlaps with this mask are considered for forwarding to T17 support
 T17_SUPPORT_REASON_MASK = ReportReasonFlag(get_env_int("T17_SUPPORT_REASON_MASK", 1))
 # The amount of responses a report must have before being considered for forwarding to T17 support
