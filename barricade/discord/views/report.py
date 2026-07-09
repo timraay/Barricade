@@ -9,7 +9,7 @@ from barricade.discord.utils import LayoutView, format_url, get_user_id_from_men
 from barricade.enums import (
     Emojis,
     Game,
-    Platform,
+    PlatformFlag,
     PlayerPlatform,
     ReportReasonFlag,
 )
@@ -37,17 +37,26 @@ HLLV_GAME_PILL = "".join(
 
 
 def get_game_pill(game: Game) -> str:
+    return "**`" + game_switch(game, "🌲 Hell Let Loose ", "🌴 HLL: Vietnam ") + "`**"
     return game_switch(game, HLL_GAME_PILL, HLLV_GAME_PILL)
+
+
+def get_platform_pill(platform: PlatformFlag) -> str:
+    if platform == PlatformFlag.PC:
+        return "**`🕹️ PC `**"
+    elif platform == PlatformFlag.CONSOLE:
+        return "**`🕹️ Console `**"
+    return "**`🕹️ PC & Console `**"
 
 
 # TODO: Add more emojis
 def get_player_platform_emoji(
-    platform: PlayerPlatform | None, server_type: Platform, game: Game
+    player_platform: PlayerPlatform | None, platforms: PlatformFlag, game: Game
 ) -> str | None:
-    if platform == PlayerPlatform.STEAM:
+    if player_platform == PlayerPlatform.STEAM:
         return Emojis.STEAM
 
-    elif server_type == Platform.PC:
+    elif platforms == PlatformFlag.PC:
         return Emojis.EPIC_XBOX
 
     return None
@@ -77,14 +86,13 @@ async def get_plain_report_view(
     container = discord.ui.Container(accent_color=container_color)
 
     # Reason(s)
+    reasons = ReportReasonFlag(report.reasons_bitflag).to_list(
+        report.reasons_custom, with_emoji=True
+    )
     container.add_item(
         discord.ui.TextDisplay(
-            "-# **Reason**\n**"
-            + "**\n**".join(
-                ReportReasonFlag(report.reasons_bitflag).to_list(
-                    report.reasons_custom, with_emoji=True
-                )
-            )
+            f"-# **{'Reason' if len(reasons) == 1 else 'Reasons'}**\n**"
+            + "**\n**".join(reasons)
             + "**"
         )
     )
@@ -124,7 +132,7 @@ async def get_plain_report_view(
 
         # Player ID
         platform_emoji = get_player_platform_emoji(
-            player.player.platform, report.server_type, report.game
+            player.player.platform, report.platforms_bitflag, report.game
         )
         if platform_emoji:
             content += f"{platform_emoji} "
@@ -250,14 +258,20 @@ async def get_plain_report_view(
         if report.edited_at:
             content += f" on {discord.utils.format_dt(report.edited_at, 'f')}"
 
+    tags = (
+        f"-# {get_game_pill(report.game)} {get_platform_pill(report.platforms_bitflag)}"
+    )
+
     if refresh_button:
         view.add_item(
             discord.ui.Section(
                 discord.ui.TextDisplay(content),
+                discord.ui.TextDisplay(tags),
                 accessory=refresh_button,
             )
         )
     else:
         view.add_item(discord.ui.TextDisplay(content))
+        view.add_item(discord.ui.TextDisplay(tags))
 
     return view

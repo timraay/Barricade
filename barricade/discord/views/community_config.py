@@ -29,7 +29,7 @@ from barricade.discord.utils import (
     get_command_mention,
     handle_error_wrap,
 )
-from barricade.enums import ReportReasonDetails, ReportReasonFlag
+from barricade.enums import PlatformFlag, ReportReasonDetails, ReportReasonFlag
 
 T = TypeVar("T")
 
@@ -182,11 +182,15 @@ class CommunityConfigView(LayoutView):
             )
             container.add_item(title_display)
 
-            value_string = option_values_to_string(self.community, option)
-            value_display = discord.ui.TextDisplay(value_string)
+            value_strings = option_values_to_string(self.community, option).split(
+                "\n\n"
+            )
+            value_displays = [
+                discord.ui.TextDisplay(value_string) for value_string in value_strings
+            ]
             container.add_item(
                 discord.ui.Section(
-                    value_display,
+                    *value_displays,
                     accessory=CommunityConfigEditButton(self.community.id, option),  # type: ignore
                 )
             )
@@ -232,8 +236,8 @@ def combine_option_value_strings(
     display2 = value_to_string_func(value2)
 
     if multiline:
-        return f"{quote_block(display1)}\n-# **HLL (WWII)**\n{quote_block(display2)}\n-# **HLL: Vietnam**"
-    return f"> {display1} {display2}\n-# **HLL (WWII)**  |  **HLL: Vietnam**"
+        return f"-# **HLL (WWII)**\n{quote_block(display1)}\n\n-# **HLL: Vietnam**\n{quote_block(display2)}"
+    return f"-# **HLL (WWII)**  |  **HLL: Vietnam**\n> {display1} {display2}"
 
 
 def _text_channel_value_to_string(
@@ -276,12 +280,42 @@ def role_values_to_string(
     )
 
 
+def _platform_filter_value_to_string(value: PlatformFlag | None) -> str:
+    if value is None or value == PlatformFlag.all():
+        return "PC & Console"
+
+    match value:
+        case PlatformFlag.PC:
+            return "PC only"
+        case PlatformFlag.CONSOLE:
+            return "Console only"
+        case PlatformFlag(0):
+            return "Nothing"
+        case _:
+            raise ValueError(f"Unexpected platform: {value}")
+
+
+def platform_filter_values_to_string(
+    community: schemas.Community,
+    value1: PlatformFlag | None,
+    value2: PlatformFlag | None,
+    can_inherit_from: str | None = None,
+) -> str:
+    return combine_option_value_strings(
+        _platform_filter_value_to_string,
+        value1,
+        value2,
+        multiline=True,
+        can_inherit_from=can_inherit_from,
+    )
+
+
 def _reason_filter_value_to_string(value: ReportReasonFlag | None) -> str:
     if not value or value == ReportReasonFlag.all():
         return "All"
     elif value == 0:
         return "None"
-    return "-# - " + "\n-# - ".join(value.to_list(custom_msg="Custom", with_emoji=True))
+    return "\n".join(value.to_list(custom_msg="Custom", with_emoji=True))
 
 
 def reason_filter_values_to_string(
@@ -315,6 +349,12 @@ def option_values_to_string(
             assert isinstance(value1, int | None)
             assert isinstance(value2, int | None)
             return role_values_to_string(
+                community, value1, value2, can_inherit_from=option.can_inherit_from
+            )
+        case ConfigOptionType.PLATFORM_FILTER:
+            assert isinstance(value1, PlatformFlag | None)
+            assert isinstance(value2, PlatformFlag | None)
+            return platform_filter_values_to_string(
                 community, value1, value2, can_inherit_from=option.can_inherit_from
             )
         case ConfigOptionType.REASON_FILTER:
@@ -588,6 +628,57 @@ class CommunityConfigEditRoleModal(_CommunityConfigEditModal[int | None]):
         return self._get_values(raw_value1, raw_value2)
 
 
+class CommunityConfigEditPlatformFilterModal(
+    _CommunityConfigEditModal[PlatformFlag | None]
+):
+    def setup_modal_components(self) -> None:
+        value1, value2 = self.option.get_values(self.community)
+
+        self.checkbox_group1 = discord.ui.CheckboxGroup(
+            required=False,
+            options=[
+                discord.CheckboxGroupOption(
+                    label="PC",
+                    value=str(PlatformFlag.PC.value),
+                    default=value1 is None or (value1 & PlatformFlag.PC) != 0,
+                ),
+                discord.CheckboxGroupOption(
+                    label="Console",
+                    value=str(PlatformFlag.CONSOLE.value),
+                    default=value1 is None or (value1 & PlatformFlag.CONSOLE) != 0,
+                ),
+            ],
+        )
+
+        self.checkbox_group2 = discord.ui.CheckboxGroup(
+            required=False,
+            options=[
+                discord.CheckboxGroupOption(
+                    label="PC",
+                    value=str(PlatformFlag.PC.value),
+                    default=value2 is None or (value2 & PlatformFlag.PC) != 0,
+                ),
+                discord.CheckboxGroupOption(
+                    label="Console",
+                    value=str(PlatformFlag.CONSOLE.value),
+                    default=value2 is None or (value2 & PlatformFlag.CONSOLE) != 0,
+                ),
+            ],
+        )
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        return self.checkbox_group1, self.checkbox_group2
+
+    def get_values(self) -> tuple[PlatformFlag | None, PlatformFlag | None]:
+        raw_value1 = PlatformFlag(
+            sum(int(value) for value in self.checkbox_group1.values)
+        )
+        raw_value2 = PlatformFlag(
+            sum(int(value) for value in self.checkbox_group2.values)
+        )
+        return self._get_values(raw_value1, raw_value2)
+
+
 class CommunityConfigEditReasonFilterModal(
     _CommunityConfigEditModal[ReportReasonFlag | None]
 ):
@@ -671,6 +762,8 @@ def get_community_config_edit_modal(
             return CommunityConfigEditTextChannelModal(community, option)
         case ConfigOptionType.ROLE:
             return CommunityConfigEditRoleModal(community, option)
+        case ConfigOptionType.PLATFORM_FILTER:
+            return CommunityConfigEditPlatformFilterModal(community, option)
         case ConfigOptionType.REASON_FILTER:
             return CommunityConfigEditReasonFilterModal(community, option)
         case _:

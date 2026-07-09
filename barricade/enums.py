@@ -1,6 +1,6 @@
 import logging
 from enum import Enum, IntFlag, StrEnum, auto
-from typing import NamedTuple
+from typing import NamedTuple, assert_never
 
 
 class PlayerIDType(StrEnum):
@@ -19,6 +19,39 @@ class Platform(StrEnum):
 
     def is_console(self):
         return self in (Platform.CONSOLE, Platform.CROSSPLAY)
+
+    def to_flag(self) -> "PlatformFlag":
+        match self:
+            case Platform.PC:
+                return PlatformFlag.PC
+            case Platform.CONSOLE:
+                return PlatformFlag.CONSOLE
+            case Platform.CROSSPLAY:
+                return PlatformFlag.PC | PlatformFlag.CONSOLE
+            case _:
+                assert_never(self)
+                raise ValueError(f"Unknown platform: {self}")
+
+
+class PlatformFlag(IntFlag):
+    PC = auto()
+    CONSOLE = auto()
+    # Update to_platforms when adding new platforms
+
+    @classmethod
+    def all(cls):
+        self = cls(0)
+        for platform in cls:
+            self |= platform
+        return self
+
+    def to_platforms(self) -> list[Platform]:
+        platforms: list[Platform] = []
+        if self & PlatformFlag.PC:
+            platforms.append(Platform.PC)
+        if self & PlatformFlag.CONSOLE:
+            platforms.append(Platform.CONSOLE)
+        return platforms
 
 
 class PlayerPlatform(StrEnum):

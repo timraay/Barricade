@@ -14,7 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
-from barricade.enums import Game, Platform
+from barricade.enums import Game
 
 if TYPE_CHECKING:
     from .player_report import PlayerReport
@@ -39,7 +39,7 @@ class Report(ModelBase):
     body: Mapped[str]
     attachment_urls: Mapped[list[str]] = mapped_column(ARRAY(String))
     game: Mapped[Game] = mapped_column(Enum(Game), server_default=Game.HLL.name)
-    server_type: Mapped[Platform] = mapped_column(Enum(Platform))
+    platforms_bitflag: Mapped[int] = mapped_column(Integer)
 
     token: Mapped["ReportToken"] = relationship(
         back_populates="report", cascade="all, delete"

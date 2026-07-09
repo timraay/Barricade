@@ -71,6 +71,12 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
         models.Community.hllv_reports_channel_id,
     )
 
+    platform_filter_column = game_switch(
+        report.game,
+        models.Community.hll_platform_filter,
+        models.Community.hllv_platform_filter,
+    )
+
     reason_filter_column = game_switch(
         report.game,
         models.Community.hll_reason_filter,
@@ -83,16 +89,14 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             reports_channel_id_column.is_not(None),
             models.Community.id != report.token.community_id,
             or_(
+                platform_filter_column.is_(None),
+                platform_filter_column.bitwise_and(report.platforms_bitflag) != 0,
+            ),
+            or_(
                 reason_filter_column.is_(None),
                 reason_filter_column.bitwise_and(report.reasons_bitflag) != 0,
             ),
         )
-
-        # TODO: Allow communities to filter on crossplay settings
-        # if report.token.platform == Platform.PC:
-        #     stmt = stmt.where(models.Community.is_pc.is_(True))
-        # elif report.token.platform == Platform.CONSOLE:
-        #     stmt = stmt.where(models.Community.is_console.is_(True))
 
         result = await db.scalars(stmt)
         db_communities = result.all()
@@ -477,7 +481,20 @@ async def send_optional_player_alert_to_community(
                     community = schemas.CommunityRef.model_validate(db_community)
 
                 db_reports = await get_reports_for_player_with_no_community_review(
-                    db, player_id, community_id, community.hll_reason_filter
+                    db,
+                    player_id,
+                    community_id,
+                    platform_filter=game_switch(
+                        game,
+                        community.hll_platform_filter,
+                        community.hllv_platform_filter,
+                    ),
+                    reason_filter=game_switch(
+                        game,
+                        community.hll_reason_filter,
+                        community.hllv_reason_filter,
+                    ),
+                    # game=game,
                 )
                 reports = [
                     schemas.ReportWithToken.model_validate(db_report)

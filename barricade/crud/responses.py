@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
-from barricade.enums import Game, ReportReasonFlag, ReportRejectReason
+from barricade.enums import Game, PlatformFlag, ReportReasonFlag, ReportRejectReason
 from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
@@ -203,7 +203,8 @@ async def get_reports_for_player_with_no_community_review(
     db: AsyncSession,
     player_id: str,
     community_id: int,
-    reasons_filter: ReportReasonFlag | None = None,
+    platform_filter: PlatformFlag | None = None,
+    reason_filter: ReportReasonFlag | None = None,
     game: Game | None = None,
 ):
     """Get all reports of a specific player which the given community has not yet responded to.
@@ -216,7 +217,9 @@ async def get_reports_for_player_with_no_community_review(
         The ID of the player
     community_id : int
         The ID of the community
-    reasons_filter : ReportReasonFlag | None
+    platform_filter : PlatformFlag | None
+        Filter out reports whose platforms do not overlap with the filter. If None, no filter
+    reason_filter : ReportReasonFlag | None
         Filter out reports whose reasons do not overlap with the filter. If None, no filter
         will be applied. By default None.
     game : Game | None
@@ -246,10 +249,13 @@ async def get_reports_for_player_with_no_community_review(
         .options(*options)
     )
 
-    if reasons_filter is not None:
+    if platform_filter is not None:
         stmt = stmt.where(
-            models.Report.reasons_bitflag.bitwise_and(reasons_filter) != 0
+            models.Report.platforms_bitflag.bitwise_and(platform_filter) != 0
         )
+
+    if reason_filter is not None:
+        stmt = stmt.where(models.Report.reasons_bitflag.bitwise_and(reason_filter) != 0)
 
     if game is not None:
         stmt = stmt.where(models.Report.game == game)

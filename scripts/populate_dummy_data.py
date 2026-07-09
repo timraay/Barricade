@@ -7,7 +7,7 @@ from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
 from barricade.db import create_tables, session_factory
 from barricade.discord import bot
-from barricade.enums import Platform, PlayerPlatform, ReportReasonFlag
+from barricade.enums import PlatformFlag, PlayerPlatform, ReportReasonFlag
 
 
 async def main():
@@ -126,7 +126,7 @@ async def main():
                     ),
                 ],
                 game=schemas.Game.HLL,
-                server_type=Platform.PC,
+                platforms_bitflag=PlatformFlag.PC,
             ),
         )
         print("--", "Created report 1")
@@ -148,7 +148,7 @@ async def main():
                     ),
                 ],
                 game=schemas.Game.HLL,
-                server_type=Platform.PC,
+                platforms_bitflag=PlatformFlag.PC,
             ),
         )
         print("--", "Created report 2")

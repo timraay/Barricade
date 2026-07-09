@@ -18,6 +18,7 @@ class ConfigOptionCategory(StrEnum):
 class ConfigOptionType(StrEnum):
     TEXT_CHANNEL = "Text Channel"
     ROLE = "Role"
+    PLATFORM_FILTER = "Platform Filter"
     REASON_FILTER = "Reason Filter"
 
 
@@ -131,7 +132,18 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
         ),
         # Filters
         ConfigOption(
-            id="reasons_filter",
+            id="platform_filter",
+            name="Report Platform Filter",
+            description="Which platforms (i.e. PC & Console) to receive reports from.",
+            type=ConfigOptionType.PLATFORM_FILTER,
+            category=ConfigOptionCategory.FILTERS,
+            property_ids=(
+                "hll_platform_filter",
+                "hllv_platform_filter",
+            ),
+        ),
+        ConfigOption(
+            id="reason_filter",
             name="Report Reason Filter",
             description="Which categories of reports to receive.",
             type=ConfigOptionType.REASON_FILTER,

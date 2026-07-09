@@ -40,6 +40,7 @@ class Community(ModelBase):
     )
     hll_admin_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     hll_alerts_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hll_platform_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hll_reason_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     hllv_reports_channel_id: Mapped[int | None] = mapped_column(
@@ -53,6 +54,7 @@ class Community(ModelBase):
     )
     hllv_admin_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     hllv_alerts_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hllv_platform_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hllv_reason_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     admins: Mapped[list["Admin"]] = relationship(

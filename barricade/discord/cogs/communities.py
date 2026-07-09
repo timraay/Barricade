@@ -43,18 +43,6 @@ async def assert_channel_permissions(channel: discord.TextChannel):
 
 
 class CommunitiesCog(commands.Cog):
-    config_group = app_commands.Group(
-        name="config",
-        description="Configure community settings",
-        guild_only=True,
-        default_permissions=discord.Permissions(manage_guild=True),
-    )
-    config_disable_group = app_commands.Group(
-        name="disable",
-        description="Disable certain features",
-        parent=config_group,
-    )
-
     def __init__(self, bot: "Bot"):
         self.bot = bot
 

@@ -15,6 +15,7 @@ from barricade.enums import (
     Game,
     IntegrationType,
     Platform,
+    PlatformFlag,
     PlayerPlatform,
     ReportMessageType,
     ReportReasonFlag,
@@ -131,12 +132,14 @@ class _CommunityBase(BaseModel):
     hll_confirmations_channel_id: int | None
     hll_admin_role_id: int | None
     hll_alerts_role_id: int | None
+    hll_platform_filter: PlatformFlag | None
     hll_reason_filter: ReportReasonFlag | None
     hllv_reports_channel_id: int | None
     hllv_alerts_channel_id: int | None
     hllv_confirmations_channel_id: int | None
     hllv_admin_role_id: int | None
     hllv_alerts_role_id: int | None
+    hllv_platform_filter: PlatformFlag | None
     hllv_reason_filter: ReportReasonFlag | None
 
     @field_serializer(
@@ -182,7 +185,7 @@ class _ReportBase(BaseModel):
     reasons_custom: str | None
     attachment_urls: list[str]
     game: Game
-    server_type: Platform
+    platforms_bitflag: PlatformFlag
     edited_at: datetime | None
     edited_by: str | None
 
@@ -426,12 +429,14 @@ class CommunityEditParams(
     hll_confirmations_channel_id: int | None
     hll_admin_role_id: int | None
     hll_alerts_role_id: int | None
+    hll_platform_filter: PlatformFlag | None
     hll_reason_filter: ReportReasonFlag | None
     hllv_reports_channel_id: int | None
     hllv_alerts_channel_id: int | None
     hllv_confirmations_channel_id: int | None
     hllv_admin_role_id: int | None
     hllv_alerts_role_id: int | None
+    hllv_platform_filter: PlatformFlag | None
     hllv_reason_filter: ReportReasonFlag | None
 
     @field_validator("contact_url")
@@ -449,12 +454,14 @@ class CommunityCreateParams(CommunityEditParams):
     hll_confirmations_channel_id: int | None = None
     hll_admin_role_id: int | None = None
     hll_alerts_role_id: int | None = None
+    hll_platform_filter: PlatformFlag | None = None
     hll_reason_filter: ReportReasonFlag | None = None
     hllv_reports_channel_id: int | None = None
     hllv_alerts_channel_id: int | None = None
     hllv_confirmations_channel_id: int | None = None
     hllv_admin_role_id: int | None = None
     hllv_alerts_role_id: int | None = None
+    hllv_platform_filter: PlatformFlag | None = None
     hllv_reason_filter: ReportReasonFlag | None = None
 
     @field_validator("contact_url")
@@ -542,7 +549,7 @@ class ReportSubmissionData(BaseModel):
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
     game: Game
-    server_type: Platform = Field(alias="serverType")
+    platforms_bitflag: PlatformFlag
 
 
 class ReportSubmission(BaseModel):
