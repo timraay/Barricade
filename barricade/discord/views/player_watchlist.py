@@ -13,7 +13,7 @@ from barricade.crud.watchlists import (
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.crud_utils import get_community
-from barricade.discord.utils import View, handle_error_wrap
+from barricade.discord.utils import LayoutView, View, handle_error_wrap
 from barricade.exceptions import AlreadyExistsError
 
 
@@ -97,11 +97,13 @@ class PlayerToggleWatchlistButton(
             )
 
             # Replace button in view
-            view = View.from_message(interaction.message)
-            for item in view.children:
+            view = (
+                LayoutView if interaction.message.flags.components_v2 else View
+            ).from_message(interaction.message)
+            for item in view.walk_children():
                 if isinstance(item, ui.Button) and item.custom_id == self.custom_id:
-                    view.remove_item(item)
-                    view.add_item(new_button)
+                    item.parent.remove_item(item)  # type: ignore
+                    item.parent.add_item(new_button)  # type: ignore
                     break
             else:
                 raise RuntimeError(
