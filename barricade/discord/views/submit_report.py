@@ -8,6 +8,7 @@ from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
 from barricade.db import session_factory
 from barricade.discord.utils import CallableButton, CustomException, View
+from barricade.discord.views.report_edit import ReportEditView
 from barricade.enums import Platform
 from barricade.urls import URLFactory
 
@@ -34,6 +35,9 @@ class GetSubmissionURLView(View):
         )
 
     async def start_submission(self, interaction: Interaction):
+        await ReportEditView.new(interaction)
+        return
+
         async with session_factory.begin() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
             if not admin or not admin.community_id:

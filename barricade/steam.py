@@ -55,7 +55,12 @@ async def _process_steam_avatar_url_queue() -> None:
 
 
 async def get_steam_avatar_url(steam_id: str) -> str | None:
-    if get_player_id_type(steam_id) != PlayerIDType.STEAM_64_ID:
+    try:
+        player_id_type = get_player_id_type(steam_id)
+    except ValueError:
+        return None
+
+    if player_id_type != PlayerIDType.STEAM_64_ID:
         return None
 
     # Simply caching the result isn't enough, because multiple concurrent requests for the same

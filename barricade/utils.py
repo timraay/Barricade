@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import logging
 import re
+import urllib.parse
 from collections.abc import Coroutine, Iterable, Sequence
 from functools import wraps
 from typing import TypeVar, assert_never
@@ -64,6 +65,21 @@ def get_player_id_type(player_id: str) -> PlayerIDType:
         return PlayerIDType.UUID
     else:
         raise ValueError("Unknown player ID type")
+
+
+def validate_url(url: str, *, strict: bool = False) -> str:
+    if not strict and not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    split_url = urllib.parse.urlsplit(url.strip())
+    if not split_url.scheme:
+        raise ValueError("URL must start with a scheme (http:// or https://)")
+    if split_url.scheme not in ("http", "https"):
+        raise ValueError("URL must start with either http:// or https://")
+    if not split_url.netloc:
+        raise ValueError("Invalid URL")
+
+    return urllib.parse.urlunsplit(split_url)
 
 
 class SingletonMeta(type):

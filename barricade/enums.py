@@ -12,13 +12,6 @@ class Platform(StrEnum):
     # Careful when renaming, used by PSQL
     PC = "PC"
     CONSOLE = "Console"
-    CROSSPLAY = "Crossplay"
-
-    def is_pc(self):
-        return self in (Platform.PC, Platform.CROSSPLAY)
-
-    def is_console(self):
-        return self in (Platform.CONSOLE, Platform.CROSSPLAY)
 
     def to_flag(self) -> "PlatformFlag":
         match self:
@@ -26,8 +19,6 @@ class Platform(StrEnum):
                 return PlatformFlag.PC
             case Platform.CONSOLE:
                 return PlatformFlag.CONSOLE
-            case Platform.CROSSPLAY:
-                return PlatformFlag.PC | PlatformFlag.CONSOLE
             case _:
                 assert_never(self)
                 raise ValueError(f"Unknown platform: {self}")
@@ -67,11 +58,19 @@ class PlayerPlatform(StrEnum):
         return self in (PlayerPlatform.XBOX, PlayerPlatform.PLAYSTATION)
 
     def is_valid_for_platform(self, platform: Platform):
-        if platform == Platform.PC:
-            return self.is_pc()
-        if platform == Platform.CONSOLE:
-            return self.is_console()
-        return True
+        match platform:
+            case Platform.PC:
+                return self.is_pc()
+            case Platform.CONSOLE:
+                return self.is_console()
+            case _:
+                assert_never(platform)
+
+    def is_valid_for_platform_flag(self, platform_bitflag: PlatformFlag):
+        return any(
+            self.is_valid_for_platform(platform)
+            for platform in platform_bitflag.to_platforms()
+        )
 
 
 class Game(StrEnum):
@@ -117,6 +116,9 @@ class ReportReasonDetails(Enum):
         pretty_name="Stream sniping / Ghosting", emoji="📺"
     )
     BAN_EVASION = ReportReasonDetailsType(pretty_name="Ban evasion", emoji="🕵️‍♂️")
+
+    def to_flag(self) -> "ReportReasonFlag":
+        return ReportReasonFlag[self.name]
 
 
 class ReportReasonFlag(IntFlag):

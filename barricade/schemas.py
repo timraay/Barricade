@@ -14,7 +14,6 @@ from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import (
     Game,
     IntegrationType,
-    Platform,
     PlatformFlag,
     PlayerPlatform,
     ReportMessageType,
@@ -496,8 +495,10 @@ class ReportCreateParams(ReportEditParams):
 
 class ReportCreateParamsTokenless(ReportEditParams):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    edited_at: datetime | None = None
+    edited_by: str | None = None
     admin_id: int
-    platform: Platform
+    platforms_bitflag: PlatformFlag
 
     @field_serializer("admin_id", when_used="json-unless-none")
     def convert_large_int_to_str(value: int):  # type: ignore

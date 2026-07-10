@@ -36,6 +36,7 @@ from barricade.integrations import (
 from barricade.integrations.custom import CustomIntegration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
+from barricade.utils import validate_url
 
 RE_BATTLEMETRICS_ORG_URL = re.compile(
     r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)"
@@ -111,7 +112,14 @@ class IntegrationManagementView(View):
 
     async def get_integration_hyperlink(self, integration: Integration):
         name = await self.get_integration_name(integration)
-        return format_url(name, integration.get_instance_url())
+
+        integration_url = integration.get_instance_url()
+        try:
+            integration_url = validate_url(integration_url)
+        except ValueError:
+            return name
+        else:
+            return format_url(name, integration_url)
 
     def update_integrations(self):
         """Take the current community and repopulate the list
@@ -161,7 +169,9 @@ class IntegrationManagementView(View):
             assert integration.config.id is not None
             enabled = integration.config.enabled
             name = integration_names[i]
-            name_hyperlink = format_url(name, integration.get_instance_url())
+
+            name_hyperlink = await self.get_integration_hyperlink(integration)
+            # Shouldn't require any I/O since name is now cached
 
             if enabled:
                 emoji = "🟢"
