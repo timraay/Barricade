@@ -9,17 +9,18 @@ T = TypeVar("T")
 
 
 class ConfigOptionCategory(StrEnum):
-    CHANNELS = "Channels"
-    ROLES = "Roles"
-    FILTERS = "Filters"
+    GAMES = "Games"
+    REPORTS = "Reports"
+    ALERTS = "Alerts"
     INTEGRATIONS = "Integrations"
 
 
 class ConfigOptionType(StrEnum):
     TEXT_CHANNEL = "Text Channel"
     ROLE = "Role"
-    PLATFORM_FILTER = "Platform Filter"
-    REASON_FILTER = "Reason Filter"
+    GAME_FILTER = "Games"
+    PLATFORM_FILTER = "Platforms"
+    REASON_FILTER = "Reasons"
 
 
 class ConfigOption(BaseModel, Generic[T]):
@@ -51,7 +52,7 @@ class ConfigOption(BaseModel, Generic[T]):
     def get_values(self, community: schemas.CommunityRef) -> tuple[T | None, T | None]:
         property_id1, property_id2 = self.property_ids
         value1 = getattr(community, property_id1)
-        value2 = getattr(community, property_id2) if property_id2 else None
+        value2 = getattr(community, property_id2) if property_id2 else value1
         return value1, value2
 
     def set_values(
@@ -66,13 +67,44 @@ class ConfigOption(BaseModel, Generic[T]):
 CONFIG_OPTIONS: dict[str, ConfigOption] = {
     option.id: option
     for option in [
-        # Channels
+        # Games
+        ConfigOption(
+            id="games_bitflag",
+            name="Supported Games",
+            description="Which games to submit and receive reports for.",
+            type=ConfigOptionType.GAME_FILTER,
+            category=ConfigOptionCategory.GAMES,
+            property_ids=("games_bitflag", None),
+        ),
+        ConfigOption(
+            id="admin_role_id",
+            name="Admin Role",
+            description="The role that can change settings & review reports.",
+            type=ConfigOptionType.ROLE,
+            category=ConfigOptionCategory.GAMES,
+            property_ids=(
+                "hll_admin_role_id",
+                "hllv_admin_role_id",
+            ),
+        ),
+        ConfigOption(
+            id="platform_filter",
+            name="Crossplay Status",
+            description="Which platforms (PC and console) to receive reports for.",
+            type=ConfigOptionType.PLATFORM_FILTER,
+            category=ConfigOptionCategory.GAMES,
+            property_ids=(
+                "hll_platform_filter",
+                "hllv_platform_filter",
+            ),
+        ),
+        # Reports
         ConfigOption(
             id="reports_channel_id",
-            name="Reports Channel",
+            name="Received Reports Channel",
             description="The text channel where you receive new reports.",
             type=ConfigOptionType.TEXT_CHANNEL,
-            category=ConfigOptionCategory.CHANNELS,
+            category=ConfigOptionCategory.REPORTS,
             property_ids=(
                 "hll_reports_channel_id",
                 "hllv_reports_channel_id",
@@ -80,78 +112,55 @@ CONFIG_OPTIONS: dict[str, ConfigOption] = {
             is_nullable=True,
         ),
         ConfigOption(
-            id="alerts_channel_id",
-            name="Alerts Channel",
-            description="The text channel where you receive alerts.",
-            type=ConfigOptionType.TEXT_CHANNEL,
-            category=ConfigOptionCategory.CHANNELS,
-            property_ids=(
-                "hll_alerts_channel_id",
-                "hllv_alerts_channel_id",
-            ),
-            can_inherit_from="Reports Channel",
-            is_nullable=True,
-        ),
-        ConfigOption(
             id="confirmations_channel_id",
-            name="Confirmations Channel",
+            name="Submitted Reports Channel",
             description="The text channel where you receive confirmations of reports you submit.",
             type=ConfigOptionType.TEXT_CHANNEL,
-            category=ConfigOptionCategory.CHANNELS,
+            category=ConfigOptionCategory.REPORTS,
             property_ids=(
                 "hll_confirmations_channel_id",
                 "hllv_confirmations_channel_id",
             ),
-            can_inherit_from="Reports Channel",
+            can_inherit_from="Received Reports Channel",
             is_nullable=True,
-        ),
-        # Roles
-        ConfigOption(
-            id="admin_role_id",
-            name="Admin Role",
-            description="The role that can review reports.",
-            type=ConfigOptionType.ROLE,
-            category=ConfigOptionCategory.ROLES,
-            property_ids=(
-                "hll_admin_role_id",
-                "hllv_admin_role_id",
-            ),
-        ),
-        ConfigOption(
-            id="alerts_role_id",
-            name="Alerts Role",
-            description="The role that gets notified by alerts.",
-            type=ConfigOptionType.ROLE,
-            category=ConfigOptionCategory.ROLES,
-            property_ids=(
-                "hll_alerts_role_id",
-                "hllv_alerts_role_id",
-            ),
-            can_inherit_from="Admin Role",
-            is_nullable=True,
-        ),
-        # Filters
-        ConfigOption(
-            id="platform_filter",
-            name="Report Platform Filter",
-            description="Which platforms (i.e. PC & Console) to receive reports from.",
-            type=ConfigOptionType.PLATFORM_FILTER,
-            category=ConfigOptionCategory.FILTERS,
-            property_ids=(
-                "hll_platform_filter",
-                "hllv_platform_filter",
-            ),
         ),
         ConfigOption(
             id="reason_filter",
             name="Report Reason Filter",
             description="Which categories of reports to receive.",
             type=ConfigOptionType.REASON_FILTER,
-            category=ConfigOptionCategory.FILTERS,
+            category=ConfigOptionCategory.REPORTS,
             property_ids=(
                 "hll_reason_filter",
                 "hllv_reason_filter",
             ),
+        ),
+        # Alerts
+        ConfigOption(
+            id="alerts_channel_id",
+            name="Alerts Channel",
+            description="The text channel where you receive alerts.",
+            type=ConfigOptionType.TEXT_CHANNEL,
+            category=ConfigOptionCategory.ALERTS,
+            property_ids=(
+                "hll_alerts_channel_id",
+                "hllv_alerts_channel_id",
+            ),
+            can_inherit_from="Received Reports Channel",
+            is_nullable=True,
+        ),
+        ConfigOption(
+            id="alerts_role_id",
+            name="Alerts Role",
+            description="The role that gets notified by alerts.",
+            type=ConfigOptionType.ROLE,
+            category=ConfigOptionCategory.ALERTS,
+            property_ids=(
+                "hll_alerts_role_id",
+                "hllv_alerts_role_id",
+            ),
+            can_inherit_from="Admin Role",
+            is_nullable=True,
         ),
     ]
 }

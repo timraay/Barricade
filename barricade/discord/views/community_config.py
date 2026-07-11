@@ -29,7 +29,12 @@ from barricade.discord.utils import (
     get_command_mention,
     handle_error_wrap,
 )
-from barricade.enums import PlatformFlag, ReportReasonDetails, ReportReasonFlag
+from barricade.enums import (
+    GameFlag,
+    PlatformFlag,
+    ReportReasonDetails,
+    ReportReasonFlag,
+)
 
 T = TypeVar("T")
 
@@ -200,7 +205,7 @@ class CommunityConfigView(LayoutView):
 
 async def get_community_config_view(
     community: schemas.Community,
-    category: ConfigOptionCategory = ConfigOptionCategory.CHANNELS,
+    category: ConfigOptionCategory = ConfigOptionCategory.GAMES,
 ) -> LayoutView:
     if category == ConfigOptionCategory.INTEGRATIONS:
         from barricade.discord.views.integration_config import IntegrationConfigView
@@ -219,6 +224,7 @@ def quote_block(value: str) -> str:
 
 def combine_option_value_strings(
     value_to_string_func: Callable[[T | None], str],
+    community: schemas.CommunityRef,
     value1: T | None,
     value2: T | None,
     can_inherit_from: str | None = None,
@@ -228,12 +234,20 @@ def combine_option_value_strings(
         # Inherit from parent
         return f"-# > Same as **{can_inherit_from}**"
 
-    if value1 == value2:
-        # value is equal for both games
-        return f">>> {value_to_string_func(value1)}"
-
     display1 = value_to_string_func(value1)
     display2 = value_to_string_func(value2)
+
+    if value1 == value2:
+        # value is equal for both games
+        return f">>> {display1}"
+
+    if community.games_bitflag == GameFlag.HLL:
+        # Only HLL is enabled, show only the first value
+        return f">>> {display1}"
+
+    if community.games_bitflag == GameFlag.HLLV:
+        # Only HLLV is enabled, show only the second value
+        return f">>> {display2}"
 
     if multiline:
         return f"-# **HLL (WWII)**\n{quote_block(display1)}\n\n-# **HLL: Vietnam**\n{quote_block(display2)}"
@@ -241,7 +255,7 @@ def combine_option_value_strings(
 
 
 def _text_channel_value_to_string(
-    community: schemas.Community, value: int | None
+    community: schemas.CommunityRef, value: int | None
 ) -> str:
     channel = get_text_channel(community.guild_id, value)
     if channel:
@@ -252,13 +266,14 @@ def _text_channel_value_to_string(
 
 
 def text_channel_values_to_string(
-    community: schemas.Community,
+    community: schemas.CommunityRef,
     value1: int | None,
     value2: int | None,
     can_inherit_from: str | None = None,
 ) -> str:
     return combine_option_value_strings(
         partial(_text_channel_value_to_string, community),
+        community,
         value1,
         value2,
         can_inherit_from=can_inherit_from,
@@ -270,13 +285,51 @@ def _role_value_to_string(value: int | None) -> str:
 
 
 def role_values_to_string(
-    community: schemas.Community,
+    community: schemas.CommunityRef,
     value1: int | None,
     value2: int | None,
     can_inherit_from: str | None = None,
 ) -> str:
     return combine_option_value_strings(
-        _role_value_to_string, value1, value2, can_inherit_from=can_inherit_from
+        _role_value_to_string,
+        community,
+        value1,
+        value2,
+        can_inherit_from=can_inherit_from,
+    )
+
+
+def _game_filter_value_to_string(value: GameFlag | None) -> str:
+    hll_str = "🌲 **Hell Let Loose** (2021)"
+    hllv_str = "🌴 **Hell Let Loose: Vietnam** (2026)"
+
+    if value is None or value == GameFlag.all():
+        return f"{hll_str}\n{hllv_str}"
+
+    match value:
+        case GameFlag.HLL:
+            return hll_str
+        case GameFlag.HLLV:
+            return hllv_str
+        case GameFlag(0):
+            return "Nothing"
+        case _:
+            raise ValueError(f"Unexpected game: {value}")
+
+
+def game_filter_values_to_string(
+    community: schemas.CommunityRef,
+    value1: GameFlag | None,
+    value2: GameFlag | None,
+    can_inherit_from: str | None = None,
+) -> str:
+    return combine_option_value_strings(
+        _game_filter_value_to_string,
+        community,
+        value1,
+        value2,
+        multiline=True,
+        can_inherit_from=can_inherit_from,
     )
 
 
@@ -296,13 +349,14 @@ def _platform_filter_value_to_string(value: PlatformFlag | None) -> str:
 
 
 def platform_filter_values_to_string(
-    community: schemas.Community,
+    community: schemas.CommunityRef,
     value1: PlatformFlag | None,
     value2: PlatformFlag | None,
     can_inherit_from: str | None = None,
 ) -> str:
     return combine_option_value_strings(
         _platform_filter_value_to_string,
+        community,
         value1,
         value2,
         multiline=True,
@@ -319,13 +373,14 @@ def _reason_filter_value_to_string(value: ReportReasonFlag | None) -> str:
 
 
 def reason_filter_values_to_string(
-    community: schemas.Community,
+    community: schemas.CommunityRef,
     value1: ReportReasonFlag | None,
     value2: ReportReasonFlag | None,
     can_inherit_from: str | None = None,
 ) -> str:
     return combine_option_value_strings(
         _reason_filter_value_to_string,
+        community,
         value1,
         value2,
         multiline=True,
@@ -334,7 +389,7 @@ def reason_filter_values_to_string(
 
 
 def option_values_to_string(
-    community: schemas.Community,
+    community: schemas.CommunityRef,
     option: ConfigOption,
 ) -> str:
     value1, value2 = option.get_values(community)
@@ -349,6 +404,12 @@ def option_values_to_string(
             assert isinstance(value1, int | None)
             assert isinstance(value2, int | None)
             return role_values_to_string(
+                community, value1, value2, can_inherit_from=option.can_inherit_from
+            )
+        case ConfigOptionType.GAME_FILTER:
+            assert isinstance(value1, GameFlag | None)
+            assert isinstance(value2, GameFlag | None)
+            return game_filter_values_to_string(
                 community, value1, value2, can_inherit_from=option.can_inherit_from
             )
         case ConfigOptionType.PLATFORM_FILTER:
@@ -379,6 +440,10 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         self.option = option
 
         value1, value2 = self.option.get_values(self.community)
+
+        self.games_bitflag = community.games_bitflag
+        self.old_values = (value1, value2)
+
         self._is_split = self.can_split and value1 != value2
 
         self.setup_modal()
@@ -458,7 +523,11 @@ class _CommunityConfigEditModal(Generic[T], Modal):
 
     @property
     def can_split(self) -> bool:
-        return self.option.is_game_dependent() and not self.is_inheriting
+        return (
+            self.option.is_game_dependent()
+            and not self.is_inheriting
+            and len(list(self.games_bitflag)) != 1
+        )
 
     @property
     def is_split(self) -> bool:
@@ -483,11 +552,12 @@ class _CommunityConfigEditModal(Generic[T], Modal):
             return None, None
 
         if not self.option.is_game_dependent():
-            return raw_value1, None
-        elif self.is_split:
-            return raw_value1, raw_value2
-        else:
             return raw_value1, raw_value1
+
+        if self.is_split:
+            return raw_value1, raw_value2
+
+        return raw_value1, raw_value1
 
     def get_values(self) -> tuple[T | None, T | None]:
         raise NotImplementedError
@@ -547,6 +617,15 @@ class _CommunityConfigEditModal(Generic[T], Modal):
             await self.assert_is_allowed_in_guild(interaction.guild, save=True)
 
             value1, value2 = self.get_values()
+
+            # If the community only has one game enabled, do not override the value for the
+            # disabled game, unless both are the same, in which case we keep them in sync.
+            if self.old_values[0] != self.old_values[1]:
+                if self.games_bitflag == GameFlag.HLL:
+                    value2 = self.old_values[1]
+                elif self.games_bitflag == GameFlag.HLLV:
+                    value1 = self.old_values[0]
+
             self.option.set_values(self.community, value1, value2)
 
             await self.save_community(db)
@@ -628,6 +707,53 @@ class CommunityConfigEditRoleModal(_CommunityConfigEditModal[int | None]):
         return self._get_values(raw_value1, raw_value2)
 
 
+class CommunityConfigEditGameFilterModal(_CommunityConfigEditModal[GameFlag | None]):
+    def setup_modal_components(self) -> None:
+        value1, value2 = self.option.get_values(self.community)
+
+        self.checkbox_group1 = discord.ui.CheckboxGroup(
+            required=True,
+            min_values=1,
+            options=[
+                discord.CheckboxGroupOption(
+                    label="🌲 Hell Let Loose (2021)",
+                    value=str(GameFlag.HLL.value),
+                    default=value1 is None or (value1 & GameFlag.HLL) != 0,
+                ),
+                discord.CheckboxGroupOption(
+                    label="🌴 Hell Let Loose: Vietnam (2026)",
+                    value=str(GameFlag.HLLV.value),
+                    default=value1 is None or (value1 & GameFlag.HLLV) != 0,
+                ),
+            ],
+        )
+
+        self.checkbox_group2 = discord.ui.CheckboxGroup(
+            required=True,
+            min_values=1,
+            options=[
+                discord.CheckboxGroupOption(
+                    label="🌲 Hell Let Loose (2021)",
+                    value=str(GameFlag.HLL.value),
+                    default=value2 is None or (value2 & GameFlag.HLL) != 0,
+                ),
+                discord.CheckboxGroupOption(
+                    label="🌴 Hell Let Loose: Vietnam (2026)",
+                    value=str(GameFlag.HLLV.value),
+                    default=value2 is None or (value2 & GameFlag.HLLV) != 0,
+                ),
+            ],
+        )
+
+    def get_components(self) -> tuple[discord.ui.Item, discord.ui.Item]:
+        return self.checkbox_group1, self.checkbox_group2
+
+    def get_values(self) -> tuple[GameFlag | None, GameFlag | None]:
+        raw_value1 = GameFlag(sum(int(value) for value in self.checkbox_group1.values))
+        raw_value2 = GameFlag(sum(int(value) for value in self.checkbox_group2.values))
+        return self._get_values(raw_value1, raw_value2)
+
+
 class CommunityConfigEditPlatformFilterModal(
     _CommunityConfigEditModal[PlatformFlag | None]
 ):
@@ -635,7 +761,8 @@ class CommunityConfigEditPlatformFilterModal(
         value1, value2 = self.option.get_values(self.community)
 
         self.checkbox_group1 = discord.ui.CheckboxGroup(
-            required=False,
+            required=True,
+            min_values=1,
             options=[
                 discord.CheckboxGroupOption(
                     label="PC",
@@ -651,7 +778,8 @@ class CommunityConfigEditPlatformFilterModal(
         )
 
         self.checkbox_group2 = discord.ui.CheckboxGroup(
-            required=False,
+            required=True,
+            min_values=1,
             options=[
                 discord.CheckboxGroupOption(
                     label="PC",
@@ -762,6 +890,8 @@ def get_community_config_edit_modal(
             return CommunityConfigEditTextChannelModal(community, option)
         case ConfigOptionType.ROLE:
             return CommunityConfigEditRoleModal(community, option)
+        case ConfigOptionType.GAME_FILTER:
+            return CommunityConfigEditGameFilterModal(community, option)
         case ConfigOptionType.PLATFORM_FILTER:
             return CommunityConfigEditPlatformFilterModal(community, option)
         case ConfigOptionType.REASON_FILTER:

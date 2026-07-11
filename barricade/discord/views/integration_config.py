@@ -438,6 +438,13 @@ class IntegrationConfigView(CommunityConfigView):
             )
         )
 
+        container.add_item(
+            discord.ui.TextDisplay(
+                "-# **Note:** Multiple servers do __not__ require multiple integrations."
+                " See the [FAQ](https://github.com/timraay/Barricade/wiki/Frequently-Asked-Questions#i-have-multiple-servers-do-i-need-to-add-multiple-integrations)."
+            )
+        )
+
         return container
 
 
