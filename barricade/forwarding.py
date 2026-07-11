@@ -89,6 +89,7 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             models.Community.guild_id.is_not(None),
             reports_channel_id_column.is_not(None),
             models.Community.id != report.token.community_id,
+            models.Community.games_bitflag.bitwise_and(report.game.to_flag()) != 0,
             or_(
                 platform_filter_column.is_(None),
                 platform_filter_column.bitwise_and(report.platforms_bitflag) != 0,
@@ -480,6 +481,9 @@ async def send_optional_player_alert_to_community(
                 if not community:
                     db_community = await get_community_by_id(db, community_id)
                     community = schemas.CommunityRef.model_validate(db_community)
+
+                if community.games_bitflag & game.to_flag() == 0:
+                    continue
 
                 db_reports = await get_reports_for_player_with_no_community_review(
                     db,
