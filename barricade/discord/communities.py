@@ -5,9 +5,9 @@ import discord
 from barricade import schemas
 from barricade.constants import (
     DISCORD_ADMIN_ROLE_ID,
-    DISCORD_CONSOLE_ROLE_ID,
+    DISCORD_HLL_ROLE_ID,
+    DISCORD_HLLV_ROLE_ID,
     DISCORD_OWNER_ROLE_ID,
-    DISCORD_PC_ROLE_ID,
 )
 from barricade.discord.bot import bot
 from barricade.discord.utils import CustomException
@@ -21,8 +21,8 @@ def get_admin_roles() -> tuple[discord.Role, discord.Role, discord.Role, discord
     for role_id, role_name in (
         (DISCORD_ADMIN_ROLE_ID, "Admin"),
         (DISCORD_OWNER_ROLE_ID, "Owner"),
-        (DISCORD_PC_ROLE_ID, "PC"),
-        (DISCORD_CONSOLE_ROLE_ID, "Console"),
+        (DISCORD_HLL_ROLE_ID, "WWII"),
+        (DISCORD_HLLV_ROLE_ID, "Vietnam"),
     ):
         role = bot.primary_guild.get_role(role_id)
         if not role:
@@ -42,7 +42,7 @@ async def get_admin_name(admin: schemas.AdminRef):
 async def update_user_roles(
     user_id: int, community: schemas.CommunityRef, strict: bool = True
 ):
-    admin_role, owner_role, pc_role, console_role = get_admin_roles()
+    admin_role, owner_role, *game_roles = get_admin_roles()
     user = await bot.get_or_fetch_member(user_id, strict=strict)
     if not user:
         return False
@@ -57,15 +57,11 @@ async def update_user_roles(
         to_add.append(admin_role)
         to_remove.append(owner_role)
 
-    if community.is_pc:
-        to_add.append(pc_role)
-    else:
-        to_remove.append(pc_role)
-
-    if community.is_console:
-        to_add.append(console_role)
-    else:
-        to_remove.append(console_role)
+    for game, game_role in zip(Game, game_roles, strict=True):
+        if community.games_bitflag & game.to_flag() == 0:
+            to_remove.append(game_role)
+        else:
+            to_add.append(game_role)
 
     await user.add_roles(*to_add)
     await user.remove_roles(*to_remove)

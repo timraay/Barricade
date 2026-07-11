@@ -13,6 +13,7 @@ from pydantic import (
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import (
     Game,
+    GameFlag,
     IntegrationType,
     PlatformFlag,
     PlayerPlatform,
@@ -122,8 +123,7 @@ class _CommunityBase(BaseModel):
     name: str
     tag: str
     contact_url: str
-    is_pc: bool
-    is_console: bool
+    games_bitflag: GameFlag
 
     guild_id: int | None
     hll_reports_channel_id: int | None

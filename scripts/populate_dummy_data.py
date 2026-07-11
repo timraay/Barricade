@@ -7,7 +7,7 @@ from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
 from barricade.db import create_tables, session_factory
 from barricade.discord import bot
-from barricade.enums import PlatformFlag, PlayerPlatform, ReportReasonFlag
+from barricade.enums import GameFlag, PlatformFlag, PlayerPlatform, ReportReasonFlag
 
 
 async def main():
@@ -38,8 +38,7 @@ async def main():
                 hll_reports_channel_id=729998051288285256,
                 hll_admin_role_id=696127274549772359,
                 owner_name="Abu",
-                is_pc=True,
-                is_console=True,
+                games_bitflag=GameFlag.all(),
             ),
         )
         print("--", "Created community 1")
@@ -53,8 +52,7 @@ async def main():
                 guild_id=None,
                 hll_reports_channel_id=None,
                 owner_name="C2 owner",
-                is_pc=True,
-                is_console=False,
+                games_bitflag=GameFlag.HLL,
             ),
         )
         print("--", "Created community 2")
@@ -68,8 +66,7 @@ async def main():
                 guild_id=None,
                 hll_reports_channel_id=None,
                 owner_name="C3 owner",
-                is_pc=True,
-                is_console=False,
+                games_bitflag=GameFlag.HLL,
             ),
         )
         print("--", "Created community 3")

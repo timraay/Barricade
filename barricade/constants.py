@@ -83,10 +83,14 @@ DISCORD_GUILD_ID = get_env_int("DISCORD_GUILD_ID", 0)
 DISCORD_ADMIN_ROLE_ID = get_env_int("DISCORD_ADMIN_ROLE_ID", 0)
 # ID of the Server Owner role
 DISCORD_OWNER_ROLE_ID = get_env_int("DISCORD_OWNER_ROLE_ID", 0)
-# ID of the PC role
+# ID of the PC role (deprecated)
 DISCORD_PC_ROLE_ID = get_env_int("DISCORD_PC_ROLE_ID", 0)
-# ID of the Console role
+# ID of the Console role (deprecated)
 DISCORD_CONSOLE_ROLE_ID = get_env_int("DISCORD_CONSOLE_ROLE_ID", 0)
+# ID of the HLL role
+DISCORD_HLL_ROLE_ID = get_env_int("DISCORD_HLL_ROLE_ID", 0)
+# ID of the hLLV role
+DISCORD_HLLV_ROLE_ID = get_env_int("DISCORD_HLLV_ROLE_ID", 0)
 # IDs of the main report channels
 DISCORD_HLL_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLL_REPORTS_CHANNEL_ID", 0)
 DISCORD_HLLV_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLLV_REPORTS_CHANNEL_ID", 0)

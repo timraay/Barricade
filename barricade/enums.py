@@ -78,6 +78,21 @@ class Game(StrEnum):
     HLL = "HLL"
     HLLV = "HLLV"
 
+    def to_flag(self) -> "GameFlag":
+        return GameFlag[self.name]
+
+
+class GameFlag(IntFlag):
+    HLL = auto()
+    HLLV = auto()
+
+    @classmethod
+    def all(cls):
+        self = cls(0)
+        for game in cls:
+            self |= game
+        return self
+
 
 class PlayerAlertType(StrEnum):
     WATCHLISTED = "Watchlisted"
