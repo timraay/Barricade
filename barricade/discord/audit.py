@@ -40,7 +40,7 @@ async def set_footer(
 def add_community_field(embed: discord.Embed, community: schemas.CommunityRef):
     return embed.add_field(
         name=f"Community (`#{community.id}`)",
-        value=f"{esc_md(community.tag)} {esc_md(community.name)}",
+        value=f"{esc_md(community.tag)} {esc_md(community.name)}".strip(),
     )
 
 

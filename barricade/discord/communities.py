@@ -5,6 +5,7 @@ import discord
 from barricade import schemas
 from barricade.constants import (
     DISCORD_ADMIN_ROLE_ID,
+    DISCORD_ENROLL_CHANNEL_ID,
     DISCORD_HLL_ROLE_ID,
     DISCORD_HLLV_ROLE_ID,
     DISCORD_OWNER_ROLE_ID,
@@ -14,6 +15,21 @@ from barricade.discord.utils import CustomException
 from barricade.enums import Game
 from barricade.logger import get_logger
 from barricade.utils import game_switch, safe_create_task
+
+
+def get_enroll_channel() -> discord.TextChannel:
+    channel = bot.primary_guild.get_channel(DISCORD_ENROLL_CHANNEL_ID)
+    if not channel:
+        raise CustomException(
+            "Could not send application!",
+            "Channel not found. Reach out to an administrator.",
+        )
+    if not isinstance(channel, discord.TextChannel):
+        raise CustomException(
+            "Could not send application!",
+            "Invalid channel configured. Reach out to an administrator.",
+        )
+    return channel
 
 
 def get_admin_roles() -> tuple[discord.Role, discord.Role, discord.Role, discord.Role]:

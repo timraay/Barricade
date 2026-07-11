@@ -124,10 +124,10 @@ class BattlemetricsIntegration(
         report = response.player_report.report
         reporting_community = report.token.community
         message = (
-            f"Reported by {reporting_community.tag}\n"
+            f"Reported by {reporting_community.tag or reporting_community.name}\n"
             f"Contact: {reporting_community.contact_url}"
             "\n\n"
-            f"Banned by {response.community.tag}\n"
+            f"Banned by {response.community.tag or response.community.name}\n"
             f"Contact: {response.community.contact_url}"
             "\n\n"
             "More info: bit.ly/BarricadeBanned"

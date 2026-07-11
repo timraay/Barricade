@@ -73,11 +73,11 @@ def validate_url(url: str, *, strict: bool = False) -> str:
 
     split_url = urllib.parse.urlsplit(url.strip())
     if not split_url.scheme:
-        raise ValueError("URL must start with a scheme (http:// or https://)")
+        raise ValueError("URL must start with a scheme (`http://` or `https://`)")
     if split_url.scheme not in ("http", "https"):
-        raise ValueError("URL must start with either http:// or https://")
+        raise ValueError("URL must start with either `http://` or `https://`")
     if not split_url.netloc:
-        raise ValueError("Invalid URL")
+        raise ValueError("Not a valid URL")
 
     return urllib.parse.urlunsplit(split_url)
 
