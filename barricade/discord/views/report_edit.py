@@ -399,13 +399,15 @@ class ReportEditView(_ReportEditView):
                 edited_by=interaction.user.mention,
             )
 
+            await interaction.response.defer(ephemeral=True)
+
             await edit_report(
                 db,
                 report=params,
                 by=interaction.user.name,
             )
 
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 view=None,
                 embed=get_success_embed(
                     "Report updated!",

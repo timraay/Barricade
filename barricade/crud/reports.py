@@ -10,6 +10,7 @@ from barricade.crud.communities import get_admin_by_id
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
 from barricade.discord.audit import (
+    AuditBy,
     audit_report_create,
     audit_report_delete,
     audit_report_edit,
@@ -49,7 +50,7 @@ async def get_token_by_value(db: AsyncSession, token_value: str):
 async def create_token(
     db: AsyncSession,
     params: schemas.ReportTokenCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new token.
 
@@ -246,7 +247,7 @@ async def is_player_reported(
 async def create_report(
     db: AsyncSession,
     params: schemas.ReportCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new report.
 
@@ -321,7 +322,7 @@ async def create_report(
 async def edit_report(
     db: AsyncSession,
     report: schemas.ReportCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
@@ -385,7 +386,7 @@ async def edit_report(
 async def delete_report(
     db: AsyncSession,
     report_id: int,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Delete a report.
 

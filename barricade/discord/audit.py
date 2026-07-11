@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from typing import TypeAlias
 
 import discord
 from discord.utils import escape_markdown as esc_md
@@ -12,9 +13,13 @@ from barricade.discord.views.report import get_plain_report_view
 
 from .bot import bot
 
+AuditBy: TypeAlias = str | discord.User | discord.Member
+
 
 async def set_footer(
-    embed: discord.Embed, user_id: int | None, by: str | discord.User | None = None
+    embed: discord.Embed,
+    user_id: int | None,
+    by: AuditBy | None = None,
 ):
     if by:
         if isinstance(by, (discord.User, discord.Member)):
@@ -134,7 +139,7 @@ async def _audit_v2(view: discord.ui.LayoutView):
 async def audit_community_create(
     community: schemas.CommunityRef,
     owner: schemas.AdminRef,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.green(), timestamp=datetime.now(tz=UTC)
@@ -152,7 +157,7 @@ async def audit_community_create(
 
 async def audit_community_edit(
     community: schemas.Community,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.yellow(), timestamp=datetime.now(tz=UTC)
@@ -171,7 +176,7 @@ async def audit_community_edit(
 async def audit_community_change_owner(
     old_owner: schemas.Admin,
     new_owner: schemas.AdminRef | None,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.yellow(), timestamp=datetime.now(tz=UTC)
@@ -194,7 +199,7 @@ async def audit_community_change_owner(
 async def audit_community_admin_add(
     community: schemas.CommunityRef,
     admin: schemas.AdminRef,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.green(), timestamp=datetime.now(tz=UTC)
@@ -212,7 +217,7 @@ async def audit_community_admin_add(
 async def audit_community_admin_remove(
     community: schemas.CommunityRef,
     admin: schemas.AdminRef,
-    by: str | discord.User | None = None,
+    by: AuditBy | None = None,
 ):
     if isinstance(by, (discord.User, discord.Member)) and by.id == admin.discord_id:
         return await audit_community_admin_leave(community, admin)
@@ -249,7 +254,7 @@ async def audit_community_admin_leave(
 
 async def audit_token_create(
     token: schemas.ReportTokenRef,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.dark_blue(), timestamp=datetime.now(tz=UTC)
@@ -266,7 +271,7 @@ async def audit_token_create(
 
 async def audit_report_create(
     report: schemas.ReportWithToken,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blue(), timestamp=datetime.now(tz=UTC)
@@ -291,7 +296,7 @@ async def audit_report_create(
 
 async def audit_report_edit(
     report: schemas.ReportWithToken,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.blurple(), timestamp=datetime.now(tz=UTC)
@@ -317,7 +322,7 @@ async def audit_report_edit(
 async def audit_report_delete(
     report: schemas.ReportWithToken,
     stats: dict[int, schemas.ResponseStats],
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     embed = discord.Embed(
         color=discord.Colour.dark_purple(), timestamp=datetime.now(tz=UTC)

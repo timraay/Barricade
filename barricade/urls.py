@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.constants import REPORT_FORM_URL
 from barricade.crud.reports import create_token
+from barricade.discord.audit import AuditBy
 from barricade.enums import ReportReasonFlag
 
 
@@ -141,7 +142,9 @@ class URLFactory:
 
     @staticmethod
     async def get(
-        db: AsyncSession, params: schemas.ReportTokenCreateParams, by: str | None = None
+        db: AsyncSession,
+        params: schemas.ReportTokenCreateParams,
+        by: AuditBy | None = None,
     ):
         key = URLFactory.Key.from_token(params)
         if url := URLFactory._cache.get(key):

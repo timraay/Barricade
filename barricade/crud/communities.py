@@ -6,6 +6,7 @@ from barricade import schemas
 from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.db import models
 from barricade.discord.audit import (
+    AuditBy,
     audit_community_admin_add,
     audit_community_admin_remove,
     audit_community_change_owner,
@@ -300,7 +301,7 @@ async def get_community_by_admin_id(
 async def create_new_community(
     db: AsyncSession,
     params: schemas.CommunityCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new community.
 
@@ -380,7 +381,7 @@ async def edit_community(
     db: AsyncSession,
     db_community: models.Community,
     params: schemas.CommunityEditParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Edit an existing community.
 
@@ -432,7 +433,7 @@ async def edit_community(
 async def create_new_admin(
     db: AsyncSession,
     params: schemas.AdminCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new admin.
 
@@ -493,7 +494,7 @@ async def create_new_admin(
 async def admin_leave_community(
     db: AsyncSession,
     db_admin: models.Admin,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Remove an admin from a community.
 
@@ -544,7 +545,7 @@ async def admin_join_community(
     db: AsyncSession,
     db_admin: models.Admin,
     db_community: models.Community,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Add an admin to a community.
 
@@ -601,7 +602,7 @@ async def transfer_ownership(
     db: AsyncSession,
     community_id: int,
     admin_id: int,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Transfer ownership of a community.
 
@@ -662,7 +663,7 @@ async def transfer_ownership(
 async def abandon_community(
     db: AsyncSession,
     community_id: int,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     db_community = await get_community_by_id(db, community_id)
     if not db_community:
