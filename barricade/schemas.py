@@ -498,7 +498,6 @@ class ReportCreateParamsTokenless(ReportEditParams):
     edited_at: datetime | None = None
     edited_by: str | None = None
     admin_id: int
-    platforms_bitflag: PlatformFlag
 
     @field_serializer("admin_id", when_used="json-unless-none")
     def convert_large_int_to_str(value: int):  # type: ignore

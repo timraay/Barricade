@@ -11,7 +11,9 @@ from barricade.crud.watchlists import (
     get_watchlist_by_player_and_community,
 )
 from barricade.db import session_factory
-from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.communities import (
+    assert_has_any_admin_role,
+)
 from barricade.discord.crud_utils import get_community
 from barricade.discord.utils import LayoutView, View, handle_error_wrap
 from barricade.exceptions import AlreadyExistsError
@@ -79,7 +81,7 @@ class PlayerToggleWatchlistButton(
         async with session_factory.begin() as db:
             community = await get_community(db, self.community_id)
             assert isinstance(interaction.user, discord.Member)
-            assert_has_admin_role(interaction.user, community)
+            assert_has_any_admin_role(interaction.user, community)
 
             assert interaction.message is not None
 

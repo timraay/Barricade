@@ -67,15 +67,17 @@ class Bot(commands.Bot):
             PlayerToggleWatchlistButton,
             ReportReviewButton,
         )
+        from barricade.discord.views.report_submission_start import (
+            ReportSubmissionStartView,
+        )
         from barricade.discord.views.report_t17_support_review import (
             ReportT17SupportReviewButton,
         )
-        from barricade.discord.views.submit_report import GetSubmissionURLView
 
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
-        self.add_view(GetSubmissionURLView(Platform.PC))
-        self.add_view(GetSubmissionURLView(Platform.CONSOLE))
+        self.add_view(ReportSubmissionStartView(Platform.PC))
+        self.add_view(ReportSubmissionStartView(Platform.CONSOLE))
         self.add_dynamic_items(
             CommunityConfigCategoryButton,
             CommunityConfigEditButton,

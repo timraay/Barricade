@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import discord
 
@@ -187,15 +187,47 @@ def safe_send_to_community(
         )
 
 
-def assert_has_admin_role(member: discord.Member, community: schemas.CommunityRef):
-    # Make sure user has the Admin role
-    if not community.hll_admin_role_id:
+def _assert_has_any_admin_roles(
+    member: discord.User | discord.Member,
+    community: schemas.CommunityRef,
+    role_ids: Sequence[int | None],
+):
+    if not any(role_ids):
         raise CustomException(
             "You are not permitted to do that!",
             f"Ask <@{community.owner_id}> to configure an Admin role.",
         )
-    if not discord.utils.get(member.roles, id=community.hll_admin_role_id):  # type: ignore
+
+    if not isinstance(member, discord.Member):
+        raise CustomException(
+            "Invalid context!",
+            "This action cannot be performed through DMs. Try again in a server.",
+        )
+
+    # Make sure user has at least one of the Admin roles
+    if not any(
+        discord.utils.get(member.roles, id=role_id) for role_id in role_ids if role_id
+    ):
         raise CustomException(
             "You are not permitted to do that!",
             "You do not have this community's configured Admin role.",
         )
+
+
+def assert_has_admin_role(
+    member: discord.User | discord.Member, community: schemas.CommunityRef, game: Game
+):
+    admin_role_id = game_switch(
+        game, community.hll_admin_role_id, community.hllv_admin_role_id
+    )
+    _assert_has_any_admin_roles(member, community, (admin_role_id,))
+
+
+def assert_has_any_admin_role(
+    member: discord.User | discord.Member, community: schemas.CommunityRef
+):
+    admin_role_ids = (
+        community.hll_admin_role_id,
+        community.hllv_admin_role_id,
+    )
+    _assert_has_any_admin_roles(member, community, admin_role_ids)

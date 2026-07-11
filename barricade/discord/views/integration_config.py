@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from barricade import schemas
 from barricade.config import ConfigOptionCategory
 from barricade.db import session_factory
-from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.communities import (
+    assert_has_any_admin_role,
+)
 from barricade.discord.crud_utils import get_community
 from barricade.discord.utils import CustomException, Modal, handle_error_wrap
 from barricade.discord.views.community_config import CommunityConfigView
@@ -108,7 +110,7 @@ class IntegrationConfigButton(
         async with session_factory.begin() as db:
             community = await self.get_community(db)
             assert isinstance(interaction.user, discord.Member)
-            assert_has_admin_role(interaction.user, community)
+            assert_has_any_admin_role(interaction.user, community)
 
             match self.command:
                 case "enable":

@@ -13,7 +13,7 @@ from barricade.discord.utils import (
     handle_error_wrap,
 )
 from barricade.discord.views.enroll import EnrollView
-from barricade.discord.views.submit_report import GetSubmissionURLView
+from barricade.discord.views.report_submission_start import ReportSubmissionStartView
 from barricade.enums import Platform
 
 
@@ -43,25 +43,10 @@ class SetupCog(commands.GroupCog, group_name="setup"):
     async def create_submission_start_message(
         self, interaction: Interaction, platform: Platform
     ):
-        await interaction.channel.send(  # type: ignore
-            content=(
-                "## Submitting a report"
-                "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
-                "\nYour evidence will be shared with other community admins, allowing them to"
-                " preemptively ban the player and prevent them from repeating their actions elsewhere."
-                "\n\n"
-                "> Only severe violations should warrant getting someone banned across many community servers."
-                "\n> As a rule of thumb, **only report players that do not deserve a second chance**."
-                "\n_ _"
-            ),
-            embed=discord.Embed(
-                title="Submit a report",
-                description=(
-                    "-# Reporting requires a **burden of proof**."
-                    "\n-# Reports with insufficient evidence are subject to removal."
-                ),
-            ),
-            view=GetSubmissionURLView(platform),
+        assert isinstance(interaction.channel, discord.abc.Messageable)
+
+        await interaction.channel.send(
+            view=ReportSubmissionStartView(platform),
         )
 
         await interaction.response.send_message(

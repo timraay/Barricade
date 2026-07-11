@@ -1,12 +1,22 @@
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime
 from functools import partial
 from typing import Any
 
 import discord
 
 from barricade import schemas
-from barricade.discord.utils import CallableButton, LayoutView, Modal
+from barricade.crud.reports import edit_report, get_report_by_id
+from barricade.db import session_factory
+from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.utils import (
+    CallableButton,
+    CustomException,
+    LayoutView,
+    Modal,
+    get_success_embed,
+)
 from barricade.discord.views.report import (
     container_add_description,
     container_add_player,
@@ -33,7 +43,7 @@ RE_BM_RCON_PLAYER_URL = re.compile(
 REPORT_MAX_PLAYERS = 5
 
 
-class ReportEditViewParams(schemas.ReportCreateParamsTokenless):
+class ReportEditViewParams(schemas.ReportEditParams):
     players: list[schemas.PlayerReportCreateParams]  # Remove min_length requirement
 
 
@@ -49,9 +59,9 @@ def _get_assertion_result(assertion_func: Callable[[], Any]) -> bool:
     return True
 
 
-class ReportEditView(LayoutView):
+class _ReportEditView(LayoutView):
     def __init__(self):
-        super().__init__(timeout=None)
+        super().__init__(timeout=60 * 30)  # 30 minutes
 
         self.params = ReportEditViewParams(
             body="",
@@ -60,37 +70,10 @@ class ReportEditView(LayoutView):
             game=Game.HLL,
             platforms_bitflag=PlatformFlag(0),
             players=[],
-            admin_id=0,
+            created_at=datetime.now(UTC),
+            edited_at=None,
+            edited_by=None,
         )
-
-    @classmethod
-    async def new(cls, interaction: discord.Interaction) -> None:
-        self = cls()
-        modal = ReportEditTagsModal(self, send_on_submit=True)
-        await interaction.response.send_modal(modal)
-
-    @classmethod
-    async def from_report(cls, report: schemas.ReportWithToken):
-        view = cls()
-        view.params = ReportEditViewParams(
-            body=report.body,
-            reasons_bitflag=report.reasons_bitflag,
-            reasons_custom=report.reasons_custom,
-            game=report.game,
-            platforms_bitflag=report.platforms_bitflag,
-            players=[
-                schemas.PlayerReportCreateParams(
-                    player_id=player.player_id,
-                    player_name=player.player_name,
-                    platform=player.player.platform,
-                    bm_rcon_url=player.player.bm_rcon_url,
-                )
-                for player in report.players
-            ],
-            admin_id=report.token.admin_id,
-        )
-        await view.update_view()
-        return view
 
     def _assert_valid_tags(self) -> None:
         if self.params.game is None:
@@ -362,11 +345,76 @@ class ReportEditView(LayoutView):
         await interaction.response.edit_message(view=self)
 
     async def submit_report(self, interaction: discord.Interaction):
-        pass
+        raise NotImplementedError
+
+
+class ReportEditView(_ReportEditView):
+    def __init__(self, report_id: int):
+        super().__init__()
+        self.report_id = report_id
+
+    @classmethod
+    async def from_report(cls, report: schemas.ReportWithToken):
+        view = cls(report_id=report.id)
+        view.params = ReportEditViewParams(
+            body=report.body,
+            reasons_bitflag=report.reasons_bitflag,
+            reasons_custom=report.reasons_custom,
+            game=report.game,
+            platforms_bitflag=report.platforms_bitflag,
+            players=[
+                schemas.PlayerReportCreateParams(
+                    player_id=player.player_id,
+                    player_name=player.player_name,
+                    platform=player.player.platform,
+                    bm_rcon_url=player.player.bm_rcon_url,
+                )
+                for player in report.players
+            ],
+            created_at=report.created_at,
+            edited_at=report.edited_at,
+            edited_by=report.edited_by,
+        )
+        await view.update_view()
+        return view
+
+    async def submit_report(self, interaction: discord.Interaction):
+        async with session_factory.begin() as db:
+            # Load all relations now, they will be used by edit_report later
+            db_report = await get_report_by_id(db, self.report_id, load_relations=True)
+            if not db_report:
+                raise CustomException("Report not found!")
+            report = schemas.ReportWithToken.model_validate(db_report)
+
+            if interaction.user.id != report.token.admin_id:
+                assert isinstance(interaction.user, discord.Member)
+                assert_has_admin_role(
+                    interaction.user, report.token.community, report.game
+                )
+
+            params = schemas.ReportCreateParams(
+                **self.params.model_dump(exclude={"edited_at", "edited_by"}),
+                token_id=report.token.id,
+                edited_at=datetime.now(UTC),
+                edited_by=interaction.user.mention,
+            )
+
+            await edit_report(
+                db,
+                report=params,
+                by=interaction.user.name,
+            )
+
+            await interaction.response.edit_message(
+                view=None,
+                embed=get_success_embed(
+                    "Report updated!",
+                ),
+            )
 
 
 class ReportEditTagsModal(Modal):
-    def __init__(self, view: ReportEditView, *, send_on_submit: bool = False):
+    def __init__(self, view: _ReportEditView, *, send_on_submit: bool = False):
         super().__init__(
             title="Create Report" if send_on_submit else "Edit Report Tags"
         )
@@ -442,7 +490,7 @@ class ReportEditTagsModal(Modal):
 
 
 class ReportEditReasonsModal(Modal):
-    def __init__(self, view: ReportEditView):
+    def __init__(self, view: _ReportEditView):
         super().__init__(title="Edit Report Description")
         self.view = view
 
@@ -482,7 +530,7 @@ class ReportEditReasonsModal(Modal):
 
 
 class ReportEditDescriptionModal(Modal):
-    def __init__(self, view: ReportEditView):
+    def __init__(self, view: _ReportEditView):
         super().__init__(title="Edit Report Description")
         self.view = view
 
@@ -522,7 +570,7 @@ class ReportEditDescriptionModal(Modal):
 class ReportEditPlayerModal(Modal):
     def __init__(
         self,
-        view: ReportEditView,
+        view: _ReportEditView,
         player: schemas.PlayerReportCreateParams | None,
     ):
         super().__init__(title="Edit Player")

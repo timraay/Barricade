@@ -18,7 +18,7 @@ from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.bot import bot
 from barricade.discord.communities import (
-    assert_has_admin_role,
+    assert_has_any_admin_role,
     get_text_channel,
 )
 from barricade.discord.crud_utils import get_community
@@ -76,7 +76,7 @@ class CommunityConfigCategoryButton(
         async with session_factory() as db:
             community = await get_community(db, self.community_id)
             assert isinstance(interaction.user, discord.Member)
-            assert_has_admin_role(interaction.user, community)
+            assert_has_any_admin_role(interaction.user, community)
 
         view = await get_community_config_view(community, self.category)
         await interaction.response.edit_message(view=view)
@@ -122,7 +122,7 @@ class CommunityConfigEditButton(
         async with session_factory() as db:
             community = await get_community(db, self.community_id)
             assert isinstance(interaction.user, discord.Member)
-            assert_has_admin_role(interaction.user, community)
+            assert_has_any_admin_role(interaction.user, community)
 
         modal = get_community_config_edit_modal(community, self.option)
         await modal.assert_is_allowed_in_guild(interaction.guild)
