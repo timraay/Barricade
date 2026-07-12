@@ -9,6 +9,7 @@ from barricade.discord.views.report_create import ReportCreateView
 
 class ReportSubmissionStartView(LayoutView):
     def __init__(self):
+        super().__init__(timeout=None)
         self.add_item(
             discord.ui.TextDisplay(
                 "## Submitting a report"
