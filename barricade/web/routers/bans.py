@@ -124,7 +124,7 @@ async def get_own_community_bans(
     paginator: PaginatorDep,
     token: Annotated[
         web_schemas.TokenWithHash,
-        Security(get_active_token_community(True), scopes=Scopes.BAN_ME_READ.to_list()),
+        Security(get_active_token_community, scopes=Scopes.BAN_ME_READ.to_list()),
     ],
     player_id: str | None = None,
     integration_id: int | None = None,
@@ -146,9 +146,7 @@ async def delete_own_community_ban_for_player(
     ban: PlayerBanDep,
     token: Annotated[
         web_schemas.TokenWithHash,
-        Security(
-            get_active_token_community(True), scopes=Scopes.BAN_ME_MANAGE.to_list()
-        ),
+        Security(get_active_token_community, scopes=Scopes.BAN_ME_MANAGE.to_list()),
     ],
 ) -> Literal[True]:
     return await delete_ban_for_player(db, integration, ban, token)

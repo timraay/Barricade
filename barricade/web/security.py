@@ -250,21 +250,14 @@ async def get_active_token_of_community(
     return token
 
 
-def get_active_token_community(load_relations: bool):
-    async def inner(
-        token: Annotated[
-            web_schemas.TokenWithHash, Depends(get_active_token_of_community)
-        ],
-        db: DatabaseDep,
-    ):
-        assert token.community_id is not None
-        result = await get_community_by_id(
-            db, community_id=token.community_id, load_relations=load_relations
+async def get_active_token_community(
+    token: Annotated[web_schemas.TokenWithHash, Depends(get_active_token_of_community)],
+    db: DatabaseDep,
+):
+    assert token.community_id is not None
+    result = await get_community_by_id(db, community_id=token.community_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Community does not exist"
         )
-        if result is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Community does not exist"
-            )
-        return result
-
-    return inner
+    return result

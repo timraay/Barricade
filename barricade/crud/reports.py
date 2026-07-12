@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, selectinload
 
@@ -108,6 +108,11 @@ async def get_all_reports(
     load_token: bool = False,
     limit: int = 100,
     offset: int = 0,
+    created_before: datetime | None = None,
+    created_after: datetime | None = None,
+    edited_before: datetime | None = None,
+    edited_after: datetime | None = None,
+    game: Game | None = None,
 ):
     """Retrieve all reports.
 
@@ -123,6 +128,16 @@ async def get_all_reports(
         The amount of results to return, by default 100
     offset : int, optional
         Offset where from to start returning results, by default 0
+    created_before : datetime, optional
+        Filter for reports created before this datetime, by default None
+    created_after : datetime, optional
+        Filter for reports created after this datetime, by default None
+    edited_before : datetime, optional
+        Filter for reports last edited before this datetime, by default None
+    edited_after : datetime, optional
+        Filter for reports last edited after this datetime, by default None
+    game : Game, optional
+        Filter for reports of a specific game, by default None
 
     Returns
     -------
@@ -143,6 +158,24 @@ async def get_all_reports(
         stmt = stmt.join(models.Report.token).where(
             models.ReportToken.community_id == community_id
         )
+
+    if created_before is not None:
+        stmt = stmt.where(models.Report.created_at <= created_before)
+    if created_after is not None:
+        stmt = stmt.where(models.Report.created_at >= created_after)
+
+    if edited_before is not None:
+        stmt = stmt.where(
+            or_(
+                models.Report.edited_at <= edited_before,
+                models.Report.edited_at.is_(None),
+            )
+        )
+    if edited_after is not None:
+        stmt = stmt.where(models.Report.edited_at >= edited_after)
+
+    if game is not None:
+        stmt = stmt.where(models.Report.game == game)
 
     result = await db.scalars(stmt)
     return result.all()
