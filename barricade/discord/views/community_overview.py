@@ -7,7 +7,6 @@ from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
@@ -15,7 +14,7 @@ from barricade.discord.utils import (
     View,
     get_command_mention,
 )
-from barricade.enums import Emojis, Game
+from barricade.enums import Emojis, GameFlag
 from barricade.utils import validate_url
 
 
@@ -79,36 +78,22 @@ class CommunityOverviewView(View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def get_embed(self, interaction: Interaction):
-        platform = "PC & Console"
         embed = Embed(
             title=f"{self.community.tag} {self.community.name}".strip(),
             color=Color.blurple(),
         )
 
-        # TODO: Update community overview embed to support multiple games
-        channel = get_reports_channel(self.community, Game.HLL)
-        if channel:
-            embed.set_thumbnail(
-                url=channel.guild.icon.url if channel.guild.icon else None
-            )
+        if (
+            (guild_id := self.community.guild_id)
+            and (guild := interaction.client.get_guild(guild_id))
+            and (icon := guild.icon)
+        ):
+            embed.set_thumbnail(url=icon.url)
 
-        if self.is_admin or self.is_owner:
-            if not self.community.hll_reports_channel_id:
-                channel_mention = "⚠️ *No reports channel*"
-            elif not channel:
-                channel_mention = "⚠️ *Unknown reports channel*"
-            else:
-                channel_mention = f"🗒️ {channel.mention}"
-
-            embed.add_field(
-                name="Details",
-                value=f"{channel_mention}\n{Emojis.CONTACT} {self.community.contact_url}",
-            )
-        else:
-            embed.add_field(
-                name="Contact",
-                value=f"{Emojis.CONTACT} {self.community.contact_url}",
-            )
+        embed.add_field(
+            name="Contact",
+            value=f"{Emojis.CONTACT} {self.community.contact_url}",
+        )
 
         admin_list = []
         for admin in self.community.admins:
@@ -130,9 +115,18 @@ class CommunityOverviewView(View):
             embed.color = Color.default()
             embed.description = "> This community was abandoned!"
 
+        if self.community.games_bitflag == 0:
+            games = "None"
+        elif self.community.games_bitflag == GameFlag.HLL:
+            games = "HLL"
+        elif self.community.games_bitflag == GameFlag.HLLV:
+            games = "HLL:V"
+        else:
+            games = "HLL & HLL:V"
+
         embed.add_field(
-            name="Platform",
-            value=platform,
+            name="Games",
+            value=games,
         )
 
         if self.is_admin:

@@ -287,7 +287,6 @@ async def get_plain_report_view(
 
         # Responded by
         if response and response.responded_by:
-            # TODO: Persist user mentions instead of names
             editor_name = (
                 response.responded_by
                 if get_user_id_from_mention(response.responded_by)
@@ -325,7 +324,6 @@ async def get_plain_report_view(
     if report.edited_by or report.edited_at:
         content += "\nLast edited"
         if report.edited_by:
-            # TODO: Persist user mentions instead of names
             editor_name = (
                 report.edited_by
                 if get_user_id_from_mention(report.edited_by)
