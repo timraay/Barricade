@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.add_column(
         "communities", sa.Column("games_bitflag", sa.Integer(), nullable=True)
     )
-    op.execute("UPDATE communities SET games_bitflag = 1")
+    op.execute("UPDATE communities SET games_bitflag = 3")
     op.alter_column("communities", "games_bitflag", nullable=False)
     op.drop_column("communities", "is_pc")
     op.drop_column("communities", "is_console")
