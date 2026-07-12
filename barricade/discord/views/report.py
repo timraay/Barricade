@@ -52,17 +52,20 @@ def get_platform_pill(platform: PlatformFlag) -> str:
     return "**`🕹️ PC & Console `**"
 
 
-# TODO: Add more emojis
 def get_player_platform_emoji(
-    player_platform: PlayerPlatform | None, platforms: PlatformFlag, game: Game
-) -> str | None:
-    if player_platform == PlayerPlatform.STEAM:
-        return Emojis.STEAM
+    player_platform: PlayerPlatform | None,
+    platforms: PlatformFlag | None = None,
+) -> str:
+    if player_platform:
+        return Emojis[player_platform.name]
 
-    elif platforms == PlatformFlag.PC:
+    if platforms == PlatformFlag.CONSOLE:
+        return Emojis.XBOX_PLAYSTATION
+
+    if platforms == PlatformFlag.PC:
         return Emojis.EPIC_XBOX
 
-    return None
+    return Emojis.EPIC_XBOX_PLAYSTATION
 
 
 ReportViewActionRowFactory: TypeAlias = Callable[
@@ -168,11 +171,10 @@ def container_add_player(
 
     # Player ID
     platform_emoji = get_player_platform_emoji(
-        player_platform, report.platforms_bitflag, report.game
+        player_platform,
+        report.platforms_bitflag,
     )
-    if platform_emoji:
-        content += f"{platform_emoji} "
-    content += f"*`{player.player_id}`*"
+    content += f"{platform_emoji} *`{player.player_id}`*"
 
     # Player EOS ID
     if with_eos_ids and not is_steam:

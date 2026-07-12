@@ -11,8 +11,8 @@ from barricade.constants import (
 )
 from barricade.discord.bot import bot
 from barricade.discord.utils import format_url
+from barricade.discord.views.report import get_player_platform_emoji
 from barricade.enums import (
-    Emojis,
     Game,
     PlayerAlertType,
     ReportReasonFlag,
@@ -55,9 +55,8 @@ def get_alert_embed(
     alert_type: PlayerAlertType,
 ):
     player_id_type = get_player_id_type(player.player_id)
-    is_steam = player_id_type == PlayerIDType.STEAM_64_ID
 
-    title = f"{player.player_name}\n{Emojis.STEAM if is_steam else Emojis.EPIC_XBOX} *`{player.player_id}`*"
+    title = f"{player.player_name}\n{get_player_platform_emoji(player.player.platform)} *`{player.player_id}`*"
     description = []
 
     if player_id_type == PlayerIDType.STEAM_64_ID:

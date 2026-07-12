@@ -46,6 +46,7 @@ class PlatformFlag(IntFlag):
 
 
 class PlayerPlatform(StrEnum):
+    # Names must exist in Emojis enum as well
     STEAM = "Steam"
     EPIC = "Epic Games"
     XBOX = "Xbox"
@@ -195,7 +196,11 @@ class ReportReasonFlag(IntFlag):
 class Emojis(StrEnum):
     STEAM = "<:steam:1275098550182740101>"
     XBOX = "<:xbox:1275098583590240256>"
+    EPIC = "<:epic:1525803070813110393>"
+    PLAYSTATION = "<:playstation:1525802885164830720>"
     EPIC_XBOX = "<:epic_xbox:1357314108415807528>"
+    XBOX_PLAYSTATION = "<:xbox_playstation:1525802887987593256>"
+    EPIC_XBOX_PLAYSTATION = "<:epic_xbox_playstation:1525802886393495643>"
     TICK_YES = "<:tick_yes:1275098575356952689>"
     TICK_MAYBE = "<:tick_maybe:1275098558567022633>"
     TICK_NO = "<:tick_no:1275098566515363911>"
