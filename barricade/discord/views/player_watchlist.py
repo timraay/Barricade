@@ -79,7 +79,8 @@ class PlayerToggleWatchlistButton(
     @handle_error_wrap
     async def callback(self, interaction: Interaction):
         async with session_factory.begin() as db:
-            community = await get_community(db, self.community_id)
+            db_community = await get_community(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
             assert isinstance(interaction.user, discord.Member)
             assert_has_any_admin_role(interaction.user, community)
 

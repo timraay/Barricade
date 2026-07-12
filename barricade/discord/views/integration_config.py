@@ -126,7 +126,8 @@ class IntegrationConfigButton(
 
     async def get_community(self, db: AsyncSession) -> schemas.Community:
         """Get the community associated with this button."""
-        return await get_community(db, self.community_id)
+        db_community = await get_community(db, self.community_id)
+        return schemas.Community.model_validate(db_community)
 
     def get_integration(self) -> Integration:
         """Get the integration associated with this button."""
@@ -477,7 +478,8 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
 
     async def get_community(self, db: AsyncSession) -> schemas.Community:
         """Get the community associated with this modal."""
-        return await get_community(db, self.community_id)
+        db_community = await get_community(db, self.community_id)
+        return schemas.Community.model_validate(db_community)
 
     def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
         raise NotImplementedError

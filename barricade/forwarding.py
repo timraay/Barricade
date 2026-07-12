@@ -60,7 +60,6 @@ from barricade.enums import Game, PlayerAlertType, PlayerIDType, ReportMessageTy
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
-from barricade.urls import URLFactory
 from barricade.utils import game_switch, get_player_id_type
 
 
@@ -327,14 +326,6 @@ async def invoke_integration_report_create_hook(report: schemas.ReportWithToken)
             if integration.config.enabled
         ]
     )
-
-
-# Report URL Cache
-
-
-@add_hook(EventHooks.report_create)
-async def remove_token_url_from_cache(report: schemas.ReportWithToken):
-    URLFactory.remove(report.token)
 
 
 # Player Alerts

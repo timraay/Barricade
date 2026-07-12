@@ -79,7 +79,8 @@ class CommunityConfigCategoryButton(
     @handle_error_wrap
     async def callback(self, interaction: discord.Interaction):
         async with session_factory() as db:
-            community = await get_community(db, self.community_id)
+            db_community = await get_community(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
             assert isinstance(interaction.user, discord.Member)
             assert_has_any_admin_role(interaction.user, community)
 
@@ -125,7 +126,8 @@ class CommunityConfigEditButton(
     @handle_error_wrap
     async def callback(self, interaction: discord.Interaction):
         async with session_factory() as db:
-            community = await get_community(db, self.community_id)
+            db_community = await get_community(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
             assert isinstance(interaction.user, discord.Member)
             assert_has_any_admin_role(interaction.user, community)
 
@@ -563,7 +565,8 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         raise NotImplementedError
 
     async def refresh_community(self, db: AsyncSession) -> schemas.Community:
-        self.community = await get_community(db, self.community.id)
+        db_community = await get_community(db, self.community.id)
+        self.community = schemas.Community.model_validate(db_community)
         return self.community
 
     async def assert_is_allowed_in_guild(

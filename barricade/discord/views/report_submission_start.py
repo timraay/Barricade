@@ -1,5 +1,3 @@
-from typing import assert_never
-
 import discord
 from discord import ButtonStyle, Interaction
 
@@ -7,14 +5,10 @@ from barricade.crud.communities import get_admin_by_id
 from barricade.db import session_factory
 from barricade.discord.utils import CallableButton, CustomException, LayoutView
 from barricade.discord.views.report_create import ReportCreateView
-from barricade.enums import Platform
 
 
 class ReportSubmissionStartView(LayoutView):
-    def __init__(self, platform: Platform):
-        super().__init__(timeout=None)
-        self.platform = platform
-
+    def __init__(self):
         self.add_item(
             discord.ui.TextDisplay(
                 "## Submitting a report"
@@ -40,22 +34,13 @@ class ReportSubmissionStartView(LayoutView):
             )
         )
         self.add_item(container)
-
-        match platform:
-            case Platform.PC:
-                custom_id = "get_submission_url_pc"
-            case Platform.CONSOLE:
-                custom_id = "get_submission_url_console"
-            case _:
-                assert_never(platform)
-
         self.add_item(
             discord.ui.ActionRow(
                 CallableButton(
                     self.start_submission,
                     style=ButtonStyle.blurple,
                     label="Submit a report",
-                    custom_id=custom_id,
+                    custom_id="report:submit_start",
                 )
             )
         )

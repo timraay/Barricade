@@ -9,7 +9,6 @@ from discord.ext import commands
 
 from barricade.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
 from barricade.discord.utils import handle_error
-from barricade.enums import Platform
 
 __all__ = ("bot",)
 
@@ -76,8 +75,7 @@ class Bot(commands.Bot):
 
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
-        self.add_view(ReportSubmissionStartView(Platform.PC))
-        self.add_view(ReportSubmissionStartView(Platform.CONSOLE))
+        self.add_view(ReportSubmissionStartView())
         self.add_dynamic_items(
             CommunityConfigCategoryButton,
             CommunityConfigEditButton,

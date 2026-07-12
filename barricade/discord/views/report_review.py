@@ -193,7 +193,8 @@ class ReportReviewButton(
                 responded_by=interaction.user.id if interaction.user else None,
             )
             async with session_factory() as db:
-                community = await get_community(db, self.community_id)
+                db_community = await get_community(db, self.community_id)
+                community = schemas.Community.model_validate(db_community)
                 assert isinstance(interaction.user, discord.Member)
                 assert_has_admin_role(interaction.user, community)
 

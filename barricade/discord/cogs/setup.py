@@ -14,7 +14,6 @@ from barricade.discord.utils import (
 )
 from barricade.discord.views.enroll import EnrollView
 from barricade.discord.views.report_submission_start import ReportSubmissionStartView
-from barricade.enums import Platform
 
 
 def insert_returns(body):
@@ -40,13 +39,11 @@ class SetupCog(commands.GroupCog, group_name="setup"):
         self.bot = bot
 
     @app_commands.command(name="send-submission-start-message")
-    async def create_submission_start_message(
-        self, interaction: Interaction, platform: Platform
-    ):
+    async def create_submission_start_message(self, interaction: Interaction):
         assert isinstance(interaction.channel, discord.abc.Messageable)
 
         await interaction.channel.send(
-            view=ReportSubmissionStartView(platform),
+            view=ReportSubmissionStartView(),
         )
 
         await interaction.response.send_message(
