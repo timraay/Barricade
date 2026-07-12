@@ -7,6 +7,7 @@ from typing import Any
 import discord
 
 from barricade import schemas
+from barricade.constants import REPORT_MAX_ATTACHMENTS, REPORT_MAX_PLAYERS
 from barricade.crud.reports import edit_report, get_report_by_id
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
@@ -18,6 +19,7 @@ from barricade.discord.utils import (
     get_success_embed,
 )
 from barricade.discord.views.report import (
+    container_add_attachments,
     container_add_description,
     container_add_player,
     container_add_reasons,
@@ -39,8 +41,6 @@ from barricade.utils import get_player_id_type, validate_url
 RE_BM_RCON_PLAYER_URL = re.compile(
     r"^https://www\.battlemetrics\.com/rcon/players/(\d+)$"
 )
-
-REPORT_MAX_PLAYERS = 5
 
 
 class ReportEditViewParams(schemas.ReportEditParams):
@@ -197,7 +197,7 @@ class _ReportEditView(LayoutView):
         container.add_item(
             discord.ui.ActionRow(
                 CallableButton(
-                    partial(self.open_reasons_modal),
+                    self.open_reasons_modal,
                     label=("Edit" if self.params.reasons_bitflag else "Add reason"),
                     style=(
                         discord.ButtonStyle.gray
@@ -216,7 +216,7 @@ class _ReportEditView(LayoutView):
         container.add_item(
             discord.ui.ActionRow(
                 CallableButton(
-                    partial(self.open_description_modal),
+                    self.open_description_modal,
                     label=("Edit" if self.params.body.strip() else "Add description"),
                     style=(
                         discord.ButtonStyle.gray
@@ -226,6 +226,38 @@ class _ReportEditView(LayoutView):
                 )
             )
         )
+
+        # Add attachments
+        container_add_attachments(container, self.params)
+
+        if self.params.attachment_urls:
+            action_row = discord.ui.ActionRow()
+            container.add_item(action_row)
+
+            if len(self.params.attachment_urls) == 1:
+                action_row.add_item(
+                    CallableButton(
+                        partial(self.remove_attachment, index=0),
+                        label="Remove",
+                        style=discord.ButtonStyle.red,
+                    )
+                )
+
+            else:
+                for i in range(
+                    min(len(self.params.attachment_urls), REPORT_MAX_ATTACHMENTS)
+                ):
+                    if i % 5 == 0 and i > 0:
+                        action_row = discord.ui.ActionRow()
+                        container.add_item(action_row)
+
+                    action_row.add_item(
+                        CallableButton(
+                            partial(self.remove_attachment, index=i),
+                            label=f"Remove #{i + 1}",
+                            style=discord.ButtonStyle.red,
+                        )
+                    )
 
         player_avatar_urls = await get_player_avatar_urls(self.params.players)
 
@@ -272,7 +304,13 @@ class _ReportEditView(LayoutView):
                         else discord.ButtonStyle.blurple
                     ),
                     disabled=len(self.params.players) >= REPORT_MAX_PLAYERS,
-                )
+                ),
+                CallableButton(
+                    self.open_attachments_modal,
+                    label="Upload attachments",
+                    style=discord.ButtonStyle.gray,
+                    disabled=len(self.params.attachment_urls) >= REPORT_MAX_ATTACHMENTS,
+                ),
             )
         )
 
@@ -329,6 +367,15 @@ class _ReportEditView(LayoutView):
     async def open_description_modal(self, interaction: discord.Interaction):
         modal = ReportEditDescriptionModal(self)
         await interaction.response.send_modal(modal)
+
+    async def open_attachments_modal(self, interaction: discord.Interaction):
+        modal = ReportUploadAttachmentsModal(self)
+        await interaction.response.send_modal(modal)
+
+    async def remove_attachment(self, interaction: discord.Interaction, *, index: int):
+        del self.params.attachment_urls[index]
+        await self.update_view()
+        await interaction.response.edit_message(view=self)
 
     async def open_player_modal(
         self, interaction: discord.Interaction, *, player_index: int | None
@@ -553,18 +600,55 @@ class ReportEditDescriptionModal(Modal):
                 component=self.description_input,
             )
         )
-        self.add_item(
-            discord.ui.TextDisplay(
-                "-# Recommended for uploading images: [imgbb](https://imgbb.com/)\n"
-                "-# Recommended for uploading videos: [Youtube](https://youtube.com/)"
-            )
-        )
 
     def get_description(self) -> str:
         return self.description_input.value.strip()
 
     async def on_submit(self, interaction: discord.Interaction):
         self.view.params.body = self.get_description()
+        await self.view.update_view()
+        await interaction.response.edit_message(view=self.view)
+
+
+class ReportUploadAttachmentsModal(Modal):
+    def __init__(self, view: _ReportEditView):
+        super().__init__(title="Upload Media")
+        self.view = view
+
+        self.attachments_input = discord.ui.FileUpload(
+            required=False,
+            min_values=0,
+            max_values=REPORT_MAX_ATTACHMENTS - len(self.view.params.attachment_urls),
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Media",
+                description="Images and videos only. Any other file types will be ignored.",
+                component=self.attachments_input,
+            )
+        )
+
+    def get_attachments(self) -> list[discord.Attachment]:
+        if (
+            len(self.view.params.attachment_urls) + len(self.attachments_input.values)
+            > REPORT_MAX_ATTACHMENTS
+        ):
+            raise CustomException(
+                "Too many attachments provided",
+                f"Reports can have at most {REPORT_MAX_ATTACHMENTS} attachments.",
+            )
+
+        return [
+            attachment
+            for attachment in self.attachments_input.values
+            if attachment.content_type
+            and attachment.content_type.startswith(("image/", "video/"))
+        ]
+
+    async def on_submit(self, interaction: discord.Interaction):
+        for attachment in self.get_attachments():
+            self.view.params.attachment_urls.append(attachment.url)
         await self.view.update_view()
         await interaction.response.edit_message(view=self.view)
 

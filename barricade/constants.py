@@ -122,6 +122,14 @@ MAX_ADMIN_LIMIT = get_env_int("MAX_ADMIN_LIMIT", 3)
 # How many integrations each community is allowed to have
 MAX_INTEGRATION_LIMIT = get_env_int("MAX_INTEGRATION_LIMIT", 3)
 
+
+# How many players can be added to a single report.
+REPORT_MAX_PLAYERS = 5
+# How many attachments can be added to a single report.
+# Currently supports no more than 10 attachments, since that is the most that fit into a single media gallery.
+REPORT_MAX_ATTACHMENTS = 10
+
+
 # The URL of the report form. Must end in a "?".
 # Note that this cannot just be changed. There's a lot of constants in barricade.urls as well.
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"

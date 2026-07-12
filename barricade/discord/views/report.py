@@ -6,6 +6,7 @@ import discord
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
+from barricade.constants import REPORT_MAX_ATTACHMENTS
 from barricade.discord.utils import LayoutView, format_url, get_user_id_from_mention
 from barricade.enums import (
     Emojis,
@@ -94,6 +95,24 @@ def container_add_description(
     container.add_item(
         discord.ui.TextDisplay(
             f"-# **Description**\n{report.body.strip() or '-# Missing'}"
+        )
+    )
+
+
+def container_add_attachments(
+    container: discord.ui.Container,
+    report: schemas._ReportBase,
+) -> None:
+    if not report.attachment_urls:
+        return
+
+    container.add_item(discord.ui.Separator(visible=False))
+    container.add_item(
+        discord.ui.MediaGallery(
+            *(
+                discord.MediaGalleryItem(url)
+                for url in report.attachment_urls[:REPORT_MAX_ATTACHMENTS]
+            )
         )
     )
 
@@ -261,6 +280,7 @@ async def get_plain_report_view(
         discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small)
     )
     container_add_description(container, report)
+    container_add_attachments(container, report)
 
     player_avatar_urls = await get_player_avatar_urls(report.players)
 
