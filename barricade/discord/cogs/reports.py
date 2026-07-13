@@ -8,7 +8,9 @@ from barricade import schemas
 from barricade.crud.communities import get_admin_by_id, get_community_by_guild_id
 from barricade.crud.reports import get_reports_for_player
 from barricade.db import session_factory
-from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.communities import (
+    assert_has_any_admin_role,
+)
 from barricade.discord.utils import CustomException
 from barricade.discord.views.report_paginator import PaginatedReportsView
 
@@ -46,7 +48,7 @@ class ReportsCog(commands.Cog):
                     raise access_denied_exc
 
                 community = schemas.CommunityRef.model_validate(db_community)
-                assert_has_admin_role(interaction.user, community)  # type: ignore
+                assert_has_any_admin_role(interaction.user, community)
 
             db_reports = await get_reports_for_player(
                 db, player_id=player_id, load_token=True

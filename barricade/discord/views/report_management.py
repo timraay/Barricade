@@ -66,7 +66,9 @@ class ReportManagementButton(
                 )
             report = schemas.ReportWithToken.model_validate(db_report)
             if interaction.user.id != report.token.admin_id:
-                assert_has_admin_role(interaction.user, report.token.community)  # type: ignore
+                assert_has_admin_role(
+                    interaction.user, report.token.community, report.game
+                )
 
             match self.command:
                 case "refresh":

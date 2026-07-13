@@ -5,7 +5,9 @@ from discord import ButtonStyle, Interaction
 from barricade import schemas
 from barricade.crud.communities import get_community_by_guild_id
 from barricade.db import session_factory
-from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.communities import (
+    assert_has_any_admin_role,
+)
 from barricade.discord.utils import CallableButton, View
 
 
@@ -32,7 +34,7 @@ class RetryErrorView(View):
             assert interaction.guild_id is not None
             db_community = await get_community_by_guild_id(db, interaction.guild_id)
             community = schemas.CommunityRef.model_validate(db_community)
-            assert_has_admin_role(interaction.user, community)  # type: ignore
+            assert_has_any_admin_role(interaction.user, community)
 
     async def retry(self, interaction: Interaction):
         await self.verify_permissions(interaction)
