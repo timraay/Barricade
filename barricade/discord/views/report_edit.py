@@ -16,7 +16,7 @@ from barricade.discord.utils import (
     CustomException,
     LayoutView,
     Modal,
-    get_success_embed,
+    get_success_container,
 )
 from barricade.discord.views.report import (
     container_add_attachments,
@@ -454,12 +454,9 @@ class ReportEditView(_ReportEditView):
                 by=interaction.user.name,
             )
 
-            await interaction.edit_original_response(
-                view=None,
-                embed=get_success_embed(
-                    "Report updated!",
-                ),
-            )
+            view = discord.ui.LayoutView()
+            view.add_item(get_success_container("Report updated!"))
+            await interaction.edit_original_response(embed=None, view=view)
 
 
 class ReportEditTagsModal(Modal):

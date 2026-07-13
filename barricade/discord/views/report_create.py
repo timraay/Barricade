@@ -4,7 +4,10 @@ from barricade import schemas
 from barricade.crud.communities import get_admin_by_id
 from barricade.crud.reports import create_report, create_token
 from barricade.db import session_factory
-from barricade.discord.utils import CustomException, get_success_embed
+from barricade.discord.utils import (
+    CustomException,
+    get_success_container,
+)
 from barricade.discord.views.report_edit import ReportEditTagsModal, _ReportEditView
 
 
@@ -50,9 +53,6 @@ class ReportCreateView(_ReportEditView):
                 by=name,
             )
 
-            await interaction.response.edit_message(
-                view=None,
-                embed=get_success_embed(
-                    "Report created!",
-                ),
-            )
+            view = discord.ui.LayoutView()
+            view.add_item(get_success_container("Report created!"))
+            await interaction.response.edit_message(view=view)

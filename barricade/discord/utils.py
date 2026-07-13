@@ -48,6 +48,14 @@ def get_success_embed(title: str, description: str | None = None):
     return embed
 
 
+def get_success_container(title: str, description: str | None = None):
+    container = discord.ui.Container(accent_color=discord.Color(7844437))
+    container.add_item(discord.ui.TextDisplay(f"✅ **{title}**"))
+    if description:
+        container.add_item(discord.ui.TextDisplay(description))
+    return container
+
+
 def get_question_embed(title: str, description: str | None = None):
     embed = discord.Embed(color=discord.Color(3315710))
     embed.set_author(
