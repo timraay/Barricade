@@ -340,7 +340,7 @@ class ReportReviewButton(
             watchlisted_player_ids=watchlisted_player_ids,
             stats=stats,
         )
-        await interaction.response.edit_message(view=view)
+        await interaction.response.edit_message(content=None, embed=None, view=view)
 
 
 def report_review_view_action_row_factory(

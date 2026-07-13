@@ -72,8 +72,9 @@ class ReportManagementButton(
                 case "refresh":
                     stats = await bulk_get_response_stats(db, report.players)
                     view = await get_report_management_view(report, stats=stats)
-                    # TODO: Verify whether message is fully using Components V2
-                    await interaction.edit_original_response(view=view)
+                    await interaction.edit_original_response(
+                        view=view, embed=None, content=None
+                    )
 
                 case "del":
 
