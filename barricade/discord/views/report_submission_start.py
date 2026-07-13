@@ -10,21 +10,6 @@ from barricade.discord.views.report_create import ReportCreateView
 class ReportSubmissionStartView(LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(
-            discord.ui.TextDisplay(
-                "## Submitting a report"
-                "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
-                "\nYour evidence will be shared with other community admins, allowing them to"
-                " preemptively ban the player and prevent them from repeating their actions elsewhere."
-                "\n\n"
-                "> Only severe violations should warrant getting someone banned across many community servers."
-                "\n> As a rule of thumb, **only report players that do not deserve a second chance**."
-            )
-        )
-
-        self.add_item(
-            discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.large)
-        )
 
         container = discord.ui.Container()
         container.add_item(

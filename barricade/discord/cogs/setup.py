@@ -43,6 +43,17 @@ class SetupCog(commands.GroupCog, group_name="setup"):
         assert isinstance(interaction.channel, discord.abc.Messageable)
 
         await interaction.channel.send(
+            "## Submitting a report"
+            "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
+            "\nYour evidence will be shared with other community admins, allowing them to"
+            " preemptively ban the player and prevent them from repeating their actions elsewhere."
+            "\n\n"
+            "> Only severe violations should warrant getting someone banned across many community servers."
+            "\n> As a rule of thumb, **only report players that do not deserve a second chance**."
+            "\n_ _"
+        )
+
+        await interaction.channel.send(
             view=ReportSubmissionStartView(),
         )
 
