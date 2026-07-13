@@ -409,6 +409,9 @@ async def edit_community(
     if other_community and other_community.id != db_community.id:
         raise AlreadyExistsError("Name is already in use")
 
+    # Check if it is necessary to update admin roles later on
+    do_update_roles = db_community.games_bitflag != params.games_bitflag
+
     for key, val in params:
         setattr(db_community, key, val)
 
@@ -422,10 +425,11 @@ async def edit_community(
     )
 
     # Update roles
-    community = schemas.CommunityRef.model_validate(db_community)
-    await db_community.awaitable_attrs.admins
-    for admin in db_community.admins:
-        await update_user_roles(admin.discord_id, community, strict=False)
+    if do_update_roles:
+        community = schemas.CommunityRef.model_validate(db_community)
+        await db_community.awaitable_attrs.admins
+        for admin in db_community.admins:
+            await update_user_roles(admin.discord_id, community, strict=False)
 
     return db_community
 

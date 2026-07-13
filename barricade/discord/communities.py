@@ -79,8 +79,10 @@ async def update_user_roles(
         else:
             to_add.append(game_role)
 
-    await user.add_roles(*to_add)
-    await user.remove_roles(*to_remove)
+    if to_add:
+        await user.add_roles(*to_add)
+    if to_remove:
+        await user.remove_roles(*to_remove)
     return True
 
 

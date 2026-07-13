@@ -14,8 +14,8 @@ from barricade.config import (
     ConfigOptionCategory,
     ConfigOptionType,
 )
-from barricade.crud.communities import edit_community, get_community_by_id
-from barricade.db import session_factory
+from barricade.crud.communities import edit_community
+from barricade.db import models, session_factory
 from barricade.discord.bot import bot
 from barricade.discord.communities import (
     assert_has_any_admin_role,
@@ -602,9 +602,7 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         )
 
     async def save_community(self, db: AsyncSession):
-        db_community = await get_community_by_id(db, self.community.id)
-        if not db_community:
-            raise CustomException("Community not found")
+        db_community = await db.get_one(models.Community, self.community.id)
         await edit_community(
             db, db_community, schemas.CommunityEditParams.model_validate(self.community)
         )
