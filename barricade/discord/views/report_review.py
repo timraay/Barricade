@@ -303,11 +303,15 @@ class ReportReviewButton(
 
             if _original_interaction:
                 if _original_interaction.message:
-                    await _original_interaction.message.edit(view=view)
+                    await _original_interaction.message.edit(
+                        view=view, content=None, embed=None
+                    )
                 await _original_interaction.delete_original_response()
                 await interaction.response.defer()
             else:
-                await interaction.response.edit_message(view=view)
+                await interaction.response.edit_message(
+                    view=view, content=None, embed=None
+                )
 
     async def refresh_report_view(self, interaction: Interaction):
         async with session_factory() as db:
