@@ -319,7 +319,11 @@ class Integration(ABC):
 
     @is_saved
     async def set_ban_id(
-        self, db: AsyncSession, player_id: str, ban_id: str
+        self,
+        db: AsyncSession,
+        player_id: str,
+        ban_id: str,
+        game: Game,
     ) -> models.PlayerBan:
         """Create a ban record
 
@@ -331,6 +335,8 @@ class Integration(ABC):
             The ID of a player
         ban_id : str
             The ID of the ban this player received
+        game : Game
+            The game the player is banned in
 
         Returns
         -------
@@ -343,9 +349,11 @@ class Integration(ABC):
             The player is already banned
         """
         self.logger.info("%r: Setting ban ID %s for player %s", self, ban_id, player_id)
+        assert self.config.id is not None
         ban = schemas.PlayerBanCreateParams(
             player_id=player_id,
-            integration_id=self.config.id,  # type: ignore
+            integration_id=self.config.id,
+            game=game,
             remote_id=ban_id,
         )
         try:

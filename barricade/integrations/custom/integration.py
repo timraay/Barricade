@@ -155,7 +155,7 @@ class CustomIntegration(Integration):
             except Exception as e:
                 raise IntegrationBanError(player_id, "Failed to ban player") from e
 
-            await self.set_ban_id(db, player_id, remote_id)
+            await self.set_ban_id(db, player_id, remote_id, game)
 
     @is_enabled
     async def unban_player(self, player_id: str, game: Game | None = None):
