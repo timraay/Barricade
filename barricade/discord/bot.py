@@ -9,7 +9,6 @@ from discord.ext import commands
 
 from barricade.constants import DISCORD_COGS_PATH, DISCORD_GUILD_ID
 from barricade.discord.utils import handle_error
-from barricade.enums import Platform
 
 __all__ = ("bot",)
 
@@ -35,7 +34,7 @@ async def sync_commands():
         await asyncio.wait_for(bot.tree.sync(), timeout=5)
         logging.info("Synced app commands")
     except TimeoutError:
-        logging.warn(
+        logging.warning(
             "Didn't sync app commands. This was likely last done recently, resulting in rate limits."
         )
 
@@ -50,28 +49,43 @@ class Bot(commands.Bot):
         await load_all_cogs()
         await sync_commands()
 
+        from barricade.discord.views.community_config import (
+            CommunityConfigCategoryButton,
+            CommunityConfigEditButton,
+        )
         from barricade.discord.views.enroll import EnrollAcceptView, EnrollView
-        from barricade.discord.views.player_review import (
-            PlayerReportResponseButton,
-            PlayerReportSelect,
-            PlayerToggleWatchlistButton,
+        from barricade.discord.views.integration_config import (
+            IntegrationAddSelect,
+            IntegrationConfigButton,
         )
         from barricade.discord.views.report_management import ReportManagementButton
-        from barricade.discord.views.submit_report import GetSubmissionURLView
-        from barricade.discord.views.t17_support_player_review import (
-            T17SupportPlayerReportResponseButton,
+        from barricade.discord.views.report_public_review import (
+            ReportPublicReviewButton,
+        )
+        from barricade.discord.views.report_review import (
+            PlayerToggleWatchlistButton,
+            ReportReviewButton,
+        )
+        from barricade.discord.views.report_submission_start import (
+            ReportSubmissionStartView,
+        )
+        from barricade.discord.views.report_t17_support_review import (
+            ReportT17SupportReviewButton,
         )
 
         self.add_view(EnrollView())
         self.add_view(EnrollAcceptView())
-        self.add_view(GetSubmissionURLView(Platform.PC))
-        self.add_view(GetSubmissionURLView(Platform.CONSOLE))
+        self.add_view(ReportSubmissionStartView())
         self.add_dynamic_items(
-            PlayerReportResponseButton,
+            CommunityConfigCategoryButton,
+            CommunityConfigEditButton,
+            IntegrationConfigButton,
+            IntegrationAddSelect,
+            ReportReviewButton,
             PlayerToggleWatchlistButton,
-            PlayerReportSelect,
             ReportManagementButton,
-            T17SupportPlayerReportResponseButton,
+            ReportPublicReviewButton,
+            ReportT17SupportReviewButton,
         )
 
     @property

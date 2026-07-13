@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, selectinload
 
@@ -10,14 +10,15 @@ from barricade.crud.communities import get_admin_by_id
 from barricade.crud.responses import get_response_stats
 from barricade.db import models
 from barricade.discord.audit import (
+    AuditBy,
     audit_report_create,
     audit_report_delete,
     audit_report_edit,
     audit_token_create,
 )
-from barricade.discord.reports import get_report_channel, get_report_embed
-from barricade.enums import Platform
-from barricade.exceptions import AlreadyExistsError, InvalidPlatformError, NotFoundError
+from barricade.discord.reports import get_report_channel
+from barricade.enums import Game
+from barricade.exceptions import AlreadyExistsError, NotFoundError
 from barricade.hooks import EventHooks
 from barricade.utils import safe_create_task
 
@@ -49,7 +50,7 @@ async def get_token_by_value(db: AsyncSession, token_value: str):
 async def create_token(
     db: AsyncSession,
     params: schemas.ReportTokenCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new token.
 
@@ -89,17 +90,6 @@ async def create_token(
             f"Admin belongs to community with ID {admin.community_id}, not {params.community_id}"
         )
 
-    if params.platform == Platform.PC:
-        if not admin.community.is_pc:
-            raise InvalidPlatformError(
-                f"Community with ID {admin.community_id} is not a PC community"
-            )
-    elif params.platform == Platform.CONSOLE:  # noqa: SIM102
-        if not admin.community.is_console:
-            raise InvalidPlatformError(
-                f"Community with ID {admin.community_id} is not a console community"
-            )
-
     db_token = models.ReportToken(**params.model_dump())
     db.add(db_token)
     await db.flush()
@@ -118,6 +108,11 @@ async def get_all_reports(
     load_token: bool = False,
     limit: int = 100,
     offset: int = 0,
+    created_before: datetime | None = None,
+    created_after: datetime | None = None,
+    edited_before: datetime | None = None,
+    edited_after: datetime | None = None,
+    game: Game | None = None,
 ):
     """Retrieve all reports.
 
@@ -133,6 +128,16 @@ async def get_all_reports(
         The amount of results to return, by default 100
     offset : int, optional
         Offset where from to start returning results, by default 0
+    created_before : datetime, optional
+        Filter for reports created before this datetime, by default None
+    created_after : datetime, optional
+        Filter for reports created after this datetime, by default None
+    edited_before : datetime, optional
+        Filter for reports last edited before this datetime, by default None
+    edited_after : datetime, optional
+        Filter for reports last edited after this datetime, by default None
+    game : Game, optional
+        Filter for reports of a specific game, by default None
 
     Returns
     -------
@@ -153,6 +158,24 @@ async def get_all_reports(
         stmt = stmt.join(models.Report.token).where(
             models.ReportToken.community_id == community_id
         )
+
+    if created_before is not None:
+        stmt = stmt.where(models.Report.created_at <= created_before)
+    if created_after is not None:
+        stmt = stmt.where(models.Report.created_at >= created_after)
+
+    if edited_before is not None:
+        stmt = stmt.where(
+            or_(
+                models.Report.edited_at <= edited_before,
+                models.Report.edited_at.is_(None),
+            )
+        )
+    if edited_after is not None:
+        stmt = stmt.where(models.Report.edited_at >= edited_after)
+
+    if game is not None:
+        stmt = stmt.where(models.Report.game == game)
 
     result = await db.scalars(stmt)
     return result.all()
@@ -233,8 +256,23 @@ async def get_reports_for_player(
     return result.all()
 
 
-async def is_player_reported(db: AsyncSession, player_id: str):
-    stmt = select(exists().where(models.PlayerReport.player_id == player_id))
+async def is_player_reported(
+    db: AsyncSession,
+    player_id: str,
+    game: Game | None = None,
+):
+    stmt = (
+        select(1)
+        .select_from(models.PlayerReport)
+        .where(
+            models.PlayerReport.player_id == player_id,
+        )
+    )
+
+    if game is not None:
+        stmt = stmt.join(models.PlayerReport.report).where(models.Report.game == game)
+
+    stmt = select(stmt.exists())
     result = await db.scalar(stmt)
     return bool(result)
 
@@ -242,7 +280,7 @@ async def is_player_reported(db: AsyncSession, player_id: str):
 async def create_report(
     db: AsyncSession,
     params: schemas.ReportCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Create a new report.
 
@@ -273,7 +311,9 @@ async def create_report(
             schemas.PlayerCreateParams(
                 id=player.player_id,
                 bm_rcon_url=player.bm_rcon_url,
-                eos_id=player.eos_id,
+                hll_eos_id=player.hll_eos_id,
+                hllv_eos_id=player.hllv_eos_id,
+                platform=player.platform,
             ),
         )
         db_players.append(db_player)
@@ -296,9 +336,13 @@ async def create_report(
 
     report = schemas.ReportWithToken.model_validate(db_report)
 
-    embed = await get_report_embed(report)
-    channel = get_report_channel(report.token.platform)
-    message = await channel.send(embed=embed)
+    from barricade.discord.views.report_public_review import (
+        get_report_public_review_view,
+    )
+
+    view = await get_report_public_review_view(report)
+    channel = get_report_channel(report.game)
+    message = await channel.send(view=view)
     db_report.message_id = message.id
 
     await db.commit()
@@ -311,7 +355,7 @@ async def create_report(
 async def edit_report(
     db: AsyncSession,
     report: schemas.ReportCreateParams,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     db_report = await get_report_by_id(db, report.token_id, load_relations=True)
     if not db_report:
@@ -338,7 +382,9 @@ async def edit_report(
                 schemas.PlayerCreateParams(
                     id=player.player_id,
                     bm_rcon_url=player.bm_rcon_url,
-                    eos_id=player.eos_id,
+                    hll_eos_id=player.hll_eos_id,
+                    hllv_eos_id=player.hllv_eos_id,
+                    platform=player.platform,
                 ),
             )
             db_pr = models.PlayerReport(
@@ -373,7 +419,7 @@ async def edit_report(
 async def delete_report(
     db: AsyncSession,
     report_id: int,
-    by: str | None = None,
+    by: AuditBy | None = None,
 ):
     """Delete a report.
 
@@ -452,26 +498,20 @@ async def get_or_create_player(db: AsyncSession, player: schemas.PlayerCreatePar
     created = False
     if db_player:
         dirty = False
-        if player.bm_rcon_url and player.bm_rcon_url != db_player.bm_rcon_url:
-            if player.bm_rcon_url:
-                logging.warning(
-                    "Updating bm_rcon_url for player %s from %s to %s",
-                    player.id,
-                    db_player.bm_rcon_url,
-                    player.bm_rcon_url,
-                )
-            db_player.bm_rcon_url = player.bm_rcon_url
-            dirty = True
-        if player.eos_id and player.eos_id != db_player.eos_id:
-            if player.eos_id:
-                logging.warning(
-                    "Updating eos_id for player %s from %s to %s",
-                    player.id,
-                    db_player.eos_id,
-                    player.eos_id,
-                )
-            db_player.eos_id = player.eos_id
-            dirty = True
+        for attr in ("bm_rcon_url", "hll_eos_id", "hllv_eos_id", "platform"):
+            new_value = getattr(player, attr)
+            old_value = getattr(db_player, attr)
+            if new_value and new_value != old_value:
+                if old_value:
+                    logging.warning(
+                        "Updating %s for player %s from %s to %s",
+                        attr,
+                        player.id,
+                        old_value,
+                        new_value,
+                    )
+                setattr(db_player, attr, new_value)
+                dirty = True
         if dirty:
             await db.flush()
     else:

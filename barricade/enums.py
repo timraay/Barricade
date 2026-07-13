@@ -1,6 +1,6 @@
 import logging
 from enum import Enum, IntFlag, StrEnum, auto
-from typing import NamedTuple
+from typing import NamedTuple, assert_never
 
 
 class PlayerIDType(StrEnum):
@@ -10,13 +10,94 @@ class PlayerIDType(StrEnum):
 
 class Platform(StrEnum):
     # Careful when renaming, used by PSQL
-    PC = "pc"
-    CONSOLE = "console"
+    PC = "PC"
+    CONSOLE = "Console"
+
+    def to_flag(self) -> "PlatformFlag":
+        match self:
+            case Platform.PC:
+                return PlatformFlag.PC
+            case Platform.CONSOLE:
+                return PlatformFlag.CONSOLE
+            case _:
+                assert_never(self)
+                raise ValueError(f"Unknown platform: {self}")
+
+
+class PlatformFlag(IntFlag):
+    PC = auto()
+    CONSOLE = auto()
+    # Update to_platforms when adding new platforms
+
+    @classmethod
+    def all(cls):
+        self = cls(0)
+        for platform in cls:
+            self |= platform
+        return self
+
+    def to_platforms(self) -> list[Platform]:
+        platforms: list[Platform] = []
+        if self & PlatformFlag.PC:
+            platforms.append(Platform.PC)
+        if self & PlatformFlag.CONSOLE:
+            platforms.append(Platform.CONSOLE)
+        return platforms
+
+
+class PlayerPlatform(StrEnum):
+    # Names must exist in Emojis enum as well
+    STEAM = "Steam"
+    EPIC = "Epic Games"
+    XBOX = "Xbox"
+    PLAYSTATION = "PlayStation"
+
+    def is_pc(self):
+        return self in (PlayerPlatform.STEAM, PlayerPlatform.EPIC, PlayerPlatform.XBOX)
+
+    def is_console(self):
+        return self in (PlayerPlatform.XBOX, PlayerPlatform.PLAYSTATION)
+
+    def is_valid_for_platform(self, platform: Platform):
+        match platform:
+            case Platform.PC:
+                return self.is_pc()
+            case Platform.CONSOLE:
+                return self.is_console()
+            case _:
+                assert_never(platform)
+
+    def is_valid_for_platform_flag(self, platform_bitflag: PlatformFlag):
+        return any(
+            self.is_valid_for_platform(platform)
+            for platform in platform_bitflag.to_platforms()
+        )
+
+
+class Game(StrEnum):
+    # Careful when renaming, used by PSQL & Integration API
+    HLL = "HLL"
+    HLLV = "HLLV"
+
+    def to_flag(self) -> "GameFlag":
+        return GameFlag[self.name]
+
+
+class GameFlag(IntFlag):
+    HLL = auto()
+    HLLV = auto()
+
+    @classmethod
+    def all(cls):
+        self = cls(0)
+        for game in cls:
+            self |= game
+        return self
 
 
 class PlayerAlertType(StrEnum):
-    WATCHLISTED = "watchlisted"
-    UNREVIEWED = "unreviewed"
+    WATCHLISTED = "Watchlisted"
+    UNREVIEWED = "Unreviewed"
 
 
 class ReportRejectReason(StrEnum):
@@ -26,9 +107,9 @@ class ReportRejectReason(StrEnum):
 
 
 class IntegrationType(StrEnum):
-    BATTLEMETRICS = "battlemetrics"
-    COMMUNITY_RCON = "crcon"
-    CUSTOM = "custom"
+    BATTLEMETRICS = "Battlemetrics"
+    COMMUNITY_RCON = "CRCON"
+    CUSTOM = "Custom"
 
 
 class ReportReasonDetailsType(NamedTuple):
@@ -37,7 +118,7 @@ class ReportReasonDetailsType(NamedTuple):
 
 
 class ReportReasonDetails(Enum):
-    HACKING = ReportReasonDetailsType(pretty_name="Hacking", emoji="👾")
+    HACKING = ReportReasonDetailsType(pretty_name="Hacking", emoji="🪄")
     TEAMKILLING_GRIEFING = ReportReasonDetailsType(
         pretty_name="Teamkilling / Griefing", emoji="🧨"
     )
@@ -51,6 +132,9 @@ class ReportReasonDetails(Enum):
         pretty_name="Stream sniping / Ghosting", emoji="📺"
     )
     BAN_EVASION = ReportReasonDetailsType(pretty_name="Ban evasion", emoji="🕵️‍♂️")
+
+    def to_flag(self) -> "ReportReasonFlag":
+        return ReportReasonFlag[self.name]
 
 
 class ReportReasonFlag(IntFlag):
@@ -83,7 +167,7 @@ class ReportReasonFlag(IntFlag):
                     self |= reason
             if not reason:
                 if self & ReportReasonFlag.CUSTOM:
-                    logging.warn(
+                    logging.warning(
                         "Multiple custom reasons submitted: %s", ", ".join(reasons)
                     )
                 self |= ReportReasonFlag.CUSTOM
@@ -112,7 +196,11 @@ class ReportReasonFlag(IntFlag):
 class Emojis(StrEnum):
     STEAM = "<:steam:1275098550182740101>"
     XBOX = "<:xbox:1275098583590240256>"
+    EPIC = "<:epic:1525803070813110393>"
+    PLAYSTATION = "<:playstation:1525802885164830720>"
     EPIC_XBOX = "<:epic_xbox:1357314108415807528>"
+    XBOX_PLAYSTATION = "<:xbox_playstation:1525802887987593256>"
+    EPIC_XBOX_PLAYSTATION = "<:epic_xbox_playstation:1525802886393495643>"
     TICK_YES = "<:tick_yes:1275098575356952689>"
     TICK_MAYBE = "<:tick_maybe:1275098558567022633>"
     TICK_NO = "<:tick_no:1275098566515363911>"
@@ -129,6 +217,16 @@ class Emojis(StrEnum):
     REFRESH = "<:refresh:1283790096461594655>"
     ARROW_DOWN_RIGHT = "<:arrow_down_right:1357406683801849996>"
     EASY_ANTI_CHEAT = "<:easy_anti_cheat:1470734064892772394>"
+    PILL_HLL_1 = "<:pill_hll1:1509524428998971462>"
+    PILL_HLL_2 = "<:pill_hll2:1509524430190022766>"
+    PILL_HLL_3 = "<:pill_hll3:1509524431553298502>"
+    PILL_HLL_4 = "<:pill_hll4:1509524432643817532>"
+    PILL_HLL_5 = "<:pill_hll5:1509524433612837055>"
+    PILL_HLLV_1 = "<:pill_hllv1:1509524437257551942>"
+    PILL_HLLV_2 = "<:pill_hllv2:1509524438360522802>"
+    PILL_HLLV_3 = "<:pill_hllv3:1509524443909722183>"
+    PILL_HLLV_4 = "<:pill_hllv4:1509524445847486495>"
+    PILL_HLLV_5 = "<:pill_hllv5:1509524447227412540>"
 
 
 class ReportMessageType(Enum):

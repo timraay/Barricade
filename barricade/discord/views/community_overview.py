@@ -1,3 +1,4 @@
+import discord
 from discord import ButtonStyle, Color, Embed, HTTPException, Interaction, Member
 from discord.ui import TextInput
 
@@ -6,7 +7,6 @@ from barricade.constants import MAX_ADMIN_LIMIT
 from barricade.crud.communities import edit_community, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord import bot
-from barricade.discord.communities import get_forward_channel
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
@@ -14,7 +14,8 @@ from barricade.discord.utils import (
     View,
     get_command_mention,
 )
-from barricade.enums import Emojis
+from barricade.enums import Emojis, GameFlag
+from barricade.utils import validate_url
 
 
 class CommunityOverviewView(View):
@@ -65,9 +66,9 @@ class CommunityOverviewView(View):
                 raise CustomException("You no longer own this community!")
 
             params = schemas.CommunityEditParams.model_validate(db_community)
-            params.name = modal.name.value
-            params.tag = modal.tag.value
-            params.contact_url = modal.contact_url.value
+            params.name = modal.get_name()
+            params.tag = modal.get_tag()
+            params.contact_url = modal.get_contact_url()
 
             await edit_community(db, db_community, params, by=interaction.user)  # type: ignore
 
@@ -77,43 +78,22 @@ class CommunityOverviewView(View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def get_embed(self, interaction: Interaction):
-        if self.community.is_pc and self.community.is_console:
-            platform = "PC & Console"
-        elif self.community.is_pc:
-            platform = "PC"
-        elif self.community.is_console:
-            platform = "Console"
-        else:
-            platform = "Unknown ⚠️"
-
         embed = Embed(
-            title=f"{self.community.tag} {self.community.name}",
+            title=f"{self.community.tag} {self.community.name}".strip(),
             color=Color.blurple(),
         )
 
-        channel = get_forward_channel(self.community)
-        if channel:
-            embed.set_thumbnail(
-                url=channel.guild.icon.url if channel.guild.icon else None
-            )
+        if (
+            (guild_id := self.community.guild_id)
+            and (guild := interaction.client.get_guild(guild_id))
+            and (icon := guild.icon)
+        ):
+            embed.set_thumbnail(url=icon.url)
 
-        if self.is_admin or self.is_owner:
-            if not self.community.forward_channel_id:
-                channel_mention = "⚠️ *No reports channel*"
-            elif not channel:
-                channel_mention = "⚠️ *Unknown reports channel*"
-            else:
-                channel_mention = f"🗒️ {channel.mention}"
-
-            embed.add_field(
-                name="Details",
-                value=f"{channel_mention}\n{Emojis.CONTACT} {self.community.contact_url}",
-            )
-        else:
-            embed.add_field(
-                name="Contact",
-                value=f"{Emojis.CONTACT} {self.community.contact_url}",
-            )
+        embed.add_field(
+            name="Contact",
+            value=f"{Emojis.CONTACT} {self.community.contact_url}",
+        )
 
         admin_list = []
         for admin in self.community.admins:
@@ -135,9 +115,18 @@ class CommunityOverviewView(View):
             embed.color = Color.default()
             embed.description = "> This community was abandoned!"
 
+        if self.community.games_bitflag == 0:
+            games = "None"
+        elif self.community.games_bitflag == GameFlag.HLL:
+            games = "HLL"
+        elif self.community.games_bitflag == GameFlag.HLLV:
+            games = "HLL:V"
+        else:
+            games = "HLL & HLL:V"
+
         embed.add_field(
-            name="Platform",
-            value=platform,
+            name="Games",
+            value=games,
         )
 
         if self.is_admin:
@@ -191,36 +180,87 @@ class CommunityOverviewView(View):
 
 class CommunityBaseModal(Modal):
     # Also used by EnrollModal
-    name = TextInput(
-        label="Name",
-        placeholder='eg. "My Community"',
-        min_length=3,
-        max_length=32,
-    )
 
-    tag = TextInput(
-        label="Tag",
-        placeholder='eg. "[ABC]", "DEF |"',
-        min_length=3,
-        max_length=8,
-    )
+    def __init__(self):
+        super().__init__()
 
-    contact_url = TextInput(
-        label="Contact URL",
-        placeholder='eg. "discord.gg/ABC"',
-        min_length=8,
-        max_length=64,
-    )
+        self.name_input = TextInput(
+            placeholder='eg. "My Community"',
+            min_length=3,
+            max_length=32,
+        )
+
+        self.tag_input = TextInput(
+            required=False,
+            placeholder='eg. "[ABC]", "DEF |"',
+            min_length=2,
+            max_length=8,
+        )
+
+        self.contact_url_input = TextInput(
+            placeholder='eg. "discord.gg/ABC"',
+            min_length=8,
+            max_length=64,
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Community Name",
+                description="The name of your community.",
+                component=self.name_input,
+            )
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Clan Tag",
+                description="(Optional) The clan tag used by members of your community.",
+                component=self.tag_input,
+            )
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Contact URL",
+                description="A permanent(!) link to your Discord or website that players can visit to contact you.",
+                component=self.contact_url_input,
+            )
+        )
+
+    def get_name(self) -> str:
+        return self.name_input.value.strip()
+
+    def get_tag(self) -> str:
+        return self.tag_input.value.strip()
+
+    def get_contact_url(self) -> str:
+        contact_url = self.contact_url_input.value.strip()
+        try:
+            validate_url(contact_url)
+        except ValueError as e:
+            raise CustomException(
+                "Invalid URL!",
+                (
+                    "The provided URL used to contact your community is invalid:"
+                    "\n\n"
+                    f"> {str(e)}"
+                    "\n\n"
+                    "Please try again with a different URL."
+                ),
+            ) from None
+        return contact_url
 
 
-class CommunityEditModal(CommunityBaseModal):
+class CommunityEditModal(CommunityBaseModal, title="Update Community"):
     def __init__(self, view: "CommunityOverviewView"):
+
+        super().__init__()
         self.view = view
+
         community = view.community
-        super().__init__(title=f"Community: {community.name}")
-        self.name.default = community.name
-        self.tag.default = community.tag
-        self.contact_url.default = community.contact_url
+        self.name_input.default = community.name
+        self.tag_input.default = community.tag
+        self.contact_url_input.default = community.contact_url
 
     async def on_submit(self, interaction: Interaction):
         await self.view.submit_edit_modal(interaction, self)

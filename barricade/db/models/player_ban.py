@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
+from barricade.enums import Game
 
 if TYPE_CHECKING:
     from .integration import Integration
@@ -18,6 +19,7 @@ class PlayerBan(ModelBase):
     integration_id: Mapped[int] = mapped_column(
         ForeignKey("integrations.id", ondelete="CASCADE")
     )
+    game: Mapped[Game] = mapped_column(Enum(Game), server_default=Game.HLL.name)
 
     remote_id: Mapped[str]
 

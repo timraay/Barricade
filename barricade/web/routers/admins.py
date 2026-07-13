@@ -168,7 +168,7 @@ async def admin_join_own_community(
     community: Annotated[
         models.Community,
         Security(
-            get_active_token_community(False),
+            get_active_token_community,
             scopes=Scopes.COMMUNITY_ME_MANAGE.to_list(),
         ),
     ],

@@ -1,16 +1,92 @@
 from collections.abc import Sequence
+from datetime import datetime
 
 import sqlalchemy.exc
-from sqlalchemy import exists, func, not_, select
+from sqlalchemy import exists, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
-from barricade.enums import ReportReasonFlag, ReportRejectReason
+from barricade.enums import Game, PlatformFlag, ReportReasonFlag, ReportRejectReason
 from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
+
+
+async def get_all_responses(
+    db: AsyncSession,
+    load_token: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+    community_id: int | None = None,
+    pr_id: int | None = None,
+    report_id: int | None = None,
+    responded_before: datetime | None = None,
+    responded_after: datetime | None = None,
+):
+    """Get all responses, optionally filtered by player report ID, report ID, or community ID.
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    load_token : bool
+        Whether to fetch the report token. By default False.
+    limit : int
+        The maximum number of responses to return. By default 100.
+    offset : int
+        The number of responses to skip. By default 0.
+    community_id : int | None
+        The ID of the community to filter by. By default None.
+    pr_id : int | None
+        The ID of the player report to filter by. By default None.
+    report_id : int | None
+        The ID of the report to filter by. By default None.
+    responded_before : datetime | None
+        The latest time a response was submitted. By default None.
+    responded_after : datetime | None
+        The earliest time a response was submitted. By default None.
+
+    Returns
+    -------
+    Sequence[models.PlayerReportResponse]
+        All matching responses
+    """
+    options = selectinload(models.PlayerReportResponse.player_report).selectinload(
+        models.PlayerReport.report
+    )
+    if load_token:
+        options = options.selectinload(models.Report.token)
+
+    stmt = (
+        select(models.PlayerReportResponse).limit(limit).offset(offset).options(options)
+    )
+
+    if community_id is not None:
+        stmt = stmt.where(models.PlayerReportResponse.community_id == community_id)
+    if pr_id is not None:
+        stmt = stmt.where(models.PlayerReportResponse.pr_id == pr_id)
+
+    if report_id is not None:
+        stmt = stmt.join(models.PlayerReportResponse.player_report).where(
+            models.PlayerReport.report_id == report_id
+        )
+
+    if responded_before is not None:
+        stmt = stmt.where(
+            or_(
+                models.PlayerReportResponse.responded_at < responded_before,
+                models.PlayerReportResponse.responded_at.is_(None),
+            )
+        )
+    if responded_after is not None:
+        stmt = stmt.where(
+            models.PlayerReportResponse.responded_at > responded_after,
+        )
+
+    result = await db.scalars(stmt)
+    return result.all()
 
 
 async def set_report_response(db: AsyncSession, params: schemas.ResponseCreateParams):
@@ -80,7 +156,10 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
 
 
 async def get_community_responses_to_report(
-    db: AsyncSession, report: schemas.Report, community_id: int
+    db: AsyncSession,
+    report: schemas.Report,
+    community_id: int,
+    load_token: bool = False,
 ):
     """Get all of a community's responses to a specific report.
 
@@ -92,23 +171,27 @@ async def get_community_responses_to_report(
         The report whose responses to obtain
     community_id : int
         The ID of the community who the responses should belong to
+    load_token : bool
+        Whether to fetch the report token. By default False.
 
     Returns
     -------
     Sequence[models.PlayerReportResponse]
         All of a community's responses to the report
     """
+    options = selectinload(models.PlayerReportResponse.player_report).selectinload(
+        models.PlayerReport.report
+    )
+    if load_token:
+        options = options.selectinload(models.Report.token)
+
     stmt = (
         select(models.PlayerReportResponse)
         .where(
             models.PlayerReportResponse.community_id == community_id,
             models.PlayerReportResponse.pr_id.in_([pr.id for pr in report.players]),
         )
-        .options(
-            selectinload(models.PlayerReportResponse.player_report)
-            .selectinload(models.PlayerReport.report)
-            .selectinload(models.Report.token)
-        )
+        .options(options)
     )
     result = await db.scalars(stmt)
     return result.all()
@@ -177,6 +260,7 @@ async def get_pending_responses(
             models.PlayerReportResponse.pr_id,
             models.PlayerReportResponse.reject_reason,
             models.PlayerReportResponse.banned,
+            models.PlayerReportResponse.responded_at,
             models.PlayerReportResponse.responded_by,
         )
         .join(models.PlayerReport)
@@ -192,6 +276,7 @@ async def get_pending_responses(
 
         response.banned = row.banned
         response.reject_reason = row.reject_reason
+        response.responded_at = row.responded_at
         response.responded_by = row.responded_by
 
     return list(responses.values())
@@ -201,7 +286,9 @@ async def get_reports_for_player_with_no_community_review(
     db: AsyncSession,
     player_id: str,
     community_id: int,
-    reasons_filter: ReportReasonFlag | None = None,
+    platform_filter: PlatformFlag | None = None,
+    reason_filter: ReportReasonFlag | None = None,
+    game: Game | None = None,
 ):
     """Get all reports of a specific player which the given community has not yet responded to.
 
@@ -213,9 +300,14 @@ async def get_reports_for_player_with_no_community_review(
         The ID of the player
     community_id : int
         The ID of the community
-    reasons_filter : ReportReasonFlag | None
+    platform_filter : PlatformFlag | None
+        Filter out reports whose platforms do not overlap with the filter. If None, no filter
+    reason_filter : ReportReasonFlag | None
         Filter out reports whose reasons do not overlap with the filter. If None, no filter
         will be applied. By default None.
+    game : Game | None
+        Only find reports for the given game. If None, will find reports for all games. By
+        default None.
 
     Returns
     -------
@@ -240,17 +332,26 @@ async def get_reports_for_player_with_no_community_review(
         .options(*options)
     )
 
-    if reasons_filter is not None:
+    if platform_filter is not None:
         stmt = stmt.where(
-            models.Report.reasons_bitflag.bitwise_and(reasons_filter) != 0
+            models.Report.platforms_bitflag.bitwise_and(platform_filter) != 0
         )
+
+    if reason_filter is not None:
+        stmt = stmt.where(models.Report.reasons_bitflag.bitwise_and(reason_filter) != 0)
+
+    if game is not None:
+        stmt = stmt.where(models.Report.game == game)
 
     result = await db.scalars(stmt)
     return result.all()
 
 
 async def get_successful_responses_without_bans(
-    db: AsyncSession, community_id: int, integration_id: int
+    db: AsyncSession,
+    community_id: int,
+    integration_id: int,
+    game: Game | None = None,
 ):
     """Find all players that an integration has not banned yet, that should
     be banned. Returns one response with token for each player found.
@@ -265,6 +366,9 @@ async def get_successful_responses_without_bans(
         The ID of the community
     integration_id : int
         The ID of the integration
+    game : Game | None
+        If provided, only find responses for reports of this game. If None,
+        find responses for all games. By default None.
 
     Returns
     -------
@@ -295,6 +399,9 @@ async def get_successful_responses_without_bans(
             .selectinload(models.Report.token)
         )
     )
+
+    if game is not None:
+        stmt = stmt.join(models.PlayerReport.report).where(models.Report.game == game)
 
     result = await db.scalars(stmt)
     return result.all()

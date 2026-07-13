@@ -24,7 +24,7 @@ from barricade.crud.responses import get_successful_responses_without_bans
 from barricade.db import models, session_factory
 from barricade.discord.communities import safe_send_to_community
 from barricade.discord.utils import get_danger_embed
-from barricade.enums import IntegrationType
+from barricade.enums import Game, IntegrationType
 from barricade.exceptions import (
     AlreadyBannedError,
     AlreadyExistsError,
@@ -74,15 +74,15 @@ class Integration(ABC):
     meta: IntegrationMetaData
 
     def __init__(self, config: schemas.IntegrationConfigParams):
-        if config.id is not None:
-            existing = IntegrationManager().get_by_id(config.id)
-            if existing:
-                config = self.meta.config_cls.model_validate(
-                    {
-                        **existing.config.model_dump(),
-                        **config.model_dump(exclude_unset=True),
-                    }
-                )
+        # if config.id is not None:
+        #     existing = IntegrationManager().get_by_id(config.id)
+        #     if existing:
+        #         config = self.meta.config_cls.model_validate(
+        #             {
+        #                 **existing.config.model_dump(),
+        #                 **config.model_dump(exclude_unset=True),
+        #             }
+        #         )
         self.config = config
 
         self.task: asyncio.Task | None = None
@@ -93,6 +93,17 @@ class Integration(ABC):
         return f"{type(self).__name__}[id={self.config.id}]"
 
     # --- Integration state
+
+    def replace_config(self, config: schemas.IntegrationConfigParams):
+        if self.config.id != config.id:
+            raise ValueError(
+                f"Integration IDs cannot be changed (from {self.config.id} to {config.id})"
+            )
+        if self.config.integration_type != config.integration_type:
+            raise ValueError(
+                f"Integration types cannot be changed (from {self.config.integration_type} to {config.integration_type})"
+            )
+        self.config = self.meta.config_cls.model_validate(config)
 
     async def create(self):
         if self.config.id is not None:
@@ -245,6 +256,7 @@ class Integration(ABC):
 
                 safe_send_to_community(
                     community,
+                    game=None,
                     embed=get_danger_embed(
                         f"Your {self.meta.name} integration was disabled!", description
                     ),
@@ -280,7 +292,7 @@ class Integration(ABC):
 
     @is_saved
     async def get_ban(
-        self, db: AsyncSession, player_id: str
+        self, db: AsyncSession, player_id: str, game: Game | None = None
     ) -> models.PlayerBan | None:
         """Get a player ban.
 
@@ -290,6 +302,8 @@ class Integration(ABC):
             An asynchronous database session
         player_id : str
             The ID of a player
+        game : Game | None
+            The game the player is banned in. If None, any game is accepted.
 
         Returns
         -------
@@ -300,6 +314,7 @@ class Integration(ABC):
             db,
             player_id=player_id,
             integration_id=self.config.id,  # type: ignore
+            game=game,
         )
 
     @is_saved
@@ -428,7 +443,7 @@ class Integration(ABC):
 
     @is_saved
     @is_enabled
-    async def repopulate(self):
+    async def repopulate(self, game: Game | None = None) -> tuple[int, int]:
         assert self.config.id is not None
 
         async with session_factory() as db:
@@ -438,14 +453,12 @@ class Integration(ABC):
                 db,
                 community_id=self.config.community_id,
                 integration_id=self.config.id,
+                game=game,
             )
             responses = [
                 schemas.ResponseWithToken.model_validate(db_response)
                 for db_response in db_responses
             ]
-
-        for response in responses:
-            print(response)
 
         total = len(responses)
         try:
@@ -517,7 +530,7 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def unban_player(self, player_id: str):
+    async def unban_player(self, player_id: str, game: Game | None = None):
         """Instruct the remote integration to unban a player, should
         they be banned.
 
@@ -525,6 +538,8 @@ class Integration(ABC):
         ----------
         player_id : str
             The ID of the player to unban
+        game : Game | None
+            The game the player is banned in. If None, any game is accepted.
 
         Raises
         ------
@@ -556,7 +571,9 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def bulk_unban_players(self, player_ids: Sequence[str]):
+    async def bulk_unban_players(
+        self, player_ids: Sequence[str], game: Game | None = None
+    ):
         """Instruct the remote integration to unban multiple players.
         Depending on the implementation this may take a while.
 
@@ -565,8 +582,10 @@ class Integration(ABC):
 
         Parameters
         ----------
-        response : Sequence[str]
+        player_ids : Sequence[str]
             The IDs of the players to unban
+        game : Game | None
+            The game the players are banned in. If None, any game is accepted.
 
         Raises
         ------

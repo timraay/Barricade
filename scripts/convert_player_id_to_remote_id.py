@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from barricade import schemas
 from barricade.db import models, session_factory
-from barricade.enums import IntegrationType
+from barricade.enums import Game, IntegrationType
 from barricade.integrations.crcon import CRCONIntegration
 from barricade.logger import get_logger
 
@@ -26,7 +26,7 @@ async def main():
                 logger.exception("Failed to load integration %r", db_config)
                 continue
 
-            records = await integration.get_blacklist_bans()
+            records = await integration.get_blacklist_bans(Game.HLL)
 
             for record in records.values():
                 player_id = record["player_id"]

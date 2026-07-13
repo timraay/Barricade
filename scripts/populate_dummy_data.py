@@ -7,7 +7,7 @@ from barricade.constants import DISCORD_BOT_TOKEN
 from barricade.crud import communities, reports
 from barricade.db import create_tables, session_factory
 from barricade.discord import bot
-from barricade.enums import Platform, ReportReasonFlag
+from barricade.enums import GameFlag, PlatformFlag, PlayerPlatform, ReportReasonFlag
 
 
 async def main():
@@ -34,12 +34,11 @@ async def main():
                 tag="(WTH)",
                 contact_url="discord.gg/WTH",
                 owner_id=425249228185534485,
-                forward_guild_id=695232527123742742,
-                forward_channel_id=729998051288285256,
-                admin_role_id=696127274549772359,
+                guild_id=695232527123742742,
+                hll_reports_channel_id=729998051288285256,
+                hll_admin_role_id=696127274549772359,
                 owner_name="Abu",
-                is_pc=True,
-                is_console=True,
+                games_bitflag=GameFlag.all(),
             ),
         )
         print("--", "Created community 1")
@@ -50,11 +49,10 @@ async def main():
                 tag="[C2]",
                 contact_url="C2 url",
                 owner_id=999254478274441277,
-                forward_guild_id=None,
-                forward_channel_id=None,
+                guild_id=None,
+                hll_reports_channel_id=None,
                 owner_name="C2 owner",
-                is_pc=True,
-                is_console=False,
+                games_bitflag=GameFlag.HLL,
             ),
         )
         print("--", "Created community 2")
@@ -65,11 +63,10 @@ async def main():
                 tag="[C3]",
                 contact_url="C3 url",
                 owner_id=1018259047947960320,
-                forward_guild_id=None,
-                forward_channel_id=None,
+                guild_id=None,
+                hll_reports_channel_id=None,
                 owner_name="C3 owner",
-                is_pc=True,
-                is_console=False,
+                games_bitflag=GameFlag.HLL,
             ),
         )
         print("--", "Created community 3")
@@ -90,7 +87,6 @@ async def main():
             schemas.ReportTokenCreateParams(
                 community_id=c1.id,
                 admin_id=c1.owner_id,  # type: ignore
-                platform=Platform.PC,
             ),
         )
         print("--", "Created token 1")
@@ -100,7 +96,6 @@ async def main():
             schemas.ReportTokenCreateParams(
                 community_id=c2.id,
                 admin_id=c2.owner_id,  # type: ignore
-                platform=Platform.PC,
             ),
         )
         print("--", "Created token 2")
@@ -118,13 +113,17 @@ async def main():
                         player_id="11111111111111111",
                         player_name="Player 1",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.STEAM,
                     ),
                     schemas.PlayerReportCreateParams(
                         player_id="22222222222222222",
                         player_name="Player 2",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.EPIC,
                     ),
                 ],
+                game=schemas.Game.HLL,
+                platforms_bitflag=PlatformFlag.PC,
             ),
         )
         print("--", "Created report 1")
@@ -142,8 +141,11 @@ async def main():
                         player_id="76561199023367826",
                         player_name="Abu",
                         bm_rcon_url=None,
+                        platform=PlayerPlatform.STEAM,
                     ),
                 ],
+                game=schemas.Game.HLL,
+                platforms_bitflag=PlatformFlag.PC,
             ),
         )
         print("--", "Created report 2")

@@ -6,12 +6,12 @@ from barricade.crud.communities import get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.autocomplete import atcp_integration_enabled
 from barricade.discord.bot import Bot
+from barricade.discord.crud_utils import get_admin
 from barricade.discord.utils import (
     CustomException,
     get_error_embed_from_exc,
     get_success_embed,
 )
-from barricade.discord.views.channel_confirmation import get_admin
 from barricade.integrations.manager import IntegrationManager
 
 
@@ -59,7 +59,7 @@ class IntegrationsCog(commands.Cog):
         try:
             num_success, num_total = await integration.repopulate()
         except Exception as e:
-            embed = get_error_embed_from_exc(e)
+            embed = get_error_embed_from_exc(interaction, e)
         else:
             embed = get_success_embed(
                 title="Repopulated ban list!",

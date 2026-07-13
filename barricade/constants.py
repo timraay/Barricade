@@ -83,22 +83,25 @@ DISCORD_GUILD_ID = get_env_int("DISCORD_GUILD_ID", 0)
 DISCORD_ADMIN_ROLE_ID = get_env_int("DISCORD_ADMIN_ROLE_ID", 0)
 # ID of the Server Owner role
 DISCORD_OWNER_ROLE_ID = get_env_int("DISCORD_OWNER_ROLE_ID", 0)
-# ID of the PC role
+# ID of the PC role (deprecated)
 DISCORD_PC_ROLE_ID = get_env_int("DISCORD_PC_ROLE_ID", 0)
-# ID of the Console role
+# ID of the Console role (deprecated)
 DISCORD_CONSOLE_ROLE_ID = get_env_int("DISCORD_CONSOLE_ROLE_ID", 0)
+# ID of the HLL role
+DISCORD_HLL_ROLE_ID = get_env_int("DISCORD_HLL_ROLE_ID", 0)
+# ID of the hLLV role
+DISCORD_HLLV_ROLE_ID = get_env_int("DISCORD_HLLV_ROLE_ID", 0)
 # IDs of the main report channels
-DISCORD_PC_REPORTS_CHANNEL_ID = get_env_int("DISCORD_PC_REPORTS_CHANNEL_ID", 0)
-DISCORD_CONSOLE_REPORTS_CHANNEL_ID = get_env_int(
-    "DISCORD_CONSOLE_REPORTS_CHANNEL_ID", 0
-)
+DISCORD_HLL_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLL_REPORTS_CHANNEL_ID", 0)
+DISCORD_HLLV_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLLV_REPORTS_CHANNEL_ID", 0)
 # ID of the channel to send community create requests to
 DISCORD_ENROLL_CHANNEL_ID = get_env_int("DISCORD_ENROLL_CHANNEL_ID", 0)
 # ID of the channel to send audit messages to
 DISCORD_AUDIT_CHANNEL_ID = get_env_int("DISCORD_AUDIT_CHANNEL_ID", 0)
 
-# ID of the channel to send reports to that are of interest to T17 support
-T17_SUPPORT_DISCORD_CHANNEL_ID = get_env_int("T17_SUPPORT_DISCORD_CHANNEL_ID", 0)
+# IDs of the channels to send reports to that are of interest to T17 support
+T17_SUPPORT_HLL_CHANNEL_ID = get_env_int("T17_SUPPORT_HLL_CHANNEL_ID", 0)
+T17_SUPPORT_HLLV_CHANNEL_ID = get_env_int("T17_SUPPORT_HLLV_CHANNEL_ID", 0)
 # A mask of report reasons. Only reports whose reasons overlaps with this mask are considered for forwarding to T17 support
 T17_SUPPORT_REASON_MASK = ReportReasonFlag(get_env_int("T17_SUPPORT_REASON_MASK", 1))
 # The amount of responses a report must have before being considered for forwarding to T17 support
@@ -119,8 +122,19 @@ MAX_ADMIN_LIMIT = get_env_int("MAX_ADMIN_LIMIT", 3)
 # How many integrations each community is allowed to have
 MAX_INTEGRATION_LIMIT = get_env_int("MAX_INTEGRATION_LIMIT", 3)
 
+
+# How many players can be added to a single report.
+REPORT_MAX_PLAYERS = 5
+# How many attachments can be added to a single report.
+# Currently supports no more than 10 attachments, since that is the most that fit into a single media gallery.
+REPORT_MAX_ATTACHMENTS = 10
+
+
 # The URL of the report form. Must end in a "?".
 # Note that this cannot just be changed. There's a lot of constants in barricade.urls as well.
 REPORT_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSedlbl33F6OXaBmaIk6brem79krxSDn_UX9qLymcUOcC7lw-Q/viewform?"
 # Time it takes for report tokens (used for submitting reports) to expire
 REPORT_TOKEN_EXPIRE_DELTA = timedelta(hours=1)
+
+# Steam API key. Currently optional but might become required in the future.
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")

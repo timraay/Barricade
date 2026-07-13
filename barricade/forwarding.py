@@ -1,16 +1,17 @@
 import asyncio
 import logging
 from collections.abc import Iterable, Sequence
+from typing import assert_never
 
 import discord
-from cachetools import TTLCache
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
 from barricade.constants import (
     T17_SUPPORT_CUTOFF_DATE,
-    T17_SUPPORT_DISCORD_CHANNEL_ID,
+    T17_SUPPORT_HLL_CHANNEL_ID,
+    T17_SUPPORT_HLLV_CHANNEL_ID,
     T17_SUPPORT_NUM_ALLOWED_REJECTS,
     T17_SUPPORT_NUM_REQUIRED_RESPONSES,
     T17_SUPPORT_REASON_MASK,
@@ -40,44 +41,63 @@ from barricade.discord.communities import (
     get_alerts_channel,
     get_alerts_role_mention,
     get_confirmations_channel,
-    get_forward_channel,
+    get_reports_channel,
 )
 from barricade.discord.reports import (
     get_alert_embed,
     get_report_channel,
-    get_report_embed,
     get_t17_support_forward_channel,
 )
 from barricade.discord.utils import View
-from barricade.discord.views.player_review import PlayerReviewView
 from barricade.discord.views.player_watchlist import PlayerToggleWatchlistButton
-from barricade.discord.views.report_management import ReportManagementView
-from barricade.discord.views.t17_support_player_review import T17SupportPlayerReviewView
-from barricade.enums import Platform, PlayerAlertType, PlayerIDType, ReportMessageType
+from barricade.discord.views.report_management import get_report_management_view
+from barricade.discord.views.report_public_review import get_report_public_review_view
+from barricade.discord.views.report_review import get_report_review_view
+from barricade.discord.views.report_t17_support_review import (
+    get_report_t17_support_review_view,
+)
+from barricade.enums import Game, PlayerAlertType, PlayerIDType, ReportMessageType
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
-from barricade.urls import URLFactory
-from barricade.utils import get_player_id_type
+from barricade.utils import game_switch, get_player_id_type
 
 
 @add_hook(EventHooks.report_create)
 async def forward_report_to_communities(report: schemas.ReportWithToken):
+    reports_channel_id_column = game_switch(
+        report.game,
+        models.Community.hll_reports_channel_id,
+        models.Community.hllv_reports_channel_id,
+    )
+
+    platform_filter_column = game_switch(
+        report.game,
+        models.Community.hll_platform_filter,
+        models.Community.hllv_platform_filter,
+    )
+
+    reason_filter_column = game_switch(
+        report.game,
+        models.Community.hll_reason_filter,
+        models.Community.hllv_reason_filter,
+    )
+
     async with session_factory.begin() as db:
         stmt = select(models.Community).where(
-            models.Community.forward_guild_id.is_not(None),
-            models.Community.forward_channel_id.is_not(None),
+            models.Community.guild_id.is_not(None),
+            reports_channel_id_column.is_not(None),
             models.Community.id != report.token.community_id,
+            models.Community.games_bitflag.bitwise_and(report.game.to_flag()) != 0,
             or_(
-                models.Community.reasons_filter.is_(None),
-                models.Community.reasons_filter.bitwise_and(report.reasons_bitflag)
-                != 0,
+                platform_filter_column.is_(None),
+                platform_filter_column.bitwise_and(report.platforms_bitflag) != 0,
+            ),
+            or_(
+                reason_filter_column.is_(None),
+                reason_filter_column.bitwise_and(report.reasons_bitflag) != 0,
             ),
         )
-        if report.token.platform == Platform.PC:
-            stmt = stmt.where(models.Community.is_pc.is_(True))
-        elif report.token.platform == Platform.CONSOLE:
-            stmt = stmt.where(models.Community.is_console.is_(True))
 
         result = await db.scalars(stmt)
         db_communities = result.all()
@@ -115,12 +135,12 @@ async def forward_report_to_token_owner(report: schemas.ReportWithToken):
 @add_hook(EventHooks.report_edit)
 async def edit_public_report_message(report: schemas.ReportWithRelations, _):
     try:
-        embed = await get_report_embed(report)
-        channel = get_report_channel(report.token.platform)
+        view = await get_report_public_review_view(report)
+        channel = get_report_channel(report.game)
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
-        await message.edit(embed=embed)
+        await message.edit(view=view)
     except discord.HTTPException:
         pass
 
@@ -176,7 +196,7 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
 @add_hook(EventHooks.report_delete)
 async def delete_public_report_message(report: schemas.ReportWithRelations):
     try:
-        channel = get_report_channel(report.token.platform)
+        channel = get_report_channel(report.game)
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
@@ -308,14 +328,6 @@ async def invoke_integration_report_create_hook(report: schemas.ReportWithToken)
     )
 
 
-# Report URL Cache
-
-
-@add_hook(EventHooks.report_create)
-async def remove_token_url_from_cache(report: schemas.ReportWithToken):
-    URLFactory.remove(report.token)
-
-
 # Player Alerts
 
 
@@ -326,11 +338,13 @@ class PlayerAlert:
         community: schemas.CommunityRef,
         reports: Iterable[schemas.ReportWithToken],
         alert_type: PlayerAlertType,
+        game: Game,
     ) -> None:
         self.player_id = player_id
         self.community = community
         self.reports = sorted(reports, key=lambda x: x.created_at)
         self.alert_type = alert_type
+        self.game = game
 
     async def send(self, db: AsyncSession, channel: discord.TextChannel):
         # Locate all the messages, resending as necessary, and updating them with the most
@@ -356,12 +370,13 @@ class PlayerAlert:
             if not message:
                 # Message doesn't exist and couldn't be sent to forward channel either.
                 # Try sending to alerts channel instead.
-                view = PlayerReviewView(
-                    responses=responses,
+                view = await get_report_review_view(
+                    report,
+                    responses,
                     watchlisted_player_ids=watchlisted_player_ids,
+                    stats=stats,
                 )
-                embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
-                message = await channel.send(embed=embed, view=view)
+                message = await channel.send(view=view)
 
             if message:
                 # Remember the message
@@ -377,7 +392,7 @@ class PlayerAlert:
         )
 
         view = View()
-        mention = get_alerts_role_mention(self.community)
+        mention = get_alerts_role_mention(self.community, self.game)
         match self.alert_type:
             case PlayerAlertType.UNREVIEWED:
                 if mention:
@@ -399,6 +414,7 @@ class PlayerAlert:
                     )
                 )
             case _:
+                assert_never(self.alert_type)
                 raise Exception(f'Unknown alert type "{self.alert_type}"')
 
         reports_urls = list(
@@ -418,15 +434,11 @@ class PlayerAlert:
         )
 
 
-__community_alerts_enabled = TTLCache[int, bool](maxsize=9999, ttl=60 * 10)
-
-
 async def send_optional_player_alert_to_community(
-    community_id: int, player_ids: Sequence[str]
+    community_id: int,
+    player_ids: Sequence[str],
+    game: Game,
 ):
-    if __community_alerts_enabled.get(community_id) is False:
-        return
-
     alerts: list[PlayerAlert] = []
     community: schemas.CommunityRef | None = None
 
@@ -451,16 +463,34 @@ async def send_optional_player_alert_to_community(
                     community=community,
                     reports=reports,
                     alert_type=PlayerAlertType.WATCHLISTED,
+                    game=game,
                 )
                 alerts.append(alert)
 
+            # TODO: Add config option to disable cross-game report alerts
             elif await is_player_reported(db, player_id):
                 if not community:
                     db_community = await get_community_by_id(db, community_id)
                     community = schemas.CommunityRef.model_validate(db_community)
 
+                if community.games_bitflag & game.to_flag() == 0:
+                    continue
+
                 db_reports = await get_reports_for_player_with_no_community_review(
-                    db, player_id, community_id, community.reasons_filter
+                    db,
+                    player_id,
+                    community_id,
+                    platform_filter=game_switch(
+                        game,
+                        community.hll_platform_filter,
+                        community.hllv_platform_filter,
+                    ),
+                    reason_filter=game_switch(
+                        game,
+                        community.hll_reason_filter,
+                        community.hllv_reason_filter,
+                    ),
+                    # game=game,
                 )
                 reports = [
                     schemas.ReportWithToken.model_validate(db_report)
@@ -472,12 +502,13 @@ async def send_optional_player_alert_to_community(
                     community=community,
                     reports=reports,
                     alert_type=PlayerAlertType.UNREVIEWED,
+                    game=game,
                 )
                 alerts.append(alert)
 
         if alerts:
             assert community is not None
-            channel = get_alerts_channel(community)
+            channel = get_alerts_channel(community, game)
             if not channel:
                 # We have nowhere to send the alert, so we just ignore
                 return
@@ -514,14 +545,16 @@ async def update_player_eos_id(
             and isinstance(integration, CRCONIntegration)
         ):
             try:
-                eos_id = await integration.get_player_eos_id(player_id)
-                if eos_id:
+                eos_ids = await integration.get_player_eos_ids(player_id)
+                if eos_ids:
                     await get_or_create_player(
                         db,
                         schemas.PlayerCreateParams(
                             id=player_id,
                             bm_rcon_url=None,
-                            eos_id=eos_id,
+                            hll_eos_id=eos_ids[0],
+                            hllv_eos_id=eos_ids[1],
+                            platform=None,
                         ),
                     )
                     return True
@@ -533,7 +566,7 @@ async def update_player_eos_id(
                     integration,
                 )
 
-    return db_player is not None and db_player.eos_id is not None
+    return db_player is not None and db_player.hll_eos_id is not None
 
 
 async def update_player_eos_id_for_report(report: schemas.ReportWithToken) -> None:
@@ -570,7 +603,12 @@ async def collect_eos_ids_on_report_edit(report: schemas.ReportWithRelations, _)
 
 
 def might_forward_to_staff(report: schemas.ReportWithToken) -> bool:
-    if not T17_SUPPORT_DISCORD_CHANNEL_ID:
+    support_channel_id = game_switch(
+        report.game,
+        T17_SUPPORT_HLL_CHANNEL_ID,
+        T17_SUPPORT_HLLV_CHANNEL_ID,
+    )
+    if not support_channel_id:
         return False
 
     if (report.reasons_bitflag & T17_SUPPORT_REASON_MASK) == 0:
@@ -597,11 +635,12 @@ def should_forward_to_staff(
     return False
 
 
-if T17_SUPPORT_DISCORD_CHANNEL_ID:
+if T17_SUPPORT_HLL_CHANNEL_ID or T17_SUPPORT_HLLV_CHANNEL_ID:
 
     @add_hook(EventHooks.player_ban)
     async def send_cheating_report_to_staff(response: schemas.ResponseWithToken):
-        channel = get_t17_support_forward_channel()
+        game = response.player_report.report.game
+        channel = get_t17_support_forward_channel(game)
         if not channel:
             return
 
@@ -635,44 +674,53 @@ async def send_or_edit_report_review_message(
         raise ValueError("Report owner should not be able to review their own report")
 
     async with session_factory.begin() as db:
-        view = PlayerReviewView(
-            responses=responses,
+        view = await get_report_review_view(
+            report,
+            responses,
             watchlisted_player_ids=watchlisted_player_ids or set(),
+            stats=stats,
         )
-        embed = await PlayerReviewView.get_embed(report, responses, stats=stats)
         return await send_or_edit_message(
             db,
             report=report,
             community=community,
             message_type=ReportMessageType.REVIEW,
-            channel=get_forward_channel(community),
-            embed=embed,
+            channel=get_reports_channel(community, report.game),
             view=view,
         )
 
 
 async def send_or_edit_report_management_message(
     report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
 ):
     community = report.token.community
     admin = report.token.admin
 
     user = await bot.get_or_fetch_member(admin.discord_id)
-    content = f"{user.mention} your report was submitted! (ID: #{report.id})"
+    view = await get_report_management_view(report, stats=stats)
+
+    # Insert message at the start of the view.
+    # This requires temporarily removing all existing elements.
+    view_items = view.children
+    view.clear_items()
+    view.add_item(
+        discord.ui.TextDisplay(
+            f"{user.mention} your report was submitted! (ID: #{report.id})"
+        )
+    )
+    for item in view_items:
+        view.add_item(item)
 
     async with session_factory.begin() as db:
-        view = ReportManagementView(report)
-        embed = await ReportManagementView.get_embed(report)
         return await send_or_edit_message(
             db,
             report=report,
             community=community,
             message_type=ReportMessageType.MANAGE,
-            channel=get_confirmations_channel(community),
-            embed=embed,
+            channel=get_confirmations_channel(community, report.game),
             view=view,
             admin=admin,
-            content=content,
             allowed_mentions=discord.AllowedMentions(users=[user]),
         )
 
@@ -682,15 +730,13 @@ async def send_or_edit_t17_support_report_review_message(
     stats: dict[int, schemas.ResponseStats] | None = None,
 ):
     async with session_factory.begin() as db:
-        view = T17SupportPlayerReviewView(report)
-        embed = await T17SupportPlayerReviewView.get_embed(report, stats=stats)
+        view = await get_report_t17_support_review_view(report, stats=stats)
         return await send_or_edit_message(
             db,
             report=report,
             community=None,
             message_type=ReportMessageType.T17_SUPPORT,
-            channel=get_t17_support_forward_channel(),
-            embed=embed,
+            channel=get_t17_support_forward_channel(report.game),
             view=view,
         )
 
@@ -701,9 +747,7 @@ async def send_or_edit_message(
     community: schemas.CommunityRef | None,
     message_type: ReportMessageType,
     channel: discord.TextChannel | None,
-    embed: discord.Embed,
-    view: discord.ui.View,
-    content: str | None = None,
+    view: discord.ui.LayoutView,
     admin: schemas.AdminRef | None = None,
     allowed_mentions: discord.AllowedMentions = discord.AllowedMentions.none(),  # noqa: B008
 ):
@@ -730,8 +774,6 @@ async def send_or_edit_message(
         try:
             # Edit the message
             message = await message.edit(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )
@@ -745,8 +787,6 @@ async def send_or_edit_message(
         try:
             # Send message
             message = await channel.send(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )
@@ -762,8 +802,8 @@ async def send_or_edit_message(
         if community:
             logger.warning(
                 "Forward channel %s/%s could not be found",
-                community.forward_guild_id,
-                community.forward_channel_id,
+                community.guild_id,
+                community.hll_reports_channel_id,
             )
         else:
             logger.warning("Forward channel could not be found")
@@ -773,8 +813,6 @@ async def send_or_edit_message(
         try:
             user = await bot.get_or_fetch_member(admin.discord_id)
             message = await user.send(
-                content=content,
-                embed=embed,
                 view=view,
                 allowed_mentions=allowed_mentions,
             )

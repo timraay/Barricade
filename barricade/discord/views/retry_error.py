@@ -32,7 +32,7 @@ class RetryErrorView(View):
             assert interaction.guild_id is not None
             db_community = await get_community_by_guild_id(db, interaction.guild_id)
             community = schemas.CommunityRef.model_validate(db_community)
-            await assert_has_admin_role(interaction.user, community)  # type: ignore
+            assert_has_admin_role(interaction.user, community)  # type: ignore
 
     async def retry(self, interaction: Interaction):
         await self.verify_permissions(interaction)

@@ -14,9 +14,10 @@ from barricade.crud.bans import (
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import models, session_factory
-from barricade.discord.communities import get_forward_channel
+from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
+from barricade.enums import Game
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.integration import Integration
 from barricade.integrations.manager import IntegrationManager
@@ -26,6 +27,7 @@ from barricade.logger import get_logger
 async def forward_errors(
     callable: Callable[..., Coroutine],
     player_id: str,
+    game: Game,
     integration: schemas.IntegrationConfig,
     community: schemas.CommunityRef,
     embed: Embed,
@@ -38,7 +40,7 @@ async def forward_errors(
             "Failed to forward request: %s", type(e).__name__
         )
         if not excs or isinstance(e, excs):
-            channel = get_forward_channel(community)
+            channel = get_reports_channel(community, game)
             if not channel:
                 return
 
@@ -53,12 +55,17 @@ async def forward_errors(
 
 @add_hook(EventHooks.player_ban)
 async def on_player_ban(response: schemas.ResponseWithToken):
+    game = response.player_report.report.game
+
     async with session_factory() as db:
         community = await get_community_by_id(db, response.community_id)
         assert community is not None
 
         bans = await get_player_bans_for_community(
-            db, response.player_report.player_id, community.id
+            db,
+            response.player_report.player_id,
+            community.id,
+            game=game,
         )
 
     if len(community.integrations) <= len(bans):
@@ -94,6 +101,7 @@ async def on_player_ban(response: schemas.ResponseWithToken):
         coro = forward_errors(
             partial(integration.ban_player, response),
             player_id=response.player_report.player_id,
+            game=game,
             integration=config,
             community=response.community,
             embed=embed,
@@ -105,11 +113,14 @@ async def on_player_ban(response: schemas.ResponseWithToken):
 
 @add_hook(EventHooks.player_unban)
 async def on_player_unban(response: schemas.Response):
+    game = response.player_report.report.game
+
     async with session_factory() as db:
         db_bans = await get_player_bans_without_responses(
             db,
             player_ids=[response.player_report.player_id],
             community_id=response.community_id,
+            game=game,
         )
 
     if not db_bans:
@@ -129,6 +140,7 @@ async def on_player_unban(response: schemas.Response):
             integration,
             response.community,
             player_id,
+            game=db_ban.game,
         )
         coros.append(coro)
 
@@ -203,6 +215,7 @@ async def revoke_dangling_bans(
             integration,
             community,
             db_ban.player_id,
+            game=db_ban.game,
         )
         coros.append(coro)
 
@@ -226,6 +239,7 @@ async def revoke_ban(
     integration: Integration,
     community: schemas.CommunityRef,
     player_id: str,
+    game: Game,
 ):
     if not isinstance(integration.config, schemas.IntegrationConfig):
         raise ValueError("Integration needs to be saved first")
@@ -236,8 +250,9 @@ async def revoke_ban(
     )
 
     await forward_errors(
-        partial(integration.unban_player, player_id),
+        partial(integration.unban_player, player_id, game=game),
         player_id=player_id,
+        game=game,
         integration=integration.config,
         community=community,
         embed=embed,

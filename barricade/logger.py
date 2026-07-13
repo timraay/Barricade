@@ -33,6 +33,7 @@ UVICORN_LOG_CONFIG = {
     "version": 1,
     "formatters": {
         "app": {"format": _get_logs_format(name="app")},
+        "discord": {"format": _get_logs_format(name="discord")},
         "web_access": {"format": _get_logs_format(name="web")},
         "web_error": {"format": "[%(asctime)s][web][%(levelname)s] %(message)s"},
         "nameless": {"format": _get_logs_format()},
@@ -42,6 +43,11 @@ UVICORN_LOG_CONFIG = {
         "stream_app": {
             "level": logging.INFO,
             "formatter": "app",
+            "class": "logging.StreamHandler",
+        },
+        "stream_discord": {
+            "level": logging.INFO,
+            "formatter": "discord",
             "class": "logging.StreamHandler",
         },
         "stream_web_access": {
@@ -59,6 +65,13 @@ UVICORN_LOG_CONFIG = {
             "formatter": "nameless",
             "class": "logging.FileHandler",
             "filename": LOGS_FOLDER / "app.log",
+            "encoding": "utf-8",
+        },
+        "file_discord": {
+            "level": logging.INFO,
+            "formatter": "nameless",
+            "class": "logging.FileHandler",
+            "filename": LOGS_FOLDER / "discord.log",
             "encoding": "utf-8",
         },
         "file_web_access": {
@@ -79,6 +92,11 @@ UVICORN_LOG_CONFIG = {
     "loggers": {
         "": {
             "handlers": ["stream_app", "file_app"],
+            "level": logging.INFO,
+            "propagate": False,
+        },
+        "discord": {
+            "handlers": ["stream_discord", "file_discord"],
             "level": logging.INFO,
             "propagate": False,
         },

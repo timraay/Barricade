@@ -13,8 +13,7 @@ from barricade.discord.utils import (
     handle_error_wrap,
 )
 from barricade.discord.views.enroll import EnrollView
-from barricade.discord.views.submit_report import GetSubmissionURLView
-from barricade.enums import Platform
+from barricade.discord.views.report_submission_start import ReportSubmissionStartView
 
 
 def insert_returns(body):
@@ -40,28 +39,11 @@ class SetupCog(commands.GroupCog, group_name="setup"):
         self.bot = bot
 
     @app_commands.command(name="send-submission-start-message")
-    async def create_submission_start_message(
-        self, interaction: Interaction, platform: Platform
-    ):
-        await interaction.channel.send(  # type: ignore
-            content=(
-                "## Submitting a report"
-                "\nHad a player significantly disrupt your server? Then submit a report to Barricade!"
-                "\nYour evidence will be shared with other community admins, allowing them to"
-                " preemptively ban the player and prevent them from repeating their actions elsewhere."
-                "\n\n"
-                "> Only severe violations should warrant getting someone banned across many community servers."
-                "\n> As a rule of thumb, **only report players that do not deserve a second chance**."
-                "\n_ _"
-            ),
-            embed=discord.Embed(
-                title="Submit a report",
-                description=(
-                    "-# Reporting requires a **burden of proof**."
-                    "\n-# Reports with insufficient evidence are subject to removal."
-                ),
-            ),
-            view=GetSubmissionURLView(platform),
+    async def create_submission_start_message(self, interaction: Interaction):
+        assert isinstance(interaction.channel, discord.abc.Messageable)
+
+        await interaction.channel.send(
+            view=ReportSubmissionStartView(),
         )
 
         await interaction.response.send_message(
@@ -70,33 +52,25 @@ class SetupCog(commands.GroupCog, group_name="setup"):
 
     @app_commands.command(name="send-community-enroll-message")
     async def create_community_enroll_message(self, interaction: Interaction):
-        await interaction.channel.send(  # type: ignore
-            content=(
-                "### Are you the owner of a Hell Let Loose server?"
-                "\nRequest to join the Bunker to claim the"
-                f" <@&{DISCORD_OWNER_ROLE_ID}> role and get access to **server-related announcements**"
-                " as well as **Barricade**, the community's collaborative ban sharing platform."
-                "\n"
-                "\n> Do not submit more than one request per community."
-                f"\n> Once accepted, you can grant access to **{MAX_ADMIN_LIMIT}** additional admins"
-                f" using the {await get_command_mention(self.bot.tree, 'add-admin', guild_only=True)}"
-                " command."
-                "\n"
-                "\n**Note to console server owners:**"
-                "\nTo verify your community owns a server we need a link to a picture with your **game server** being visible either on **your server management panel** or in the **in-game server browser**."
-                "\nWe recommend you upload the picture to [Imgur](<https://imgur.com/upload>), but other image hosting platforms are fine too."
-                "\n_ _"
-            ),
-            embed=discord.Embed(
-                title="Request access to Bunker",
-                description="-# Requests are manually reviewed. Please be patient.",
-            ),
-            view=EnrollView(),
-            allowed_mentions=discord.AllowedMentions.none(),
+        assert isinstance(interaction.channel, discord.abc.Messageable)
+
+        content = (
+            "### Are you the owner of a Hell Let Loose server?"
+            f"\nRequest to join the Bunker to claim the <@&{DISCORD_OWNER_ROLE_ID}> role,"
+            " granting you access to **server-related announcements**\nas well as **Barricade**,"
+            " the community's collaborative ban sharing platform."
+            "\n"
+            "\n> Do not submit more than one request per community."
+            f"\n> Once accepted, you can grant access to **{MAX_ADMIN_LIMIT}** additional admins"
+            f" using the {await get_command_mention(self.bot.tree, 'add-admin', guild_only=True)} command."
+            "\n_ _"
         )
 
+        await interaction.channel.send(content)
+        await interaction.channel.send(view=EnrollView())
+
         await interaction.response.send_message(
-            embed=get_success_embed("Message sent!"), ephemeral=True
+            embed=get_success_embed("Messages sent!"), ephemeral=True
         )
 
     @commands.command(

@@ -2,14 +2,15 @@ import asyncio
 import contextlib
 import logging
 import re
+import urllib.parse
 from collections.abc import Coroutine, Iterable, Sequence
 from functools import wraps
-from typing import TypeVar
+from typing import TypeVar, assert_never
 
 from cachetools import TTLCache
 from cachetools.keys import hashkey
 
-from barricade.enums import PlayerIDType
+from barricade.enums import Game, PlayerIDType
 
 
 def async_ttl_cache(size: int, seconds: int):
@@ -66,6 +67,21 @@ def get_player_id_type(player_id: str) -> PlayerIDType:
         raise ValueError("Unknown player ID type")
 
 
+def validate_url(url: str, *, strict: bool = False) -> str:
+    if not strict and not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    split_url = urllib.parse.urlsplit(url.strip())
+    if not split_url.scheme:
+        raise ValueError("URL must start with a scheme (`http://` or `https://`)")
+    if split_url.scheme not in ("http", "https"):
+        raise ValueError("URL must start with either `http://` or `https://`")
+    if not split_url.netloc:
+        raise ValueError("Not a valid URL")
+
+    return urllib.parse.urlunsplit(split_url)
+
+
 class SingletonMeta(type):
     _instances = {}
 
@@ -86,3 +102,14 @@ def batched(iterable: Sequence[T], n=1) -> Iterable[Iterable[T]]:
     length = len(iterable)
     for ndx in range(0, length, n):
         yield iterable[ndx : min(ndx + n, length)]
+
+
+def game_switch(game: Game, hll_value: T, hllv_value: T) -> T:
+    match game:
+        case Game.HLL:
+            return hll_value
+        case Game.HLLV:
+            return hllv_value
+        case _:
+            assert_never(game)
+            raise ValueError(f"Unrecognized game: {game}")

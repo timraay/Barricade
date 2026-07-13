@@ -319,7 +319,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "bcrypt", specifier = "==4.3.*" },
     { name = "cachetools", specifier = ">=7.1.4" },
-    { name = "discord-py", specifier = ">=2.4.0" },
+    { name = "discord-py", specifier = ">=2.7.0" },
     { name = "fastapi", specifier = ">=0.136.3" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "psycopg2", specifier = ">=2.9.12" },

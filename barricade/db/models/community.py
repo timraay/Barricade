@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from barricade.db import ModelBase
@@ -24,20 +24,37 @@ class Community(ModelBase):
     contact_url: Mapped[str]
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("admins.discord_id"))
 
-    is_pc: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
-    is_console: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    games_bitflag: Mapped[int] = mapped_column(Integer)
 
-    forward_guild_id: Mapped[int | None] = mapped_column(
+    guild_id: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True, unique=True, index=True
     )
-    forward_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    admin_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    reasons_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    confirmations_channel_id: Mapped[int | None] = mapped_column(
+
+    hll_reports_channel_id: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
     )
-    alerts_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    alerts_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hll_alerts_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hll_confirmations_channel_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    hll_admin_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hll_alerts_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hll_platform_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hll_reason_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    hllv_reports_channel_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    hllv_alerts_channel_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    hllv_confirmations_channel_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    hllv_admin_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hllv_alerts_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    hllv_platform_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hllv_reason_filter: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     admins: Mapped[list["Admin"]] = relationship(
         back_populates="community", foreign_keys="Admin.community_id"

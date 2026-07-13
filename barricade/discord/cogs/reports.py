@@ -10,7 +10,7 @@ from barricade.crud.reports import get_reports_for_player
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
 from barricade.discord.utils import CustomException
-from barricade.discord.views.report_paginator import ReportPaginator
+from barricade.discord.views.report_paginator import PaginatedReportsView
 
 if TYPE_CHECKING:
     from barricade.discord.bot import Bot
@@ -46,7 +46,7 @@ class ReportsCog(commands.Cog):
                     raise access_denied_exc
 
                 community = schemas.CommunityRef.model_validate(db_community)
-                await assert_has_admin_role(interaction.user, community)  # type: ignore
+                assert_has_admin_role(interaction.user, community)  # type: ignore
 
             db_reports = await get_reports_for_player(
                 db, player_id=player_id, load_token=True
@@ -64,7 +64,7 @@ class ReportsCog(commands.Cog):
                 for db_report in db_reports
             ]
 
-            view = ReportPaginator(community, reports)
+            view = PaginatedReportsView(community, reports)
             await view.send(interaction)
 
 

@@ -31,9 +31,7 @@ def get_own_integration_dependency(
     integration: IntegrationDep,
     community: Annotated[
         models.Community,
-        Security(
-            get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_READ.to_list()
-        ),
+        Security(get_active_token_community, scopes=Scopes.COMMUNITY_ME_READ.to_list()),
     ],
 ):
     if integration.config.community_id != community.id:
@@ -124,9 +122,7 @@ async def get_own_community_integration(
     integration: OwnIntegrationDep,
     token: Annotated[
         web_schemas.TokenWithHash,
-        Security(
-            get_active_token_community(False), scopes=Scopes.COMMUNITY_ME_READ.to_list()
-        ),
+        Security(get_active_token_community, scopes=Scopes.COMMUNITY_ME_READ.to_list()),
     ],
 ):
     return integration.config
@@ -141,7 +137,7 @@ async def enable_own_community_integration(
     token: Annotated[
         web_schemas.TokenWithHash,
         Security(
-            get_active_token_community(True),
+            get_active_token_community,
             scopes=Scopes.COMMUNITY_ME_MANAGE.to_list(),
         ),
     ],
@@ -158,7 +154,7 @@ async def disable_own_community_integration(
     token: Annotated[
         web_schemas.TokenWithHash,
         Security(
-            get_active_token_community(True),
+            get_active_token_community,
             scopes=Scopes.COMMUNITY_ME_MANAGE.to_list(),
         ),
     ],

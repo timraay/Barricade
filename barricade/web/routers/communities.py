@@ -14,24 +14,16 @@ from barricade.web.security import get_active_token, get_active_token_community
 router = APIRouter(prefix="/communities", tags=["Communities"])
 
 
-def get_community_dependency(load_relations: bool):
-    async def inner(db: DatabaseDep, community_id: int):
-        result = await communities.get_community_by_id(
-            db, community_id, load_relations=load_relations
+async def get_community_dependency(db: DatabaseDep, community_id: int):
+    result = await communities.get_community_by_id(db, community_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Community does not exist"
         )
-        if result is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Community does not exist"
-            )
-        return result
-
-    return inner
+    return result
 
 
-CommunityDep = Annotated[models.Community, Depends(get_community_dependency(False))]
-CommunityWithRelationsDep = Annotated[
-    models.Community, Depends(get_community_dependency(True))
-]
+CommunityDep = Annotated[models.Community, Depends(get_community_dependency)]
 
 
 def get_admin_dependency(load_relations: bool):
@@ -92,26 +84,24 @@ async def create_community(
     return db_community
 
 
-@router.get("/me", response_model=schemas.CommunityWithRelations)
+@router.get("/me", response_model=schemas.Community)
 async def get_own_community(
     community: Annotated[
-        schemas.CommunityWithRelations,
-        Security(
-            get_active_token_community(True), scopes=Scopes.COMMUNITY_ME_READ.to_list()
-        ),
+        schemas.Community,
+        Security(get_active_token_community, scopes=Scopes.COMMUNITY_ME_READ.to_list()),
     ],
 ):
     return community
 
 
-@router.put("/me", response_model=schemas.CommunityWithRelations)
+@router.put("/me", response_model=schemas.Community)
 async def edit_own_community(
     db: DatabaseDep,
     params: schemas.CommunityEditParams,
     db_community: Annotated[
         models.Community,
         Security(
-            get_active_token_community(True),
+            get_active_token_community,
             scopes=Scopes.COMMUNITY_ME_MANAGE.to_list(),
         ),
     ],
@@ -129,7 +119,7 @@ async def transfer_own_community_ownership(
     db_community: Annotated[
         models.Community,
         Security(
-            get_active_token_community(False),
+            get_active_token_community,
             scopes=Scopes.COMMUNITY_ME_MANAGE.to_list(),
         ),
     ],
@@ -138,9 +128,9 @@ async def transfer_own_community_ownership(
     return await transfer_community_ownership(db, db_community, admin, token)
 
 
-@router.get("/{community_id}", response_model=schemas.SafeCommunityWithRelations)
+@router.get("/{community_id}", response_model=schemas.SafeCommunity)
 async def get_community(
-    community: CommunityWithRelationsDep,
+    community: CommunityDep,
     token: Annotated[
         web_schemas.TokenWithHash,
         Security(get_active_token, scopes=Scopes.COMMUNITY_READ.to_list()),

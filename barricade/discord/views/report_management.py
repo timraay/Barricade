@@ -1,29 +1,26 @@
 import contextlib
 import re
-from datetime import UTC, datetime
-from io import BytesIO
 
 import discord
 from discord import ButtonStyle, Interaction
 
 from barricade import schemas
-from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.crud.reports import delete_report, get_report_by_id
 from barricade.crud.responses import bulk_get_response_stats
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
-from barricade.discord.reports import get_report_embed
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
+    LayoutView,
     View,
-    format_url,
     get_danger_embed,
     get_success_embed,
     handle_error_wrap,
 )
+from barricade.discord.views.report import get_plain_report_view
+from barricade.discord.views.report_edit import ReportEditView
 from barricade.enums import Emojis
-from barricade.urls import get_report_edit_url
 
 
 class ReportManagementButton(
@@ -62,29 +59,31 @@ class ReportManagementButton(
         await interaction.response.defer(ephemeral=True)
 
         async with session_factory.begin() as db:
-            db_report = await get_report_by_id(db, self.report_id, load_relations=True)
+            db_report = await get_report_by_id(db, self.report_id, load_token=True)
             if not db_report:
                 raise CustomException(
                     "Report not found!", "This report was most likely deleted already."
                 )
-            report = schemas.ReportWithRelations.model_validate(db_report)
+            report = schemas.ReportWithToken.model_validate(db_report)
             if interaction.user.id != report.token.admin_id:
-                await assert_has_admin_role(interaction.user, report.token.community)  # type: ignore
+                assert_has_admin_role(interaction.user, report.token.community)  # type: ignore
 
             match self.command:
                 case "refresh":
                     stats = await bulk_get_response_stats(db, report.players)
-                    view = ReportManagementView(report)
-                    embed = await view.get_embed(report, stats=stats)
-                    await interaction.edit_original_response(embed=embed, view=view)
+                    view = await get_report_management_view(report, stats=stats)
+                    # TODO: Verify whether message is fully using Components V2
+                    await interaction.edit_original_response(view=view)
 
                 case "del":
 
                     async def confirm_delete(_interaction: Interaction):
                         await _interaction.response.defer(ephemeral=True)
 
-                        async with session_factory.begin() as db:
-                            await delete_report(db, self.report_id, by=interaction.user)  # type: ignore
+                        async with session_factory.begin() as _db:
+                            await delete_report(
+                                _db, self.report_id, by=interaction.user
+                            )
 
                         with contextlib.suppress(discord.NotFound):
                             await interaction.message.delete()  # type: ignore
@@ -115,74 +114,57 @@ class ReportManagementButton(
                     )
 
                 case "edit":
-                    # Generate new token and update expiration date
-                    db_report.token.value = db_report.token.generate_value()
-                    db_report.token.expires_at = (
-                        datetime.now(tz=UTC) + REPORT_TOKEN_EXPIRE_DELTA
-                    )
-                    # Send URL to user
-                    url = get_report_edit_url(
-                        schemas.ReportWithToken.model_validate(db_report)
-                    )
-                    body = "## " + format_url("Open Google Form", url)
-
-                    if len(body) <= 4096:
-                        await interaction.followup.send(
-                            embed=discord.Embed(description=body), ephemeral=True
-                        )
-                    else:
-                        fp = BytesIO(url.encode())
-                        fp.seek(0)
-                        file = discord.File(fp, "url.txt")
-                        await interaction.followup.send(
-                            content="The URL was too large, so it has been uploaded as a file instead.",
-                            file=file,
-                            ephemeral=True,
-                        )
+                    view = await ReportEditView.from_report(report)
+                    await interaction.followup.send(view=view)
 
                 case _:
                     raise ValueError(f"Unknown command {self.command!r}")
 
 
-class ReportManagementView(View):
-    def __init__(self, report: schemas.ReportRef):
-        super().__init__(timeout=None)
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.blurple,
-                    label="Edit report",
-                ),
-                command="edit",
-                report_id=report.id,
-            )
-        )
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.red,
-                    label="Delete report",
-                ),
-                command="del",
-                report_id=report.id,
-            )
-        )
-        self.add_item(
-            ReportManagementButton(
-                button=discord.ui.Button(
-                    style=discord.ButtonStyle.grey,
-                    emoji=Emojis.REFRESH,
-                ),
-                command="refresh",
-                report_id=report.id,
-            )
-        )
+async def get_report_management_view(
+    report: schemas.ReportWithToken,
+    stats: dict[int, schemas.ResponseStats] | None = None,
+    with_refresh_button: bool = True,
+) -> LayoutView:
+    action_row = discord.ui.ActionRow()
 
-    @staticmethod
-    async def get_embed(
-        report: schemas.ReportWithToken,
-        stats: dict[int, schemas.ResponseStats] | None = None,
-    ):
-        embed = await get_report_embed(report, stats=stats, with_footer=False)
-        embed.color = discord.Colour(0xFEE75C)  # yellow
-        return embed
+    action_row.add_item(
+        ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.blurple,
+                label="Edit report",
+            ),
+            command="edit",
+            report_id=report.id,
+        )
+    )
+    action_row.add_item(
+        ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.red,
+                label="Delete report",
+            ),
+            command="del",
+            report_id=report.id,
+        )
+    )
+
+    # Create view
+    view = await get_plain_report_view(
+        report,
+        stats=stats,
+        container_color=discord.Colour(0xFEE75C),  # yellow
+        action_row=action_row,
+        refresh_button=ReportManagementButton(
+            button=discord.ui.Button(
+                style=discord.ButtonStyle.grey,
+                emoji=Emojis.REFRESH,
+            ),
+            command="refresh",
+            report_id=report.id,
+        )
+        if with_refresh_button
+        else None,
+    )
+
+    return view

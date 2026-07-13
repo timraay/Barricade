@@ -17,6 +17,14 @@ services:
     volumes:
       - ./db_data:/data
 
+  migrate:
+    # Build the image from the Dockerfile in the current directory
+    build: .
+    command: uv run alembic upgrade head
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     # Build the image from the Dockerfile in the current directory
     build: .
@@ -24,6 +32,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
     restart: unless-stopped
 

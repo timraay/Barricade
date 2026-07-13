@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from io import BytesIO
 from typing import Annotated, Literal
 
@@ -10,7 +11,7 @@ from barricade import schemas
 from barricade.crud import communities, reports
 from barricade.db import DatabaseDep, models
 from barricade.discord.bot import bot
-from barricade.enums import Emojis, ReportReasonFlag
+from barricade.enums import Emojis, Game, ReportReasonFlag
 from barricade.exceptions import NotFoundError
 from barricade.web import schemas as web_schemas
 from barricade.web.paginator import PaginatedResponse, PaginatorDep
@@ -48,9 +49,22 @@ async def get_reports(
         web_schemas.TokenWithHash,
         Security(get_active_token, scopes=Scopes.REPORT_READ.to_list()),
     ],
+    created_before: datetime | None = None,
+    created_after: datetime | None = None,
+    edited_before: datetime | None = None,
+    edited_after: datetime | None = None,
+    game: Game | None = None,
 ):
     result = await reports.get_all_reports(
-        db, load_token=True, limit=paginator.limit, offset=paginator.offset
+        db,
+        load_token=True,
+        limit=paginator.limit,
+        offset=paginator.offset,
+        created_before=created_before,
+        created_after=created_after,
+        edited_before=edited_before,
+        edited_after=edited_after,
+        game=game,
     )
     return paginator.paginate(result)
 
@@ -80,7 +94,6 @@ async def create_report(
         params=schemas.ReportTokenCreateParams(
             admin_id=db_admin.discord_id,
             community_id=db_admin.community_id,
-            platform=report.platform,
         ),
         by=(token.user.username if token.user else "Web Token"),
     )
@@ -295,6 +308,11 @@ async def get_own_reports(
         web_schemas.TokenWithHash,
         Security(get_active_token_of_community, scopes=Scopes.REPORT_ME_READ.to_list()),
     ],
+    created_before: datetime | None = None,
+    created_after: datetime | None = None,
+    edited_before: datetime | None = None,
+    edited_after: datetime | None = None,
+    game: Game | None = None,
 ):
     result = await reports.get_all_reports(
         db,
@@ -302,6 +320,11 @@ async def get_own_reports(
         load_token=True,
         limit=paginator.limit,
         offset=paginator.offset,
+        created_before=created_before,
+        created_after=created_after,
+        edited_before=edited_before,
+        edited_after=edited_after,
+        game=game,
     )
     return paginator.paginate(result)
 

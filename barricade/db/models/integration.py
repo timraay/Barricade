@@ -21,7 +21,8 @@ class Integration(ModelBase):
 
     api_key: Mapped[str]
     api_url: Mapped[str]
-    banlist_id: Mapped[str | None]
+    hll_banlist_id: Mapped[str | None]
+    hllv_banlist_id: Mapped[str | None]
 
     # Battlemetrics
     organization_id: Mapped[str | None]

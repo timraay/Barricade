@@ -2,26 +2,25 @@ import re
 from functools import partial
 
 import discord
-import pydantic_core
 from discord import ButtonStyle, Color, Interaction
 from discord.ui import TextInput
 from pydantic import ValidationError
 
 from barricade import schemas
-from barricade.constants import DISCORD_ENROLL_CHANNEL_ID
 from barricade.crud.communities import create_new_community, get_admin_by_id
 from barricade.db import session_factory
+from barricade.discord.communities import get_enroll_channel
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
+    LayoutView,
     Modal,
     View,
-    format_url,
     get_command_mention,
     get_success_embed,
 )
 from barricade.discord.views.community_overview import CommunityBaseModal
-from barricade.enums import Emojis
+from barricade.enums import Emojis, Game, GameFlag
 
 RE_BATTLEMETRICS_URL = re.compile(
     r"^https:\/\/(?:www\.)?battlemetrics\.com\/servers\/hll\/\d+$"
@@ -29,28 +28,60 @@ RE_BATTLEMETRICS_URL = re.compile(
 RE_SERVER_ADDRESS = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{3,5}$")
 
 
-class EnrollView(View):
+class EnrollView(LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
 
-        self.add_item(
-            CallableButton(
-                partial(self.send_owner_form, True),
-                style=ButtonStyle.blurple,
-                label="Request access (PC)",
-                custom_id="enroll_pc",
+        container = discord.ui.Container()
+        container.add_item(
+            discord.ui.TextDisplay(
+                "**Request access to Bunker**"
+                "\nSelect the game that you currently operate servers for. This can be changed later."
             )
         )
-        self.add_item(
-            CallableButton(
-                partial(self.send_owner_form, False),
-                style=ButtonStyle.blurple,
-                label="Request access (Console)",
-                custom_id="enroll_console",
+        container.add_item(discord.ui.Separator())
+        container.add_item(
+            discord.ui.Section(
+                discord.ui.TextDisplay("🌲 **Hell Let Loose** (2021)"),
+                accessory=CallableButton(
+                    partial(self.send_owner_form, games_bitflag=Game.HLL.to_flag()),
+                    style=ButtonStyle.blurple,
+                    label="Request",
+                    custom_id="enroll:hll",
+                ),
             )
         )
+        container.add_item(
+            discord.ui.Section(
+                discord.ui.TextDisplay("🌴 **Hell Let Loose: Vietnam** (2026)"),
+                accessory=CallableButton(
+                    partial(self.send_owner_form, games_bitflag=Game.HLLV.to_flag()),
+                    style=ButtonStyle.blurple,
+                    label="Request",
+                    custom_id="enroll:hllv",
+                ),
+            )
+        )
+        container.add_item(discord.ui.Separator())
+        container.add_item(
+            discord.ui.Section(
+                discord.ui.TextDisplay("▫️ Hosting servers for both games?"),
+                accessory=CallableButton(
+                    partial(self.send_owner_form, games_bitflag=GameFlag.all()),
+                    style=ButtonStyle.gray,
+                    label="Request",
+                    custom_id="enroll:all",
+                ),
+            )
+        )
+        container.add_item(
+            discord.ui.TextDisplay(
+                "-# Requests are manually reviewed. Please allow up to 3 days."
+            )
+        )
+        self.add_item(container)
 
-    async def send_owner_form(self, is_pc: bool, interaction: Interaction):
+    async def send_owner_form(self, interaction: Interaction, games_bitflag: GameFlag):
         async with session_factory() as db:
             admin = await get_admin_by_id(db, interaction.user.id)
             if admin and admin.community:
@@ -62,55 +93,74 @@ class EnrollView(View):
                             f" ask the existing owner to transfer ownership."
                         ),
                     )
-                elif (is_pc and not admin.community.is_pc) or (
-                    not is_pc and not admin.community.is_console
-                ):
+
+                games_overlap = admin.community.games_bitflag & games_bitflag
+                if (games_bitflag - games_overlap) != 0:
                     raise CustomException(
                         f"You are already registered as owner of {admin.community.name}!",
-                        "If you want to change what platform(s) your community hosts servers for, please reach out to Bunker staff.",
-                    )
-                else:
-                    raise CustomException(
-                        f"You are already registered as owner of {admin.community.name}!",
-                        f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}.",  # type: ignore
+                        f"If you want to change what games your community hosts servers for, use {await get_command_mention(interaction.client.tree, 'config')}.",  # type: ignore
                     )
 
-        modal = PCEnrollModal() if is_pc else ConsoleEnrollModal()
+                raise CustomException(
+                    f"You are already registered as owner of {admin.community.name}!",
+                    f"If you want to update your community details, use {await get_command_mention(interaction.client.tree, 'community', guild_only=True)}.",  # type: ignore
+                )
+
+        modal = EnrollModal(games_bitflag=games_bitflag)
         await interaction.response.send_modal(modal)
 
 
 class EnrollModal(CommunityBaseModal, title="Sign up your community"):
-    def get_params(self, interaction: Interaction):
-        return schemas.CommunityCreateParams(
-            name=self.name.value,
-            tag=self.tag.value,
-            contact_url=self.contact_url.value,
-            owner_id=interaction.user.id,
-            owner_name=interaction.user.display_name,
-            is_pc=False,
-            is_console=False,
+    def __init__(self, games_bitflag: GameFlag):
+        super().__init__()
+        self.games_bitflag = games_bitflag
+
+        self.evidence_input = discord.ui.FileUpload(
+            min_values=1,
+            max_values=1,
         )
 
-    def get_server_value(self) -> str:
-        return "Unknown"
+        self.add_item(
+            discord.ui.TextDisplay(
+                "You need to show that your community owns a server.\n"
+                "-# Please **provide a screenshot** containing either of the following:\n"
+                "> -# - The control panel of your server\n"
+                "> -# - The server browser, with your server visible.\n"
+                "-# Images only. Any other file types will be rejected."
+            )
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Evidence of server ownership",
+                component=self.evidence_input,
+            )
+        )
+
+    def get_evidence_url(self) -> str:
+        if not self.evidence_input.values:
+            raise CustomException("At least one attachment must be provided!")
+        file = self.evidence_input.values[0]
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise CustomException("Only images are allowed!")
+        return file.url
+
+    def get_params(self, interaction: Interaction):
+        return schemas.CommunityCreateParams(
+            name=self.get_name(),
+            tag="",
+            contact_url=self.get_contact_url(),
+            owner_id=interaction.user.id,
+            owner_name=interaction.user.display_name,
+            games_bitflag=self.games_bitflag,
+        )
 
     async def on_submit(self, interaction: Interaction):
-        channel = interaction.client.get_channel(DISCORD_ENROLL_CHANNEL_ID)
-        if not channel:
-            raise CustomException(
-                "Could not send application!",
-                "Channel not found. Reach out to an administrator.",
-            )
-        if not isinstance(channel, discord.TextChannel):
-            raise CustomException(
-                "Could not send application!",
-                "Invalid channel configured. Reach out to an administrator.",
-            )
-
+        channel = get_enroll_channel()
         params = self.get_params(interaction)
 
         embed = discord.Embed(
-            title=f"{params.tag} {params.name}",
+            title=f"{params.tag} {params.name}".strip(),
             color=Color.blurple(),
         )
         embed.add_field(
@@ -124,88 +174,28 @@ class EnrollModal(CommunityBaseModal, title="Sign up your community"):
             inline=True,
         )
         embed.add_field(
-            name="Server",
-            value=self.get_server_value(),
-            inline=True,
-        )
-        embed.add_field(
             name="Payload",
             value="```json\n"
             + params.model_dump_json(indent=2, exclude_unset=True)
             + "\n```",
             inline=False,
         )
+        embed.set_image(url=self.get_evidence_url())
 
         await channel.send(embed=embed, view=EnrollAcceptView())
+
+        # TODO: Warn user if they have DMs disabled (to receive rejection reason)
         await interaction.response.send_message(
             embed=get_success_embed(
                 "Application sent!",
-                "Your application was submitted for review. You will automatically receive your roles once accepted.",
+                (
+                    "Your application was submitted for review."
+                    " This may take up to 3 days."
+                    " You will automatically receive your roles once accepted."
+                ),
             ),
             ephemeral=True,
         )
-
-
-class PCEnrollModal(EnrollModal, title="[PC] Sign up your community"):
-    battlemetrics_url = TextInput(
-        label="Battlemetrics URL",
-        placeholder='eg. "https://www.battlemetrics.com/servers/hll/12345"',
-    )
-
-    def get_params(self, interaction: Interaction):
-        params = super().get_params(interaction)
-        params.is_pc = True
-        return params
-
-    def get_server_value(self):
-        return format_url("View on Battlemetrics", self.battlemetrics_url.value)
-
-    async def on_submit(self, interaction: Interaction):
-        bm_url_match = RE_BATTLEMETRICS_URL.match(self.battlemetrics_url.value)
-        if not bm_url_match:
-            raise CustomException(
-                "Invalid Battlemetrics URL!",
-                "Please visit [Battlemetrics](https://www.battlemetrics.com/servers/hll), search for your server, click on it, and copy the URL.",
-            )
-
-        return await super().on_submit(interaction)
-
-
-class ConsoleEnrollModal(EnrollModal, title="[Console] Sign up your community"):
-    image_url = TextInput(
-        label="URL to image of HLL server in browser",
-        placeholder='eg. "https://imgur.com/i/..."',
-    )
-
-    def get_params(self, interaction: Interaction):
-        params = super().get_params(interaction)
-        params.is_console = True
-        return params
-
-    def get_server_value(self):
-        return format_url("View Image", str(pydantic_core.Url(self.image_url.value)))
-
-    async def on_submit(self, interaction: Interaction):
-        invalid_url_exc = CustomException(
-            "Invalid URL!",
-            (
-                "Please provide a valid URL to an image. The image must show your game server on your server management panel or in the server browser."
-                " Your server's name needs to be visible. [Imgur](https://imgur.com/upload) is recommended to quickly upload your image online."
-            ),
-        )
-        try:
-            url = pydantic_core.Url(self.image_url.value)
-        except ValidationError:
-            raise invalid_url_exc from None
-
-        if not url.host:
-            raise invalid_url_exc
-        if "discord" in url.host and not (
-            url.host.startswith("cdn.") or url.host.startswith("media")
-        ):
-            raise invalid_url_exc
-
-        return await super().on_submit(interaction)
 
 
 class EnrollEditModal(Modal, title="Edit Application"):

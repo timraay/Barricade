@@ -12,8 +12,11 @@ from pydantic import (
 
 from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import (
+    Game,
+    GameFlag,
     IntegrationType,
-    Platform,
+    PlatformFlag,
+    PlayerPlatform,
     ReportMessageType,
     ReportReasonFlag,
     ReportRejectReason,
@@ -38,7 +41,8 @@ class SafeIntegrationConfigParams(_ModelFromAttributes):
     api_url: str
 
     organization_id: str | None
-    banlist_id: str | None
+    hll_banlist_id: str | None
+    hllv_banlist_id: str | None
 
 
 class IntegrationConfigParams(SafeIntegrationConfigParams):
@@ -52,7 +56,8 @@ class BattlemetricsIntegrationConfigParams(IntegrationConfigParams):
     integration_type: Literal[IntegrationType.BATTLEMETRICS] = (  # type: ignore
         IntegrationType.BATTLEMETRICS
     )
-    banlist_id: str | None = None
+    hll_banlist_id: str | None = None
+    hllv_banlist_id: str | None = None
 
 
 class CustomIntegrationConfigParams(IntegrationConfigParams):
@@ -60,7 +65,8 @@ class CustomIntegrationConfigParams(IntegrationConfigParams):
 
     integration_type: Literal[IntegrationType.CUSTOM] = IntegrationType.CUSTOM  # type: ignore
     organization_id: None = None  # type: ignore
-    banlist_id: str | None = None
+    hll_banlist_id: str | None = None
+    hllv_banlist_id: str | None = None
 
 
 class CRCONIntegrationConfigParams(CustomIntegrationConfigParams):
@@ -117,24 +123,36 @@ class _CommunityBase(BaseModel):
     name: str
     tag: str
     contact_url: str
-    is_pc: bool
-    is_console: bool
+    games_bitflag: GameFlag
 
-    forward_guild_id: int | None
-    forward_channel_id: int | None
-    admin_role_id: int | None
-    reasons_filter: ReportReasonFlag | None
-    confirmations_channel_id: int | None
-    alerts_channel_id: int | None
-    alerts_role_id: int | None
+    guild_id: int | None
+    hll_reports_channel_id: int | None
+    hll_alerts_channel_id: int | None
+    hll_confirmations_channel_id: int | None
+    hll_admin_role_id: int | None
+    hll_alerts_role_id: int | None
+    hll_platform_filter: PlatformFlag | None
+    hll_reason_filter: ReportReasonFlag | None
+    hllv_reports_channel_id: int | None
+    hllv_alerts_channel_id: int | None
+    hllv_confirmations_channel_id: int | None
+    hllv_admin_role_id: int | None
+    hllv_alerts_role_id: int | None
+    hllv_platform_filter: PlatformFlag | None
+    hllv_reason_filter: ReportReasonFlag | None
 
     @field_serializer(
-        "forward_guild_id",
-        "forward_channel_id",
-        "admin_role_id",
-        "confirmations_channel_id",
-        "alerts_channel_id",
-        "alerts_role_id",
+        "guild_id",
+        "hll_reports_channel_id",
+        "hll_alerts_channel_id",
+        "hll_confirmations_channel_id",
+        "hll_admin_role_id",
+        "hll_alerts_role_id",
+        "hllv_reports_channel_id",
+        "hllv_alerts_channel_id",
+        "hllv_confirmations_channel_id",
+        "hllv_admin_role_id",
+        "hllv_alerts_role_id",
         when_used="json-unless-none",
     )
     def convert_large_int_to_str(value: int):  # type: ignore
@@ -144,14 +162,15 @@ class _CommunityBase(BaseModel):
 class _PlayerBase(BaseModel):
     id: str
     bm_rcon_url: str | None
-    eos_id: str | None
+    hll_eos_id: str | None
+    hllv_eos_id: str | None
+    platform: PlayerPlatform | None
 
 
 class _ReportTokenBase(BaseModel):
     community_id: int
     admin_id: int
     expires_at: datetime
-    platform: Platform
 
     @field_serializer("admin_id", when_used="json-unless-none")
     def convert_large_int_to_str(value: int):  # type: ignore
@@ -164,6 +183,10 @@ class _ReportBase(BaseModel):
     reasons_bitflag: ReportReasonFlag
     reasons_custom: str | None
     attachment_urls: list[str]
+    game: Game
+    platforms_bitflag: PlatformFlag
+    edited_at: datetime | None
+    edited_by: str | None
 
 
 class _PlayerReportBase(BaseModel):
@@ -176,12 +199,14 @@ class _ResponseBase(BaseModel):
     community_id: int
     banned: bool
     reject_reason: ReportRejectReason | None
+    responded_at: datetime | None
     responded_by: str | None
 
 
 class _PlayerBanBase(BaseModel):
     player_id: str
     integration_id: int
+    game: Game
     remote_id: str
 
 
@@ -218,12 +243,17 @@ class CommunityRef(_CommunityBase, _ModelFromAttributes):
     owner_id: int | None
 
     @field_serializer(
-        "forward_guild_id",
-        "forward_channel_id",
-        "admin_role_id",
-        "confirmations_channel_id",
-        "alerts_channel_id",
-        "alerts_role_id",
+        "guild_id",
+        "hll_reports_channel_id",
+        "hll_alerts_channel_id",
+        "hll_confirmations_channel_id",
+        "hll_admin_role_id",
+        "hll_alerts_role_id",
+        "hllv_reports_channel_id",
+        "hllv_alerts_channel_id",
+        "hllv_confirmations_channel_id",
+        "hllv_admin_role_id",
+        "hllv_alerts_role_id",
         "owner_id",
         when_used="json-unless-none",
     )
@@ -392,13 +422,21 @@ class AdminCreateParams(_AdminBase):
 class CommunityEditParams(
     _CommunityBase, _ModelFromAttributes, validate_assignment=True
 ):
-    forward_guild_id: int | None
-    forward_channel_id: int | None
-    admin_role_id: int | None
-    reasons_filter: ReportReasonFlag | None
-    confirmations_channel_id: int | None
-    alerts_channel_id: int | None
-    alerts_role_id: int | None
+    guild_id: int | None
+    hll_reports_channel_id: int | None
+    hll_alerts_channel_id: int | None
+    hll_confirmations_channel_id: int | None
+    hll_admin_role_id: int | None
+    hll_alerts_role_id: int | None
+    hll_platform_filter: PlatformFlag | None
+    hll_reason_filter: ReportReasonFlag | None
+    hllv_reports_channel_id: int | None
+    hllv_alerts_channel_id: int | None
+    hllv_confirmations_channel_id: int | None
+    hllv_admin_role_id: int | None
+    hllv_alerts_role_id: int | None
+    hllv_platform_filter: PlatformFlag | None
+    hllv_reason_filter: ReportReasonFlag | None
 
     @field_validator("contact_url")
     @classmethod
@@ -409,13 +447,21 @@ class CommunityEditParams(
 class CommunityCreateParams(CommunityEditParams):
     owner_id: int
     owner_name: str
-    forward_guild_id: int | None = None
-    forward_channel_id: int | None = None
-    admin_role_id: int | None = None
-    reasons_filter: ReportReasonFlag | None = None
-    confirmations_channel_id: int | None = None
-    alerts_channel_id: int | None = None
-    alerts_role_id: int | None = None
+    guild_id: int | None = None
+    hll_reports_channel_id: int | None = None
+    hll_alerts_channel_id: int | None = None
+    hll_confirmations_channel_id: int | None = None
+    hll_admin_role_id: int | None = None
+    hll_alerts_role_id: int | None = None
+    hll_platform_filter: PlatformFlag | None = None
+    hll_reason_filter: ReportReasonFlag | None = None
+    hllv_reports_channel_id: int | None = None
+    hllv_alerts_channel_id: int | None = None
+    hllv_confirmations_channel_id: int | None = None
+    hllv_admin_role_id: int | None = None
+    hllv_alerts_role_id: int | None = None
+    hllv_platform_filter: PlatformFlag | None = None
+    hllv_reason_filter: ReportReasonFlag | None = None
 
     @field_validator("contact_url")
     @classmethod
@@ -429,23 +475,29 @@ class PlayerCreateParams(_PlayerBase):
 
 class PlayerReportCreateParams(_PlayerReportBase):
     bm_rcon_url: str | None
-    eos_id: str | None = None
+    hll_eos_id: str | None = None
+    hllv_eos_id: str | None = None
+    platform: PlayerPlatform | None
 
 
 class ReportEditParams(_ReportBase):
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
+    edited_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
     players: list[PlayerReportCreateParams] = Field(min_length=1)
     attachment_urls: list[str] = Field(default_factory=list)
 
 
 class ReportCreateParams(ReportEditParams):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    edited_at: datetime | None = None
+    edited_by: str | None = None
     token_id: int
 
 
 class ReportCreateParamsTokenless(ReportEditParams):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    edited_at: datetime | None = None
+    edited_by: str | None = None
     admin_id: int
-    platform: Platform
 
     @field_serializer("admin_id", when_used="json-unless-none")
     def convert_large_int_to_str(value: int):  # type: ignore
@@ -465,6 +517,7 @@ class PendingResponse(_ResponseBase, _ModelFromAttributes):
     community: CommunityRef
     banned: bool | None = None  # type: ignore
     reject_reason: ReportRejectReason | None = None
+    responded_at: datetime | None = None
     responded_by: str | None = None
 
 
@@ -495,6 +548,8 @@ class ReportSubmissionData(BaseModel):
     ]
     body: str
     attachment_urls: list[str] = Field(alias="attachmentUrls")
+    game: Game
+    platforms_bitflag: PlatformFlag
 
 
 class ReportSubmission(BaseModel):
