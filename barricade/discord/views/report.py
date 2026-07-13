@@ -97,7 +97,7 @@ def container_add_description(
     # Description
     container.add_item(
         discord.ui.TextDisplay(
-            f"-# **Description**\n{report.body.strip() or '-# Missing'}"
+            f"-# **Description**\n{report.body.strip() or '-# Missing'}"[:4000]
         )
     )
 
