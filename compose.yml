@@ -20,7 +20,10 @@ services:
   migrate:
     # Build the image from the Dockerfile in the current directory
     build: .
+
     command: uv run alembic upgrade head
+    # To manually run a migration:
+    # docker compose run --rm migrate uv run alembic upgrade head
 
     depends_on:
       postgres:
