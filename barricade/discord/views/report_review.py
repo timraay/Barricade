@@ -193,10 +193,16 @@ class ReportReviewButton(
                 responded_by=interaction.user.mention if interaction.user else None,
             )
             async with session_factory() as db:
+                db_report = await get_report_by_id(db, self.report_id)
+                if not db_report:
+                    raise CustomException(
+                        f"Report with ID {self.report_id} no longer exists!"
+                    )
+
                 db_community = await get_community(db, self.community_id)
                 community = schemas.Community.model_validate(db_community)
                 assert isinstance(interaction.user, discord.Member)
-                assert_has_admin_role(interaction.user, community)
+                assert_has_admin_role(interaction.user, community, db_report.game)
 
                 # Make sure that there is at least one enabled integration
                 if banned:
@@ -277,19 +283,19 @@ class ReportReviewButton(
                 # Fetch report and response stats
                 db_report = db_prr.player_report.report
                 await db_report.awaitable_attrs.token
-                report = schemas.ReportWithToken.model_validate(db_report)
-                stats = await bulk_get_response_stats(db, report.players)
+                db_report = schemas.ReportWithToken.model_validate(db_report)
+                stats = await bulk_get_response_stats(db, db_report.players)
 
                 # Fetch watchlisted player IDs
                 watchlisted_player_ids = await filter_watchlisted_player_ids(
                     db,
-                    player_ids=[player.player_id for player in report.players],
+                    player_ids=[player.player_id for player in db_report.players],
                     community_id=self.community_id,
                 )
 
             responses = list(responses.values())
             view = await get_report_review_view(
-                report=report,
+                report=db_report,
                 responses=responses,
                 watchlisted_player_ids=watchlisted_player_ids,
                 stats=stats,
