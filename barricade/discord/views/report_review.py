@@ -190,7 +190,7 @@ class ReportReviewButton(
                 banned=banned,
                 reject_reason=self.reject_reason,
                 responded_at=datetime.now(tz=UTC),
-                responded_by=interaction.user.id if interaction.user else None,
+                responded_by=interaction.user.mention if interaction.user else None,
             )
             async with session_factory() as db:
                 db_community = await get_community(db, self.community_id)
