@@ -206,6 +206,10 @@ def _assert_has_any_admin_roles(
     community: schemas.CommunityRef,
     role_ids: Sequence[int | None],
 ):
+    if community.owner_id == member.id:
+        # Always allow the owner of the community to perform actions.
+        return
+
     if not any(role_ids):
         raise CustomException(
             "You are not permitted to do that!",

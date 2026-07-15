@@ -9,6 +9,7 @@ from barricade.constants import DISCORD_GUILD_ID
 from barricade.crud.communities import get_community_by_admin_id, get_community_by_id
 from barricade.db import session_factory
 from barricade.discord.autocomplete import atcp_community
+from barricade.discord.communities import assert_has_any_admin_role
 from barricade.discord.crud_utils import get_admin
 from barricade.discord.utils import CustomException
 from barricade.discord.views.channel_confirmation import (
@@ -71,6 +72,7 @@ class CommunitiesCog(commands.Cog):
             db_community = await get_community_by_id(db, community_id)
 
         community = schemas.Community.model_validate(db_community)
+        assert_has_any_admin_role(interaction.user, community)
         view = await get_community_config_view(community)
         await interaction.response.send_message(view=view, ephemeral=True)
 

@@ -615,6 +615,7 @@ class _CommunityConfigEditModal(Generic[T], Modal):
         async with session_factory.begin() as db:
             await self.refresh_community(db)
 
+            assert_has_any_admin_role(interaction.user, self.community)
             await self.assert_is_allowed_in_guild(interaction.guild, save=True)
 
             value1, value2 = self.get_values()
