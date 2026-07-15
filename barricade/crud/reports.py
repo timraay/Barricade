@@ -403,6 +403,11 @@ async def edit_report(
     db_report.body = report.body
     db_report.reasons_bitflag = report.reasons_bitflag
     db_report.reasons_custom = report.reasons_custom
+    db_report.attachment_urls = report.attachment_urls
+    db_report.game = report.game
+    db_report.platforms_bitflag = report.platforms_bitflag
+    db_report.edited_at = db_report.edited_at
+    db_report.edited_by = db_report.edited_by
 
     await db.flush()
     # await db.refresh(db_report)
