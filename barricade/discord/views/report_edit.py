@@ -439,11 +439,13 @@ class ReportEditView(_ReportEditView):
                     interaction.user, report.token.community, report.game
                 )
 
+            admin_name = interaction.user.global_name or interaction.user.name
+
             params = schemas.ReportCreateParams(
                 **self.params.model_dump(exclude={"edited_at", "edited_by"}),
                 token_id=report.token.id,
                 edited_at=datetime.now(UTC),
-                edited_by=interaction.user.mention,
+                edited_by=admin_name,
             )
 
             await interaction.response.defer(ephemeral=True)
@@ -451,7 +453,7 @@ class ReportEditView(_ReportEditView):
             await edit_report(
                 db,
                 report=params,
-                by=interaction.user.name,
+                by=admin_name,
             )
 
             view = discord.ui.LayoutView()

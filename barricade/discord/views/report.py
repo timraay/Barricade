@@ -338,7 +338,7 @@ async def get_plain_report_view(
         community_url = "https://" + community_url
 
     content = (
-        f"-# Reported by <@{report.token.admin_id}>"
+        f"-# Reported by **{esc_md(report.token.admin.name)}**"
         f" of [{report.token.community.name}]({community_url})"
         f" on {discord.utils.format_dt(report.created_at, 'f')}"
     )
@@ -351,8 +351,7 @@ async def get_plain_report_view(
                 if get_user_id_from_mention(report.edited_by)
                 else f"**{esc_md(report.edited_by)}**"
             )
-            content = f"\n-# Reviewed by {editor_name}"
-            content += f" by {report.edited_by}"
+            content += f" by {editor_name}"
         if report.edited_at:
             content += f" on {discord.utils.format_dt(report.edited_at, 'f')}"
 
