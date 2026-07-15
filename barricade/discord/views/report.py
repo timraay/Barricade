@@ -230,7 +230,15 @@ def container_add_player(
             links.append(format_url("Battlemetrics", bm_rcon_url))
 
     links.append(
-        format_url("HLLRecords", f"https://hllrecords.com/profiles/{player.player_id}")
+        game_switch(
+            report.game,
+            format_url(
+                "HLLRecords", f"https://hllrecords.com/profiles/{player.player_id}"
+            ),
+            format_url(
+                "HLLVRecords", f"https://hllvrecords.com/profiles/{player.player_id}"
+            ),
+        )
     )
 
     content += "\nView on " + " | ".join(links)
