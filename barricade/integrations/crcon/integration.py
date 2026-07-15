@@ -112,6 +112,9 @@ class CRCONIntegration(
         resp = await self._make_request(method="GET", endpoint="/get_public_info")
         return resp["result"]["name"]["short_name"]
 
+    def get_instance_url(self) -> str | None:
+        return self.config.api_url
+
     async def validate(self, community: schemas.Community) -> set[str]:
         await super().validate(community)
 

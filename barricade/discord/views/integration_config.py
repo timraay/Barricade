@@ -26,6 +26,7 @@ from barricade.integrations.custom.integration import CustomIntegration
 from barricade.integrations.integration import Integration
 from barricade.integrations.manager import IntegrationManager
 from barricade.logger import get_logger
+from barricade.utils import validate_url
 
 
 async def safe_get_integration_name(integration: Integration) -> str | None:
@@ -344,16 +345,28 @@ class IntegrationConfigView(CommunityConfigView):
                 f"## {integration.meta.emoji} **{esc_md(integration_name) or 'Unnamed integration'}**"
             )
 
-            container.add_item(
-                discord.ui.Section(
-                    integration_title,
-                    accessory=discord.ui.Button(
-                        label="Open",
-                        url=integration.get_instance_url(),
-                        style=discord.ButtonStyle.gray,
-                    ),
+            # Get and validate URL to public integration page
+            integration_url = integration.get_instance_url()
+            if integration_url:
+                try:
+                    integration_url = validate_url(integration_url)
+                except ValueError:
+                    integration_url = None
+
+            # Add integration title and URL button (if available)
+            if integration_url:
+                container.add_item(
+                    discord.ui.Section(
+                        integration_title,
+                        accessory=discord.ui.Button(
+                            label="Open",
+                            url=integration_url,
+                            style=discord.ButtonStyle.gray,
+                        ),
+                    )
                 )
-            )
+            else:
+                container.add_item(discord.ui.TextDisplay(integration_title))
 
             # Error messages
             error_messages: list[str] = []

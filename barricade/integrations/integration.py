@@ -491,14 +491,14 @@ class Integration(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_instance_url(self) -> str:
-        """Get a URL to the specific instance that this
-        integration connects to.
+    def get_instance_url(self) -> str | None:
+        """Get a URL to a user-friendly webpage that belongs to the specific
+        instance that this integration connects to.
 
         Returns
         -------
         str
-            The URL of the connected instance."""
+            A URL to a public webpage. If no URL is known, return None."""
 
     @abstractmethod
     async def validate(self, community: schemas.Community) -> set[str]:

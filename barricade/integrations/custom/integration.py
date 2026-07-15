@@ -125,8 +125,8 @@ class CustomIntegration(Integration):
     async def get_instance_name(self) -> str:
         return "Custom"
 
-    def get_instance_url(self) -> str:
-        return self.config.api_url
+    def get_instance_url(self) -> str | None:
+        return None
 
     async def validate(self, community: schemas.Community) -> set[str]:
         if community.id != self.config.community_id:
