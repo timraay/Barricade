@@ -388,17 +388,17 @@ async def edit_report(
                 ),
             )
             db_pr = models.PlayerReport(
-                report=db_report,
+                # report=db_report,
                 player=db_player,
                 player_name=player.player_name,
             )
-            # db_report.players.append(db_pr)
-            db.add(db_pr)
+            db_report.players.append(db_pr)
+            # db.add(db_pr)
 
     # Iterate over all remaining previous players and remove them
     for db_pr in db_prs.values():
-        # db_report.players.remove(db_pr)
-        await db.delete(db_pr)
+        db_report.players.remove(db_pr)
+        # await db.delete(db_pr)
 
     db_report.body = report.body
     db_report.reasons_bitflag = report.reasons_bitflag
