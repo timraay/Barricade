@@ -109,7 +109,9 @@ def container_add_attachments(
     if not report.attachment_urls:
         return
 
-    container.add_item(discord.ui.Separator(visible=False))
+    container.add_item(
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large)
+    )
     container.add_item(
         discord.ui.MediaGallery(
             *(
@@ -290,7 +292,6 @@ async def get_plain_report_view(
         discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small)
     )
     container_add_description(container, report)
-    container_add_attachments(container, report)
 
     player_avatar_urls = await get_player_avatar_urls(report.players)
 
@@ -327,6 +328,9 @@ async def get_plain_report_view(
                 content += f" on {discord.utils.format_dt(response.responded_at, 'f')}"
             content += f" {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
             container.add_item(discord.ui.TextDisplay(content))
+
+    # Attachments
+    container_add_attachments(container, report)
 
     if action_row:
         container.add_item(

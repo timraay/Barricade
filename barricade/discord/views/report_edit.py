@@ -227,6 +227,36 @@ class _ReportEditView(LayoutView):
             )
         )
 
+        player_avatar_urls = await get_player_avatar_urls(self.params.players)
+
+        # Reported player(s)
+        for i, player in enumerate(self.params.players):
+            container_add_player(
+                container,
+                self.params,
+                player,
+                rank=i + 1,
+                avatar_url=player_avatar_urls[i],
+            )
+            container.add_item(
+                discord.ui.ActionRow(
+                    CallableButton(
+                        partial(self.open_player_modal, player_index=i),
+                        label="Edit",
+                        style=(
+                            discord.ButtonStyle.gray
+                            if self.is_valid_player(i)
+                            else discord.ButtonStyle.blurple
+                        ),
+                    ),
+                    CallableButton(
+                        partial(self.remove_player, player_index=i),
+                        label="Remove",
+                        style=discord.ButtonStyle.red,
+                    ),
+                )
+            )
+
         # Add attachments
         container_add_attachments(container, self.params)
 
@@ -259,36 +289,7 @@ class _ReportEditView(LayoutView):
                         )
                     )
 
-        player_avatar_urls = await get_player_avatar_urls(self.params.players)
-
-        # Reported player(s)
-        for i, player in enumerate(self.params.players):
-            container_add_player(
-                container,
-                self.params,
-                player,
-                rank=i + 1,
-                avatar_url=player_avatar_urls[i],
-            )
-            container.add_item(
-                discord.ui.ActionRow(
-                    CallableButton(
-                        partial(self.open_player_modal, player_index=i),
-                        label="Edit",
-                        style=(
-                            discord.ButtonStyle.gray
-                            if self.is_valid_player(i)
-                            else discord.ButtonStyle.blurple
-                        ),
-                    ),
-                    CallableButton(
-                        partial(self.remove_player, player_index=i),
-                        label="Remove",
-                        style=discord.ButtonStyle.red,
-                    ),
-                )
-            )
-
+        # Buttons for adding players and attachments
         has_player = len(self.params.players) > 0
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large)
