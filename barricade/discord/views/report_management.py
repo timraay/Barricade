@@ -118,7 +118,7 @@ class ReportManagementButton(
 
                 case "edit":
                     view = await ReportEditView.from_report(report)
-                    await interaction.followup.send(view=view)
+                    await interaction.followup.send(view=view, ephemeral=True)
 
                 case _:
                     raise ValueError(f"Unknown command {self.command!r}")
