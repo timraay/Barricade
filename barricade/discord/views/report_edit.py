@@ -407,6 +407,7 @@ class ReportEditView(_ReportEditView):
             body=report.body,
             reasons_bitflag=report.reasons_bitflag,
             reasons_custom=report.reasons_custom,
+            attachment_urls=report.attachment_urls,
             game=report.game,
             platforms_bitflag=report.platforms_bitflag,
             players=[
