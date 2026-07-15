@@ -52,5 +52,5 @@ class Scope:
 
         return all(
             other_part == self_part
-            for other_part, self_part in zip(other_parts, self.parts, strict=True)
+            for other_part, self_part in zip(other_parts, self.parts, strict=False)
         )
