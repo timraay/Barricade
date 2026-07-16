@@ -6,6 +6,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    computed_field,
     field_serializer,
     field_validator,
 )
@@ -198,6 +199,7 @@ class _ReportBase(BaseModel):
     platforms_bitflag: PlatformFlag
     edited_at: datetime | None
     edited_by: str | None
+    # When extending, also update barricade.crud.reports.edit_report
 
 
 class _PlayerReportBase(BaseModel):
@@ -307,6 +309,7 @@ class ReportTokenRef(SafeReportTokenRef):
 class ReportRef(_ReportBase, _ModelFromAttributes):
     id: int
     message_id: int
+    effective_platforms_bitflag: PlatformFlag
 
     def __repr__(self) -> str:
         return f"Report[id={self.id}]"
@@ -498,6 +501,21 @@ class ReportEditParams(_ReportBase):
     )
     attachment_urls: list[str] = Field(default_factory=list)
 
+    @computed_field(return_type=PlatformFlag)
+    @property
+    def effective_platforms_bitflag(self) -> PlatformFlag:
+        platforms = PlatformFlag(0)
+        for player in self.players:
+            if player.platform is None:
+                platforms = PlatformFlag.all()
+                break
+
+            for platform in PlatformFlag:
+                if player.platform.is_valid_for_platform_flag(platform):
+                    platforms |= platform
+
+        return platforms & self.platforms_bitflag
+
 
 class ReportCreateParams(ReportEditParams):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -563,6 +581,7 @@ class ReportSubmissionData(BaseModel):
     attachment_urls: list[str] = Field(alias="attachmentUrls")
     game: Game
     platforms_bitflag: PlatformFlag
+    effective_platforms_bitflag: PlatformFlag = Field(alias="effectivePlatformsBitflag")
 
 
 class ReportSubmission(BaseModel):

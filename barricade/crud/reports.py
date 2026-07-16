@@ -406,6 +406,7 @@ async def edit_report(
     db_report.attachment_urls = report.attachment_urls
     db_report.game = report.game
     db_report.platforms_bitflag = report.platforms_bitflag
+    db_report.effective_platforms_bitflag = report.effective_platforms_bitflag
     db_report.edited_at = db_report.edited_at
     db_report.edited_by = db_report.edited_by
 

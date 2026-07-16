@@ -334,7 +334,7 @@ async def get_reports_for_player_with_no_community_review(
 
     if platform_filter is not None:
         stmt = stmt.where(
-            models.Report.platforms_bitflag.bitwise_and(platform_filter) != 0
+            models.Report.effective_platforms_bitflag.bitwise_and(platform_filter) != 0
         )
 
     if reason_filter is not None:

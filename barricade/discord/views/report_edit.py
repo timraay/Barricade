@@ -444,7 +444,9 @@ class ReportEditView(_ReportEditView):
             admin_name = interaction.user.global_name or interaction.user.name
 
             params = schemas.ReportCreateParams(
-                **self.params.model_dump(exclude={"edited_at", "edited_by"}),
+                **self.params.model_dump(
+                    exclude={"edited_at", "edited_by", "effective_platforms_bitflag"}
+                ),
                 token_id=report.token.id,
                 edited_at=datetime.now(UTC),
                 edited_by=admin_name,

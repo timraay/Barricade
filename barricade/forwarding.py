@@ -91,7 +91,8 @@ async def forward_report_to_communities(report: schemas.ReportWithToken):
             models.Community.games_bitflag.bitwise_and(report.game.to_flag()) != 0,
             or_(
                 platform_filter_column.is_(None),
-                platform_filter_column.bitwise_and(report.platforms_bitflag) != 0,
+                platform_filter_column.bitwise_and(report.effective_platforms_bitflag)
+                != 0,
             ),
             or_(
                 reason_filter_column.is_(None),
