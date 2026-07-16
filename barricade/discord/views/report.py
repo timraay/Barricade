@@ -6,7 +6,7 @@ import discord
 from discord.utils import escape_markdown as esc_md
 
 from barricade import schemas
-from barricade.constants import REPORT_MAX_ATTACHMENTS
+from barricade.constants import REPORT_MAX_ATTACHMENTS, REPORT_MAX_PLAYERS
 from barricade.discord.utils import LayoutView, format_url, get_user_id_from_mention
 from barricade.enums import (
     Emojis,
@@ -255,6 +255,37 @@ def container_add_player(
         container.add_item(discord.ui.TextDisplay(content))
 
 
+def container_add_excess_players(
+    container: discord.ui.Container,
+    report: schemas.ReportRef,
+    excess_players: Sequence[
+        schemas.PlayerReportRef | schemas.PlayerReportCreateParams
+    ],
+) -> None:
+    if not excess_players:
+        return
+
+    container.add_item(
+        discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large)
+    )
+
+    content = f"{len(excess_players)} players could not be displayed.\n"
+    for player in excess_players:
+        # Player ID
+        player_platform = (
+            player.player.platform
+            if isinstance(player, schemas.PlayerReportRef)
+            else player.platform
+        )
+        platform_emoji = get_player_platform_emoji(
+            player_platform,
+            report.platforms_bitflag,
+        )
+        content += f"\n- {platform_emoji} *`{player.player_id}`*"
+
+    container.add_item(discord.ui.TextDisplay(content))
+
+
 async def get_player_avatar_urls(
     players: Sequence[schemas._PlayerReportBase],
 ) -> list[str | None]:
@@ -296,7 +327,7 @@ async def get_plain_report_view(
     player_avatar_urls = await get_player_avatar_urls(report.players)
 
     # Reported player(s)
-    for i, player in enumerate(report.players):
+    for i, player in enumerate(report.players[:REPORT_MAX_PLAYERS]):
         response = responses[i] if responses else None
 
         container_add_player(
@@ -328,6 +359,9 @@ async def get_plain_report_view(
                 content += f" on {discord.utils.format_dt(response.responded_at, 'f')}"
             content += f" {Emojis.BANNED if response.banned else Emojis.UNBANNED}"
             container.add_item(discord.ui.TextDisplay(content))
+
+    if excess_players := report.players[REPORT_MAX_PLAYERS:]:
+        container_add_excess_players(container, report, excess_players)
 
     # Attachments
     container_add_attachments(container, report)

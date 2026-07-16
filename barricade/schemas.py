@@ -10,7 +10,7 @@ from pydantic import (
     field_validator,
 )
 
-from barricade.constants import REPORT_TOKEN_EXPIRE_DELTA
+from barricade.constants import REPORT_MAX_PLAYERS, REPORT_TOKEN_EXPIRE_DELTA
 from barricade.enums import (
     Game,
     GameFlag,
@@ -482,7 +482,9 @@ class PlayerReportCreateParams(_PlayerReportBase):
 
 class ReportEditParams(_ReportBase):
     edited_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))
-    players: list[PlayerReportCreateParams] = Field(min_length=1)
+    players: list[PlayerReportCreateParams] = Field(
+        min_length=1, max_length=REPORT_MAX_PLAYERS
+    )
     attachment_urls: list[str] = Field(default_factory=list)
 
 

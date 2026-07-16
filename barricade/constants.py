@@ -124,7 +124,7 @@ MAX_INTEGRATION_LIMIT = get_env_int("MAX_INTEGRATION_LIMIT", 3)
 
 
 # How many players can be added to a single report.
-REPORT_MAX_PLAYERS = 5
+REPORT_MAX_PLAYERS = 3
 # How many attachments can be added to a single report.
 # Currently supports no more than 10 attachments, since that is the most that fit into a single media gallery.
 REPORT_MAX_ATTACHMENTS = 10
