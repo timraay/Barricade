@@ -21,6 +21,10 @@ dependencies = [
     "websockets==13.*",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff.lint]
 select = [
     # pycodestyle
