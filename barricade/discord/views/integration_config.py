@@ -21,6 +21,7 @@ from barricade.exceptions import (
     IntegrationValidationError,
 )
 from barricade.integrations.battlemetrics.integration import BattlemetricsIntegration
+from barricade.integrations.bifrost.integration import BifrostIntegration
 from barricade.integrations.crcon.integration import CRCONIntegration
 from barricade.integrations.custom.integration import CustomIntegration
 from barricade.integrations.integration import Integration
@@ -708,6 +709,37 @@ class CRCONIntegrationEditModal(_IntegrationEditModal[CRCONIntegration]):
         )
 
 
+class BifrostIntegrationEditModal(_IntegrationEditModal[BifrostIntegration]):
+    def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
+        # Define input fields
+        self.api_key = discord.ui.TextInput(
+            label="Access token",
+            style=discord.TextStyle.short,
+        )
+
+        # Load default values
+        if default_values:
+            self.api_key.default = default_values.api_key
+
+        self.add_item(self.api_key)
+
+    def apply_values_to_config(self, config: schemas.IntegrationConfigParams) -> None:
+        config.api_key = self.api_key.value
+
+    def create_new_config(self) -> schemas.BifrostIntegrationConfigParams:
+        return schemas.BifrostIntegrationConfigParams(
+            community_id=self.community_id,
+            api_key="",
+        )
+
+    def create_new_integration(
+        self, params: schemas.IntegrationConfigParams
+    ) -> BifrostIntegration:
+        return BifrostIntegration(
+            schemas.BifrostIntegrationConfigParams.model_validate(params)
+        )
+
+
 class CustomIntegrationEditModal(_IntegrationEditModal[CustomIntegration]):
     def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
         # Define input fields
@@ -771,6 +803,8 @@ def get_integration_edit_modal_class(
             return BattlemetricsIntegrationEditModal
         case IntegrationType.COMMUNITY_RCON:
             return CRCONIntegrationEditModal
+        case IntegrationType.BIFROST:
+            return BifrostIntegrationEditModal
         case IntegrationType.CUSTOM:
             return CustomIntegrationEditModal
         case _:

@@ -236,6 +236,7 @@ class CustomIntegration(Integration):
                     await self.discard_multiple_ban_ids(db, successful_player_ids)
 
     @is_enabled
+    @is_websocket_enabled
     async def synchronize(self):
         pass
 

@@ -75,6 +75,13 @@ class CRCONIntegrationConfigParams(CustomIntegrationConfigParams):
     )
 
 
+class BifrostIntegrationConfigParams(CustomIntegrationConfigParams):
+    api_url: str = "wss://hll-barricade.bifrostgaming.com"
+    integration_type: Literal[IntegrationType.BIFROST] = (  # type: ignore
+        IntegrationType.BIFROST
+    )
+
+
 class SafeIntegrationConfig(SafeIntegrationConfigParams):
     id: int  # type: ignore
 
@@ -96,6 +103,10 @@ class BattlemetricsIntegrationConfig(  # type: ignore
 
 
 class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):  # type: ignore
+    pass
+
+
+class BifrostIntegrationConfig(BifrostIntegrationConfigParams, IntegrationConfig):  # type: ignore
     pass
 
 

@@ -156,6 +156,7 @@ class CRCONIntegration(
                         # The player was unbanned, change responses of all reports where
                         # the player is banned
                         async with session_factory.begin() as _db:
+                            # TODO: Remove the remote ban?
                             await expire_bans_of_player(
                                 _db, db_ban.player_id, db_ban.integration.community_id
                             )
