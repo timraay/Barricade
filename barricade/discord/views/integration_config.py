@@ -122,6 +122,8 @@ class IntegrationConfigButton(
                     await self.handle_disable_command(db, interaction)
                 case "delete":
                     await self.handle_delete_command(db, interaction)
+                case "expand":
+                    await self.handle_expand_command(db, interaction)
                 case _:
                     raise ValueError(f"Unknown command: {self.command}")
 
@@ -213,6 +215,20 @@ class IntegrationConfigButton(
         await view.prepare()
         await interaction.response.edit_message(view=view)
 
+    async def handle_expand_command(
+        self,
+        db: AsyncSession,
+        interaction: discord.Interaction,
+    ):
+        """Handle the expand command for an integration."""
+        community = await self.get_community(db)
+
+        view = IntegrationConfigView(
+            community, expanded_integration_id=self.integration_id
+        )
+        await view.prepare()
+        await interaction.response.edit_message(view=view)
+
 
 class IntegrationAddSelect(
     discord.ui.DynamicItem[discord.ui.Select],
@@ -278,13 +294,20 @@ class IntegrationConfigView(CommunityConfigView):
     def __init__(
         self,
         community: schemas.Community,
+        *,
+        expanded_integration_id: int = -1,
     ):
         self.integrations: dict[int, Integration] = {}
         self.integration_names: dict[int, str] = {}
+        self.expanded_integration_id = expanded_integration_id
 
         super().__init__(community, ConfigOptionCategory.INTEGRATIONS)
 
         self.logger = get_logger(self.community.id)
+
+    @property
+    def do_collapse(self) -> bool:
+        return len(self.integrations) >= 3
 
     def update_integrations(self):
         """Take the current community and repopulate the list
@@ -336,109 +359,133 @@ class IntegrationConfigView(CommunityConfigView):
                 )
             )
 
+            do_collapse = (
+                self.do_collapse
+                and integration.config.id != self.expanded_integration_id
+            )
+
             # Integration header & title
             assert integration.config.id is not None
             integration_name = self.integration_names.get(integration.config.id, "")
 
-            integration_title = (
-                f"`{'🟢 Enabled' if integration.config.enabled else '🔴 Disabled'}`\n"
-                f"## {integration.meta.emoji} **{esc_md(integration_name) or 'Unnamed integration'}**"
-            )
+            status_text = "🟢 Enabled" if integration.config.enabled else "🔴 Disabled"
+            title_text = f"{integration.meta.emoji} **{esc_md(integration_name) or 'Unnamed integration'}**"
 
-            # Get and validate URL to public integration page
-            integration_url = integration.get_instance_url()
-            if integration_url:
-                try:
-                    integration_url = validate_url(integration_url)
-                except ValueError:
-                    integration_url = None
+            if do_collapse:
+                integration_title = f"`{status_text}`  {title_text}"
 
-            # Add integration title and URL button (if available)
-            if integration_url:
                 container.add_item(
                     discord.ui.Section(
                         integration_title,
-                        accessory=discord.ui.Button(
-                            label="Open",
-                            url=integration_url,
-                            style=discord.ButtonStyle.gray,
-                        ),
+                        accessory=IntegrationConfigButton(
+                            button=discord.ui.Button(
+                                label="Expand  ▼",
+                                style=discord.ButtonStyle.gray,
+                            ),
+                            community_id=self.community.id,
+                            integration_id=integration.config.id,
+                            command="expand",
+                        ),  # type: ignore
                     )
                 )
+
             else:
-                container.add_item(discord.ui.TextDisplay(integration_title))
+                integration_title = f"`{status_text}`\n## {title_text}"
 
-            # Error messages
-            error_messages: list[str] = []
-            if not integration_name:
-                error_messages.append("Could not resolve integration name")
+                # Get and validate URL to public integration page
+                integration_url = integration.get_instance_url()
+                if integration_url:
+                    try:
+                        integration_url = validate_url(integration_url)
+                    except ValueError:
+                        integration_url = None
 
-            if error_messages:
-                for error_message in error_messages:
+                # Add integration title and URL button (if available)
+                if integration_url:
                     container.add_item(
-                        discord.ui.TextDisplay(
-                            f"{Emojis.HIGHLIGHT_RED} {error_message}"
+                        discord.ui.Section(
+                            integration_title,
+                            accessory=discord.ui.Button(
+                                label="Open",
+                                url=integration_url,
+                                style=discord.ButtonStyle.gray,
+                            ),
+                        )
+                    )
+                else:
+                    container.add_item(discord.ui.TextDisplay(integration_title))
+
+                # Error messages
+                error_messages: list[str] = []
+                if not integration_name:
+                    error_messages.append("Could not resolve integration name")
+
+                if error_messages:
+                    for error_message in error_messages:
+                        container.add_item(
+                            discord.ui.TextDisplay(
+                                f"{Emojis.HIGHLIGHT_RED} {error_message}"
+                            )
+                        )
+
+                    container.add_item(
+                        discord.ui.Separator(
+                            visible=False, spacing=discord.SeparatorSpacing.small
                         )
                     )
 
-                container.add_item(
-                    discord.ui.Separator(
-                        visible=False, spacing=discord.SeparatorSpacing.small
-                    )
-                )
-
-            # Button row
-            action_row = discord.ui.ActionRow()
-            action_row.add_item(
-                IntegrationConfigButton(
-                    button=discord.ui.Button(
-                        label="Enable",
-                        style=discord.ButtonStyle.green,
-                        disabled=integration.config.enabled,
-                    ),
-                    community_id=self.community.id,
-                    integration_id=integration.config.id,
-                    command="enable",
-                )
-            )
-            action_row.add_item(
-                IntegrationConfigButton(
-                    button=discord.ui.Button(
-                        label="Edit",
-                        style=discord.ButtonStyle.blurple,
-                    ),
-                    community_id=self.community.id,
-                    integration_id=integration.config.id,
-                    command="edit",
-                )
-            )
-            action_row.add_item(
-                IntegrationConfigButton(
-                    button=discord.ui.Button(
-                        label="Disable",
-                        style=discord.ButtonStyle.red,
-                        disabled=not integration.config.enabled,
-                    ),
-                    community_id=self.community.id,
-                    integration_id=integration.config.id,
-                    command="disable",
-                )
-            )
-
-            if not integration.config.enabled:
+                # Button row
+                action_row = discord.ui.ActionRow()
                 action_row.add_item(
                     IntegrationConfigButton(
                         button=discord.ui.Button(
-                            label="Delete",
-                            style=discord.ButtonStyle.red,
+                            label="Enable",
+                            style=discord.ButtonStyle.green,
+                            disabled=integration.config.enabled,
                         ),
                         community_id=self.community.id,
                         integration_id=integration.config.id,
-                        command="delete",
+                        command="enable",
+                    )
+                )
+                action_row.add_item(
+                    IntegrationConfigButton(
+                        button=discord.ui.Button(
+                            label="Edit",
+                            style=discord.ButtonStyle.blurple,
+                        ),
+                        community_id=self.community.id,
+                        integration_id=integration.config.id,
+                        command="edit",
+                    )
+                )
+                action_row.add_item(
+                    IntegrationConfigButton(
+                        button=discord.ui.Button(
+                            label="Disable",
+                            style=discord.ButtonStyle.red,
+                            disabled=not integration.config.enabled,
+                        ),
+                        community_id=self.community.id,
+                        integration_id=integration.config.id,
+                        command="disable",
                     )
                 )
 
-            container.add_item(action_row)
+                if not integration.config.enabled:
+                    action_row.add_item(
+                        IntegrationConfigButton(
+                            button=discord.ui.Button(
+                                label="Delete",
+                                style=discord.ButtonStyle.red,
+                            ),
+                            community_id=self.community.id,
+                            integration_id=integration.config.id,
+                            command="delete",
+                        )
+                    )
+
+                container.add_item(action_row)
 
         container.add_item(
             discord.ui.Separator(visible=True, spacing=discord.SeparatorSpacing.large)
