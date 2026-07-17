@@ -140,7 +140,7 @@ async def edit_public_report_message(report: schemas.ReportWithRelations, _):
         message = bot.get_partial_message(
             channel.id, report.message_id, channel.guild.id
         )
-        await message.edit(view=view)
+        await message.edit(view=view, embed=None)
     except discord.HTTPException:
         pass
 
@@ -257,7 +257,8 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
                             report.id,
                             banned_ids,
                         )
-                        await message.edit(view=None)
+                        # TODO: Disable buttons
+                        # await message.edit(view=None)
                         await message.reply(
                             embed=discord.Embed(
                                 description=(
@@ -272,7 +273,8 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
 
                 # Send warning if T17 Support was notified about this player
                 elif message_data.message_type == ReportMessageType.T17_SUPPORT:
-                    await message.edit(view=None)
+                    # TODO: Disable buttons
+                    # await message.edit(view=None)
                     await message.reply(
                         embed=discord.Embed(
                             description="-# **This report was deleted!** If this user was game banned, consider revoking it.",
@@ -775,6 +777,7 @@ async def send_or_edit_message(
             # Edit the message
             message = await message.edit(
                 view=view,
+                embed=None,
                 allowed_mentions=allowed_mentions,
             )
             return message
