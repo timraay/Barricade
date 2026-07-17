@@ -109,6 +109,9 @@ class IntegrationBanListMixin(Integration, ABC):
         else:
             raise ValueError(f"Unrecognized game: {game}")
 
+        async with session_factory.begin() as db:
+            await self.update(db)
+
         return new_banlist_id
 
     async def validate_ban_lists(self, community: schemas.Community):
