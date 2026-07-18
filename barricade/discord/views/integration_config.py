@@ -21,6 +21,7 @@ from barricade.exceptions import (
     IntegrationValidationError,
 )
 from barricade.integrations.battlemetrics.integration import BattlemetricsIntegration
+from barricade.integrations.bifrost.integration import BifrostIntegration
 from barricade.integrations.crcon.integration import CRCONIntegration
 from barricade.integrations.custom.integration import CustomIntegration
 from barricade.integrations.integration import Integration
@@ -154,13 +155,19 @@ class IntegrationConfigButton(
             raise CustomException("Integration is already enabled")
 
         community = await self.get_community(db)
+        await interaction.response.defer(ephemeral=True)
         await validate_integration(integration, community)
 
         await integration.enable()
 
-        view = IntegrationConfigView(community)
+        # Expire and fetch again to ensure we have the latest available config
+        db.expire_all()
+        community = await self.get_community(db)
+        view = IntegrationConfigView(
+            community, expanded_integration_id=self.integration_id
+        )
         await view.prepare()
-        await interaction.response.edit_message(view=view)
+        await interaction.edit_original_response(view=view)
 
     async def handle_edit_command(
         self,
@@ -184,12 +191,12 @@ class IntegrationConfigButton(
         if not integration.config.enabled:
             raise CustomException("Integration is already disabled")
 
-        community = await self.get_community(db)
-        # await validate_integration(integration, community)
-
         await integration.disable()
 
-        view = IntegrationConfigView(community)
+        community = await self.get_community(db)
+        view = IntegrationConfigView(
+            community, expanded_integration_id=self.integration_id
+        )
         await view.prepare()
         await interaction.response.edit_message(view=view)
 
@@ -241,8 +248,9 @@ class IntegrationAddSelect(
             emoji=integration.meta.emoji,
         )
         for (integration_type, integration) in (
-            (IntegrationType.COMMUNITY_RCON, CRCONIntegration),
             (IntegrationType.BATTLEMETRICS, BattlemetricsIntegration),
+            (IntegrationType.BIFROST, BifrostIntegration),
+            (IntegrationType.COMMUNITY_RCON, CRCONIntegration),
             (IntegrationType.CUSTOM, CustomIntegration),
         )
     ]
@@ -512,14 +520,16 @@ class IntegrationConfigView(CommunityConfigView):
 IntegrationT = TypeVar("IntegrationT", bound=Integration)
 
 
-class _IntegrationEditModal(Generic[IntegrationT], Modal):
+class _IntegrationEditModal(
+    Generic[IntegrationT], Modal, title="Configure Integration"
+):
     def __init__(
         self,
         community_id: int,
         integration_id: int | None,
         default_values: schemas.IntegrationConfigParams | None = None,
     ):
-        super().__init__(title="Configure Battlemetrics Integration", timeout=None)
+        super().__init__(timeout=None)
         self.community_id = community_id
         self.integration_id = integration_id
         self.setup_fields(default_values)
@@ -581,6 +591,8 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
             assert temp_integration.config.community_id == self.community_id
 
             community = await self.get_community(db)
+
+            await interaction.response.defer(ephemeral=True)
             await validate_integration(temp_integration, community)
 
             # If a new integration is being created
@@ -598,13 +610,16 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
         # Refresh the view
         async with session_factory() as db:
             community = await self.get_community(db)
-            view = IntegrationConfigView(community)
+            view = IntegrationConfigView(
+                community, expanded_integration_id=integration.config.id or -1
+            )
             await view.prepare()
-            await interaction.response.edit_message(view=view)
+            await interaction.edit_original_response(view=view)
 
 
 class BattlemetricsIntegrationEditModal(
-    _IntegrationEditModal[BattlemetricsIntegration]
+    _IntegrationEditModal[BattlemetricsIntegration],
+    title="Configure Battlemetrics Integration",
 ):
     RE_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 
@@ -656,7 +671,10 @@ class BattlemetricsIntegrationEditModal(
         )
 
 
-class CRCONIntegrationEditModal(_IntegrationEditModal[CRCONIntegration]):
+class CRCONIntegrationEditModal(
+    _IntegrationEditModal[CRCONIntegration],
+    title="Configure CRCON Integration",
+):
     RE_API_URL = re.compile(
         r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$"
     )
@@ -708,7 +726,44 @@ class CRCONIntegrationEditModal(_IntegrationEditModal[CRCONIntegration]):
         )
 
 
-class CustomIntegrationEditModal(_IntegrationEditModal[CustomIntegration]):
+class BifrostIntegrationEditModal(
+    _IntegrationEditModal[BifrostIntegration],
+    title="Configure Bifrost Integration",
+):
+    def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
+        # Define input fields
+        self.api_key = discord.ui.TextInput(
+            label="Access token",
+            style=discord.TextStyle.short,
+        )
+
+        # Load default values
+        if default_values:
+            self.api_key.default = default_values.api_key
+
+        self.add_item(self.api_key)
+
+    def apply_values_to_config(self, config: schemas.IntegrationConfigParams) -> None:
+        config.api_key = self.api_key.value
+
+    def create_new_config(self) -> schemas.BifrostIntegrationConfigParams:
+        return schemas.BifrostIntegrationConfigParams(
+            community_id=self.community_id,
+            api_key="",
+        )
+
+    def create_new_integration(
+        self, params: schemas.IntegrationConfigParams
+    ) -> BifrostIntegration:
+        return BifrostIntegration(
+            schemas.BifrostIntegrationConfigParams.model_validate(params)
+        )
+
+
+class CustomIntegrationEditModal(
+    _IntegrationEditModal[CustomIntegration],
+    title="Configure Custom Integration",
+):
     def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
         # Define input fields
         self.api_url = discord.ui.TextInput(
@@ -771,6 +826,8 @@ def get_integration_edit_modal_class(
             return BattlemetricsIntegrationEditModal
         case IntegrationType.COMMUNITY_RCON:
             return CRCONIntegrationEditModal
+        case IntegrationType.BIFROST:
+            return BifrostIntegrationEditModal
         case IntegrationType.CUSTOM:
             return CustomIntegrationEditModal
         case _:

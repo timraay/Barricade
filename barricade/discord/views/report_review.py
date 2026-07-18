@@ -15,7 +15,7 @@ from barricade.constants import (
     T17_SUPPORT_REASON_MASK,
 )
 from barricade.crud.communities import get_community_by_id
-from barricade.crud.reports import get_report_by_id
+from barricade.crud.reports import get_report_by_id, set_report_comment
 from barricade.crud.responses import (
     bulk_get_response_stats,
     get_pending_responses,
@@ -29,6 +29,7 @@ from barricade.discord.utils import (
     CallableButton,
     CustomException,
     LayoutView,
+    Modal,
     View,
     get_command_mention,
     handle_error_wrap,
@@ -161,6 +162,9 @@ class ReportReviewButton(
 
             case "watchlist":
                 await self.set_response(interaction, banned=False)
+
+            case "comment":
+                await self.edit_comment(interaction)
 
             case _:
                 await self.set_response(interaction, banned=False)
@@ -346,6 +350,82 @@ class ReportReviewButton(
         )
         await interaction.response.edit_message(content=None, embed=None, view=view)
 
+    async def edit_comment(self, interaction: Interaction):
+        async with session_factory() as db:
+            db_report = await get_report_by_id(db, self.report_id)
+            if not db_report:
+                raise CustomException(
+                    f"Report with ID {self.report_id} no longer exists!"
+                )
+
+            db_community = await get_community(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
+            assert isinstance(interaction.user, discord.Member)
+            assert_has_admin_role(interaction.user, community, db_report.game)
+
+        modal = ReportEditCommentModal(
+            community_id=self.community_id,
+            report_id=self.report_id,
+            comment=db_report.comment,
+        )
+        await interaction.response.send_modal(modal)
+
+
+class ReportEditCommentModal(Modal, title="Provide Additional Context"):
+    def __init__(self, community_id: int, report_id: int, comment: str | None = None):
+        super().__init__()
+        self.community_id = community_id
+        self.report_id = report_id
+
+        self.comment_input = discord.ui.TextInput(
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=4000,
+            default=comment,
+        )
+
+        self.add_item(
+            discord.ui.Label(
+                text="Additional Context",
+                description="Provide any additional context that may help other communities make a better informed decision.",
+                component=self.comment_input,
+            )
+        )
+        self.add_item(
+            discord.ui.TextDisplay(
+                "-# ⚠️  **Provide context only.**\n-# Give each community the opportunity to draw their own conclusions. All provided information must be factual."
+            )
+        )
+
+    async def on_submit(self, interaction: Interaction):
+        comment = self.comment_input.value.strip()
+
+        async with session_factory() as db:
+            db_report = await set_report_comment(db, self.report_id, comment=comment)
+            report = schemas.ReportWithToken.model_validate(db_report)
+
+            db_community = await get_community_by_id(db, self.community_id)
+            community = schemas.Community.model_validate(db_community)
+            assert isinstance(interaction.user, discord.Member)
+            assert_has_admin_role(interaction.user, community, db_report.game)
+
+            stats = await bulk_get_response_stats(db, report.players)
+            responses = await get_pending_responses(db, community, report.players)
+
+            watchlisted_player_ids = await filter_watchlisted_player_ids(
+                db,
+                player_ids=[player.player_id for player in report.players],
+                community_id=self.community_id,
+            )
+
+        view = await get_report_review_view(
+            report=report,
+            responses=responses,
+            watchlisted_player_ids=watchlisted_player_ids,
+            stats=stats,
+        )
+        await interaction.response.edit_message(content=None, embed=None, view=view)
+
 
 def report_review_view_action_row_factory(
     player: schemas.PlayerReportRef,
@@ -458,15 +538,14 @@ async def get_report_review_view(
         report,
         responses=responses,
         stats=stats,
+        with_comment=True,
         container_color=container_color,
         player_action_row_factory=functools.partial(
             report_review_view_action_row_factory,
             watchlisted_player_ids=watchlisted_player_ids,
         ),
         refresh_button=ReportReviewButton(
-            button=discord.ui.Button(
-                emoji=Emojis.REFRESH, style=ButtonStyle.gray, row=0
-            ),
+            button=discord.ui.Button(emoji=Emojis.REFRESH, style=ButtonStyle.gray),
             command="refresh",
             community_id=responses[0].community_id,
             report_id=report.id,
@@ -474,6 +553,16 @@ async def get_report_review_view(
         )
         if with_refresh_button
         else None,
+        comment_button=ReportReviewButton(
+            button=discord.ui.Button(
+                emoji=Emojis.WRITE if report.comment else Emojis.COMMENT,
+                style=ButtonStyle.gray,
+            ),
+            command="comment",
+            community_id=responses[0].community_id,
+            report_id=report.id,
+            pr_id=responses[0].pr_id,
+        ),
     )
 
     return view

@@ -14,6 +14,7 @@ from barricade.discord.audit import (
     audit_report_create,
     audit_report_delete,
     audit_report_edit,
+    audit_report_set_comment,
     audit_token_create,
 )
 from barricade.discord.reports import get_report_channel
@@ -406,8 +407,10 @@ async def edit_report(
     db_report.attachment_urls = report.attachment_urls
     db_report.game = report.game
     db_report.platforms_bitflag = report.platforms_bitflag
+    db_report.effective_platforms_bitflag = report.effective_platforms_bitflag
     db_report.edited_at = db_report.edited_at
     db_report.edited_by = db_report.edited_by
+    db_report.comment = report.comment
 
     await db.flush()
     # await db.refresh(db_report)
@@ -464,6 +467,53 @@ async def delete_report(
     safe_create_task(audit_report_delete(report, stats, by=by))
 
     return True
+
+
+async def set_report_comment(
+    db: AsyncSession,
+    report_id: int,
+    comment: str | None,
+    by: AuditBy | None = None,
+) -> models.Report:
+    """Set the comment of a report.
+
+    This method will automatically commit after successfully creating
+    a report!
+
+    Parameters
+    ----------
+    db : AsyncSession
+        An asynchronous database session
+    report_id : int
+        The ID of the report to edit
+    comment : str | None
+        The new comment, or None to clear it
+
+    Raises
+    ------
+    NotFoundError
+        No report exists with the given ID
+    """
+    db_report = await get_report_by_id(db, report_id, load_relations=True)
+    if not db_report:
+        raise NotFoundError(f"No report exists with ID {report_id}")
+
+    if db_report.comment == comment:
+        # No change, no need to do anything
+        return db_report
+
+    old_report = schemas.ReportWithRelations.model_validate(db_report)
+
+    db_report.comment = comment
+    await db.commit()
+
+    new_report = old_report.model_copy(update={"comment": comment})
+    EventHooks.invoke_report_edit(new_report, old_report)
+    safe_create_task(
+        audit_report_set_comment(new_report, old_comment=old_report.comment, by=by)
+    )
+
+    return db_report
 
 
 async def get_player(db: AsyncSession, player_id: str):

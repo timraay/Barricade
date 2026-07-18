@@ -77,6 +77,7 @@ class _ReportEditView(LayoutView):
             created_at=datetime.now(UTC),
             edited_at=None,
             edited_by=None,
+            comment=None,
         )
 
     def _assert_valid_tags(self) -> None:
@@ -429,6 +430,7 @@ class ReportEditView(_ReportEditView):
             created_at=report.created_at,
             edited_at=report.edited_at,
             edited_by=report.edited_by,
+            comment=report.comment,
         )
         await view.update_view()
         return view
@@ -450,7 +452,9 @@ class ReportEditView(_ReportEditView):
             admin_name = interaction.user.global_name or interaction.user.name
 
             params = schemas.ReportCreateParams(
-                **self.params.model_dump(exclude={"edited_at", "edited_by"}),
+                **self.params.model_dump(
+                    exclude={"edited_at", "edited_by", "effective_platforms_bitflag"}
+                ),
                 token_id=report.token.id,
                 edited_at=datetime.now(UTC),
                 edited_by=admin_name,

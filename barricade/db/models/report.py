@@ -40,6 +40,8 @@ class Report(ModelBase):
     attachment_urls: Mapped[list[str]] = mapped_column(ARRAY(String))
     game: Mapped[Game] = mapped_column(Enum(Game), server_default=Game.HLL.name)
     platforms_bitflag: Mapped[int] = mapped_column(Integer)
+    effective_platforms_bitflag: Mapped[int] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(String)
 
     token: Mapped["ReportToken"] = relationship(
         back_populates="report", cascade="all, delete"

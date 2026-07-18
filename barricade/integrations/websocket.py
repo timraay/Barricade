@@ -2,18 +2,43 @@ import asyncio
 import logging
 import random
 from collections.abc import AsyncIterator
+from typing import Self
 from urllib.parse import urlparse, urlunparse
 
 import websockets
 import websockets.legacy
 import websockets.legacy.client
 
+from barricade.exceptions import IntegrationValidationError
 from barricade.utils import safe_create_task
 
 BACKOFF_MIN = 1.92
 BACKOFF_MAX = 300.0
 BACKOFF_FACTOR = 1.618
 BACKOFF_INITIAL = 5
+
+
+async def validate_ws_connection(ws: "Websocket", timeout: float = 3.0):
+    # Create a new websocket
+    ws = ws.copy()
+
+    ws.logger.info("Testing websocket connection to %s", ws.address)
+
+    # Start the websocket and wait for it to connect
+    ws.start()
+    try:
+        await ws.wait_until_connected(timeout=timeout)
+    except TimeoutError:
+        raise IntegrationValidationError(
+            "Websocket could not connect in time"
+        ) from None
+    except Exception as e:
+        raise IntegrationValidationError(f"Websocket failed to connect: {e}") from e
+    else:
+        ws.logger.info("Websocket connection to %s was successful", ws.address)
+    finally:
+        # Always stop the websocket
+        ws.stop()
 
 
 async def reconnect(
@@ -84,6 +109,9 @@ class Websocket:
         # - Done: The websocket is connected
         self._ws: asyncio.Future[websockets.WebSocketClientProtocol] = asyncio.Future()
         self._ws.cancel()
+
+    def copy(self) -> Self:
+        return type(self)(self.address, self.token, self.logger)
 
     def get_url(self) -> str:
         # Parse URL

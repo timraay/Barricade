@@ -77,17 +77,26 @@ ReportViewActionRowFactory: TypeAlias = Callable[
 def container_add_reasons(
     container: discord.ui.Container,
     report: schemas._ReportBase,
+    accessory: discord.ui.Item | None = None,
 ) -> None:
     # Reason(s)
     reasons = ReportReasonFlag(report.reasons_bitflag).to_list(
         report.reasons_custom, with_emoji=True
     )
-    container.add_item(
-        discord.ui.TextDisplay(
-            f"-# **{'Reason' if len(reasons) == 1 else 'Reasons'}**\n"
-            + (("**" + "**\n**".join(reasons) + "**") if reasons else "-# Missing")
-        )
+    text_display = discord.ui.TextDisplay(
+        f"-# **{'Reason' if len(reasons) == 1 else 'Reasons'}**\n"
+        + (("**" + "**\n**".join(reasons) + "**") if reasons else "-# Missing")
     )
+
+    if accessory:
+        container.add_item(
+            discord.ui.Section(
+                text_display,
+                accessory=accessory,
+            )
+        )
+    else:
+        container.add_item(text_display)
 
 
 def container_add_description(
@@ -100,6 +109,35 @@ def container_add_description(
             f"-# **Description**\n{report.body.strip() or '-# Missing'}"[:4000]
         )
     )
+
+
+def container_add_comment(
+    container: discord.ui.Container,
+    report: schemas._ReportBase,
+    accessory: discord.ui.Item | None = None,
+) -> None:
+    if not report.comment:
+        return
+
+    # Start each line with "-# "
+    comment = "-# " + esc_md(report.comment.strip()).replace("\n", "\n-# ")
+    comment = comment.replace("\n-# \n", "\n-# _ _\n")
+    comment = comment.replace("\n-# \n", "\n-# _ _\n")
+
+    # Comment
+    text_display = discord.ui.TextDisplay(
+        f">>> -# {Emojis.COMMENT} ***Other communities have provided additional context:***"
+        f"\n{comment[:3800]}"
+    )
+    if accessory:
+        container.add_item(
+            discord.ui.Section(
+                text_display,
+                accessory=accessory,
+            )
+        )
+    else:
+        container.add_item(text_display)
 
 
 def container_add_attachments(
@@ -306,10 +344,12 @@ async def get_plain_report_view(
     responses: list[schemas.PendingResponse] | None = None,
     stats: dict[int, schemas.ResponseStats] | None = None,
     with_eos_ids: bool = False,
+    with_comment: bool = True,
     container_color: discord.Colour | None = None,
     action_row: discord.ui.ActionRow | None = None,
     player_action_row_factory: ReportViewActionRowFactory | None = None,
     refresh_button: discord.ui.Item | None = None,
+    comment_button: discord.ui.Item | None = None,
 ) -> LayoutView:
     if responses and len(responses) != len(report.players):
         raise ValueError(
@@ -318,11 +358,21 @@ async def get_plain_report_view(
 
     container = discord.ui.Container(accent_color=container_color)
 
-    container_add_reasons(container, report)
+    container_add_reasons(
+        container,
+        report,
+        accessory=comment_button if with_comment and not report.comment else None,
+    )
     container.add_item(
         discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small)
     )
     container_add_description(container, report)
+    if with_comment and report.comment:
+        container_add_comment(
+            container,
+            report,
+            accessory=comment_button,
+        )
 
     player_avatar_urls = await get_player_avatar_urls(report.players)
 

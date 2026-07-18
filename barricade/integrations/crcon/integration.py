@@ -116,9 +116,10 @@ class CRCONIntegration(
         return self.config.api_url
 
     async def validate(self, community: schemas.Community) -> set[str]:
+        await self.validate_crcon_version()
+
         await super().validate(community)
 
-        await self.validate_crcon_version()
         missing_optional_perms = await self.validate_scopes()
         await self.validate_ban_lists(community)
 
@@ -156,6 +157,7 @@ class CRCONIntegration(
                         # The player was unbanned, change responses of all reports where
                         # the player is banned
                         async with session_factory.begin() as _db:
+                            # TODO: Remove the remote ban?
                             await expire_bans_of_player(
                                 _db, db_ban.player_id, db_ban.integration.community_id
                             )

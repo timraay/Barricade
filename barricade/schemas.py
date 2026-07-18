@@ -6,6 +6,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    computed_field,
     field_serializer,
     field_validator,
 )
@@ -75,6 +76,13 @@ class CRCONIntegrationConfigParams(CustomIntegrationConfigParams):
     )
 
 
+class BifrostIntegrationConfigParams(CustomIntegrationConfigParams):
+    api_url: str = "wss://hll-barricade.bifrostgaming.com"
+    integration_type: Literal[IntegrationType.BIFROST] = (  # type: ignore
+        IntegrationType.BIFROST
+    )
+
+
 class SafeIntegrationConfig(SafeIntegrationConfigParams):
     id: int  # type: ignore
 
@@ -96,6 +104,10 @@ class BattlemetricsIntegrationConfig(  # type: ignore
 
 
 class CRCONIntegrationConfig(CRCONIntegrationConfigParams, IntegrationConfig):  # type: ignore
+    pass
+
+
+class BifrostIntegrationConfig(BifrostIntegrationConfigParams, IntegrationConfig):  # type: ignore
     pass
 
 
@@ -187,6 +199,8 @@ class _ReportBase(BaseModel):
     platforms_bitflag: PlatformFlag
     edited_at: datetime | None
     edited_by: str | None
+    comment: str | None
+    # When extending, also update barricade.crud.reports.edit_report
 
 
 class _PlayerReportBase(BaseModel):
@@ -296,6 +310,7 @@ class ReportTokenRef(SafeReportTokenRef):
 class ReportRef(_ReportBase, _ModelFromAttributes):
     id: int
     message_id: int
+    effective_platforms_bitflag: PlatformFlag
 
     def __repr__(self) -> str:
         return f"Report[id={self.id}]"
@@ -487,11 +502,27 @@ class ReportEditParams(_ReportBase):
     )
     attachment_urls: list[str] = Field(default_factory=list)
 
+    @computed_field(return_type=PlatformFlag)
+    @property
+    def effective_platforms_bitflag(self) -> PlatformFlag:
+        platforms = PlatformFlag(0)
+        for player in self.players:
+            if player.platform is None:
+                platforms = PlatformFlag.all()
+                break
+
+            for platform in PlatformFlag:
+                if player.platform.is_valid_for_platform_flag(platform):
+                    platforms |= platform
+
+        return platforms & self.platforms_bitflag
+
 
 class ReportCreateParams(ReportEditParams):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     edited_at: datetime | None = None
     edited_by: str | None = None
+    comment: str | None = None
     token_id: int
 
 
@@ -552,6 +583,7 @@ class ReportSubmissionData(BaseModel):
     attachment_urls: list[str] = Field(alias="attachmentUrls")
     game: Game
     platforms_bitflag: PlatformFlag
+    effective_platforms_bitflag: PlatformFlag = Field(alias="effectivePlatformsBitflag")
 
 
 class ReportSubmission(BaseModel):
