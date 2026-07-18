@@ -19,6 +19,7 @@ from barricade.discord.utils import (
     CustomException,
     LayoutView,
     Modal,
+    get_error_embed,
     get_success_container,
 )
 from barricade.discord.views.report import (
@@ -373,8 +374,10 @@ class _ReportEditView(LayoutView):
         await interaction.response.send_modal(modal)
 
     async def open_attachments_modal(self, interaction: discord.Interaction):
-        modal = ReportUploadAttachmentsModal(self)
+        assert interaction.message is not None
+        modal = ReportUploadAttachmentsModal(self, interaction.message)
         await interaction.response.send_modal(modal)
+        modal.message = await interaction.original_response()
 
     async def remove_attachment(self, interaction: discord.Interaction, *, index: int):
         del self.params.attachment_urls[index]
@@ -615,9 +618,10 @@ class ReportEditDescriptionModal(Modal):
 
 
 class ReportUploadAttachmentsModal(Modal):
-    def __init__(self, view: _ReportEditView):
+    def __init__(self, view: _ReportEditView, message: discord.Message):
         super().__init__(title="Upload Media")
         self.view = view
+        self.message = message
 
         self.attachments_input = discord.ui.FileUpload(
             required=False,
@@ -630,6 +634,14 @@ class ReportUploadAttachmentsModal(Modal):
                 text="Media",
                 description="Images and videos only. Any other file types will be ignored.",
                 component=self.attachments_input,
+            )
+        )
+
+        assert message.guild is not None
+        self.add_item(
+            discord.ui.TextDisplay(
+                f"-# Due to server limitations, files larger than {message.guild.filesize_limit / (1024 * 1024):.0f} MB"
+                " will be ignored, regardless of your account's file upload limit."
             )
         )
 
@@ -658,9 +670,23 @@ class ReportUploadAttachmentsModal(Modal):
             description=attachment.description,
         )
 
+    async def _attachment_batch_to_urls(
+        self, attachments: list[discord.Attachment], channel: discord.TextChannel
+    ) -> list[str]:
+        files = await asyncio.gather(
+            *[
+                ReportUploadAttachmentsModal.attachment_to_file(attachment)
+                for attachment in attachments
+            ]
+        )
+
+        message = await channel.send(files=files)
+        return [attachment.url for attachment in message.attachments]
+
     async def on_submit(self, interaction: discord.Interaction):
         assert interaction.message is not None
 
+        # Start "thinking..." message
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         channel = get_attachments_channel()
@@ -670,32 +696,59 @@ class ReportUploadAttachmentsModal(Modal):
                 "No channel was found. Please contact an admin.",
             )
 
-        # Respect file size limits
-        # TODO: Split into multiple messages if required
-        filesize = sum(attachment.size for attachment in self.get_attachments())
-        filesize_mb = filesize / (1024 * 1024)
-        filesize_limit_mb = channel.guild.filesize_limit / (1024 * 1024)
-        if filesize > channel.guild.filesize_limit:
-            raise CustomException(
-                "Attachments could not be uploaded",
-                f"Total file size of attachments ({filesize_mb:.1f} MB) exceeds the server's file size limit ({filesize_limit_mb:.0f} MB).",
-            )
+        # Group attachments into batches that fit within the server's filesize limit
+        attachment_batches: list[list[discord.Attachment]] = [[]]
+        failed_attachments: list[discord.Attachment] = []
+        for attachment in self.get_attachments():
+            # Set aside individual attachments that exceed the server's filesize limit
+            if attachment.size > channel.guild.filesize_limit:
+                failed_attachments.append(attachment)
+                continue
 
-        # Re-upload files to get a permanent URL
-        files = await asyncio.gather(
+            batch_size = sum(a.size for a in attachment_batches[-1])
+            if batch_size + attachment.size >= channel.guild.filesize_limit:
+                # Create a new batch
+                attachment_batches.append([attachment])
+            else:
+                # Add to existing batch
+                attachment_batches[-1].append(attachment)
+
+        # Reupload files to get a permanent URL
+        attachment_url_batches = await asyncio.gather(
             *[
-                self.attachment_to_file(attachment)
-                for attachment in self.get_attachments()
+                self._attachment_batch_to_urls(batch, channel)
+                for batch in attachment_batches
             ]
         )
-        message = await channel.send(files=files)
-        attachment_urls = [attachment.url for attachment in message.attachments]
+        attachment_urls = [url for batch in attachment_url_batches for url in batch]
+
+        # Add the new attachment URLs to the report
         self.view.params.attachment_urls.extend(attachment_urls)
 
+        # Update the view
         await self.view.update_view()
 
-        await interaction.delete_original_response()
-        await interaction.message.edit(view=self.view)
+        if failed_attachments:
+            # Notify of attachments that were skipped because they exceeded the server's filesize limit
+            filesize_limit_mb = channel.guild.filesize_limit / (1024 * 1024)
+            await interaction.followup.send(
+                embed=get_error_embed(
+                    "Some attachments could not be uploaded!",
+                    f"The following attachments exceeded the {filesize_limit_mb:.0f} MB file size limit:\n"
+                    + "\n".join(
+                        f"- `{attachment.filename}` ({attachment.size / (1024 * 1024):.1f} MB)"
+                        for attachment in failed_attachments
+                    )
+                    + "\n\nAll remaining attachments were uploaded successfully.",
+                ),
+                ephemeral=True,
+            )
+        else:
+            # Delete the "thinking..." message
+            await interaction.delete_original_response()
+
+        # Edit the original view
+        await self.message.edit(view=self.view)
 
 
 class ReportEditPlayerModal(Modal):
