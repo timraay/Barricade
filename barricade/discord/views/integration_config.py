@@ -248,8 +248,9 @@ class IntegrationAddSelect(
             emoji=integration.meta.emoji,
         )
         for (integration_type, integration) in (
-            (IntegrationType.COMMUNITY_RCON, CRCONIntegration),
             (IntegrationType.BATTLEMETRICS, BattlemetricsIntegration),
+            (IntegrationType.BIFROST, BifrostIntegration),
+            (IntegrationType.COMMUNITY_RCON, CRCONIntegration),
             (IntegrationType.CUSTOM, CustomIntegration),
         )
     ]
