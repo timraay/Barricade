@@ -519,14 +519,16 @@ class IntegrationConfigView(CommunityConfigView):
 IntegrationT = TypeVar("IntegrationT", bound=Integration)
 
 
-class _IntegrationEditModal(Generic[IntegrationT], Modal):
+class _IntegrationEditModal(
+    Generic[IntegrationT], Modal, title="Configure Integration"
+):
     def __init__(
         self,
         community_id: int,
         integration_id: int | None,
         default_values: schemas.IntegrationConfigParams | None = None,
     ):
-        super().__init__(title="Configure Battlemetrics Integration", timeout=None)
+        super().__init__(timeout=None)
         self.community_id = community_id
         self.integration_id = integration_id
         self.setup_fields(default_values)
@@ -615,7 +617,8 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
 
 
 class BattlemetricsIntegrationEditModal(
-    _IntegrationEditModal[BattlemetricsIntegration]
+    _IntegrationEditModal[BattlemetricsIntegration],
+    title="Configure Battlemetrics Integration",
 ):
     RE_ORG_URL = re.compile(r"https://www.battlemetrics.com/rcon/orgs/edit/(\d+)")
 
@@ -667,7 +670,10 @@ class BattlemetricsIntegrationEditModal(
         )
 
 
-class CRCONIntegrationEditModal(_IntegrationEditModal[CRCONIntegration]):
+class CRCONIntegrationEditModal(
+    _IntegrationEditModal[CRCONIntegration],
+    title="Configure CRCON Integration",
+):
     RE_API_URL = re.compile(
         r"(http(?:s)?:\/\/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}|.+?))(?:\/(?:(?:#|api|admin).*)?)?$"
     )
@@ -719,7 +725,10 @@ class CRCONIntegrationEditModal(_IntegrationEditModal[CRCONIntegration]):
         )
 
 
-class BifrostIntegrationEditModal(_IntegrationEditModal[BifrostIntegration]):
+class BifrostIntegrationEditModal(
+    _IntegrationEditModal[BifrostIntegration],
+    title="Configure Bifrost Integration",
+):
     def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
         # Define input fields
         self.api_key = discord.ui.TextInput(
@@ -750,7 +759,10 @@ class BifrostIntegrationEditModal(_IntegrationEditModal[BifrostIntegration]):
         )
 
 
-class CustomIntegrationEditModal(_IntegrationEditModal[CustomIntegration]):
+class CustomIntegrationEditModal(
+    _IntegrationEditModal[CustomIntegration],
+    title="Configure Custom Integration",
+):
     def setup_fields(self, default_values: schemas.IntegrationConfigParams | None):
         # Define input fields
         self.api_url = discord.ui.TextInput(
