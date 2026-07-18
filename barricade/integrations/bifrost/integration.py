@@ -96,7 +96,6 @@ class BifrostIntegration(
     def get_instance_url(self) -> str | None:
         return "https://dashboard.bifrostgaming.com/"
 
-    # TODO: Validate that API token is valid
     # async def validate(self, community: schemas.Community) -> set[str]:
     #     await super().validate(community)
     #     return set()

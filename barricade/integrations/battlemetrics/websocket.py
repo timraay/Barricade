@@ -1,6 +1,7 @@
 import asyncio
 import itertools
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -24,15 +25,27 @@ if TYPE_CHECKING:
 
 
 class BattlemetricsWebsocket(Websocket):
-    def __init__(self, integration: "BattlemetricsIntegration"):
-        super().__init__(
+    def __init__(
+        self,
+        address: str,
+        token: str | None = None,
+        logger: logging.Logger = logging,  # type: ignore
+    ):
+        super().__init__(address=address, token=token, logger=logger)
+        self._waiters: dict[UUID, asyncio.Future[Any]] = {}
+        self._counter = itertools.count()
+        self.integration: BattlemetricsIntegration | None = None
+        self.server_ids: dict[str, Game] = {}
+
+    @classmethod
+    def from_integration(cls, integration: "BattlemetricsIntegration"):
+        self = cls(
             address=integration.get_ws_url(),
             token=integration.config.api_key,
             logger=integration.logger,
         )
         self.integration = integration
-        self._waiters: dict[UUID, asyncio.Future[Any]] = {}
-        self._counter = itertools.count()
+        return self
 
     async def setup_hook(self):
         await self.execute(
@@ -40,22 +53,31 @@ class BattlemetricsWebsocket(Websocket):
         )
         self.logger.info("Authorized Battlemetrics websocket")
 
-        self.server_ids = {
-            server_id: game
-            for game, server_ids in zip(
-                Game,
-                await asyncio.gather(
-                    *[self.integration.get_server_ids_from_org(game) for game in Game]
-                ),
-                strict=True,
-            )
-            for server_id in server_ids
-        }
+        if self.integration is None:
+            self.server_ids = {}
+        else:
+            self.server_ids = {
+                server_id: game
+                for game, server_ids in zip(
+                    Game,
+                    await asyncio.gather(
+                        *[
+                            self.integration.get_server_ids_from_org(game)
+                            for game in Game
+                        ]
+                    ),
+                    strict=True,
+                )
+                for server_id in server_ids
+            }
 
-        await self.execute(
-            ClientRequestType.join,
-            payload=[f"server:updates:{server_id}" for server_id in self.server_ids],
-        )
+        if self.server_ids:
+            await self.execute(
+                ClientRequestType.join,
+                payload=[
+                    f"server:updates:{server_id}" for server_id in self.server_ids
+                ],
+            )
 
     async def handle_message(self, message: str | bytes):
         content = json.loads(message)
@@ -177,6 +199,9 @@ class BattlemetricsWebsocket(Websocket):
         pass
 
     async def handle_server_update(self, payload: dict):
+        if not self.integration:
+            return
+
         # We're after the information telling us a player joining the
         # server; everything else can be discarded.
         if "players" not in payload:

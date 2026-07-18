@@ -39,6 +39,7 @@ from barricade.integrations.mixins import (
     IntegrationScopedMixin,
 )
 from barricade.integrations.scope import Scope
+from barricade.integrations.websocket import validate_ws_connection
 from barricade.utils import (
     async_ttl_cache,
     batched,
@@ -92,7 +93,7 @@ class BattlemetricsIntegration(
     def __init__(self, config: schemas.BattlemetricsIntegrationConfigParams) -> None:
         super().__init__(config)
         self.config: schemas.BattlemetricsIntegrationConfigParams
-        self.ws = BattlemetricsWebsocket(self)
+        self.ws = BattlemetricsWebsocket.from_integration(self)
 
     def get_ws_url(self):
         return self.BASE_WS_URL.format(uuid4())
@@ -156,6 +157,7 @@ class BattlemetricsIntegration(
             raise IntegrationValidationError("Communities do not match")
 
         missing_optional_scopes = await self.validate_scopes()
+        await validate_ws_connection(self.ws, timeout=5)
         await self.validate_ban_lists(community)
 
         return missing_optional_scopes

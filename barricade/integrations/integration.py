@@ -103,6 +103,8 @@ class Integration(ABC):
             raise ValueError(
                 f"Integration types cannot be changed (from {self.config.integration_type} to {config.integration_type})"
             )
+        if self.config.enabled != config.enabled:
+            config.enabled = self.config.enabled
         self.config = self.meta.config_cls.model_validate(config)
 
     async def create(self):

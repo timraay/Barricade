@@ -32,6 +32,7 @@ from barricade.integrations.integration import (
     IntegrationMetaData,
     is_enabled,
 )
+from barricade.integrations.websocket import validate_ws_connection
 from barricade.utils import game_switch
 
 
@@ -131,6 +132,8 @@ class CustomIntegration(Integration):
     async def validate(self, community: schemas.Community) -> set[str]:
         if community.id != self.config.community_id:
             raise IntegrationValidationError("Communities do not match")
+
+        await validate_ws_connection(self.ws, timeout=5)
 
         return set()
 
