@@ -199,6 +199,7 @@ class _ReportBase(BaseModel):
     platforms_bitflag: PlatformFlag
     edited_at: datetime | None
     edited_by: str | None
+    comment: str | None
     # When extending, also update barricade.crud.reports.edit_report
 
 
@@ -521,6 +522,7 @@ class ReportCreateParams(ReportEditParams):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     edited_at: datetime | None = None
     edited_by: str | None = None
+    comment: str | None = None
     token_id: int
 
 

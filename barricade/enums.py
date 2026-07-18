@@ -229,6 +229,8 @@ class Emojis(StrEnum):
     PILL_HLLV_3 = "<:pill_hllv3:1509524443909722183>"
     PILL_HLLV_4 = "<:pill_hllv4:1509524445847486495>"
     PILL_HLLV_5 = "<:pill_hllv5:1509524447227412540>"
+    COMMENT = "<:comment:1528035496595558550>"
+    WRITE = "<:write:1528035497765769349>"
 
 
 class ReportMessageType(Enum):

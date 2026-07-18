@@ -319,6 +319,36 @@ async def audit_report_edit(
     await _audit(embed, payload)
 
 
+async def audit_report_set_comment(
+    report: schemas.ReportWithToken,
+    old_comment: str | None,
+    by: AuditBy | None = None,
+):
+    embed = discord.Embed(
+        color=discord.Colour.blurple(), timestamp=datetime.now(tz=UTC)
+    ).set_author(
+        name="Report comment updated",
+    )
+    await set_footer(embed, None, by)
+
+    embed.add_field(
+        name="Report ID",
+        value=f"{report.id}",
+    )
+    embed.add_field(
+        name="Old Comment",
+        value=f"`{old_comment}`" if old_comment is not None else "None",
+        inline=False,
+    )
+    embed.add_field(
+        name="New Comment",
+        value=f"`{report.comment}`" if report.comment is not None else "None",
+        inline=False,
+    )
+
+    await _audit(embed)
+
+
 async def audit_report_delete(
     report: schemas.ReportWithToken,
     stats: dict[int, schemas.ResponseStats],

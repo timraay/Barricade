@@ -73,6 +73,7 @@ class _ReportEditView(LayoutView):
             created_at=datetime.now(UTC),
             edited_at=None,
             edited_by=None,
+            comment=None,
         )
 
     def _assert_valid_tags(self) -> None:
@@ -423,6 +424,7 @@ class ReportEditView(_ReportEditView):
             created_at=report.created_at,
             edited_at=report.edited_at,
             edited_by=report.edited_by,
+            comment=report.comment,
         )
         await view.update_view()
         return view
