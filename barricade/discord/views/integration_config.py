@@ -155,13 +155,19 @@ class IntegrationConfigButton(
             raise CustomException("Integration is already enabled")
 
         community = await self.get_community(db)
+        await interaction.response.defer(ephemeral=True)
         await validate_integration(integration, community)
 
         await integration.enable()
 
-        view = IntegrationConfigView(community)
+        # Expire and fetch again to ensure we have the latest available config
+        db.expire_all()
+        community = await self.get_community(db)
+        view = IntegrationConfigView(
+            community, expanded_integration_id=self.integration_id
+        )
         await view.prepare()
-        await interaction.response.edit_message(view=view)
+        await interaction.edit_original_response(view=view)
 
     async def handle_edit_command(
         self,
@@ -185,12 +191,12 @@ class IntegrationConfigButton(
         if not integration.config.enabled:
             raise CustomException("Integration is already disabled")
 
-        community = await self.get_community(db)
-        # await validate_integration(integration, community)
-
         await integration.disable()
 
-        view = IntegrationConfigView(community)
+        community = await self.get_community(db)
+        view = IntegrationConfigView(
+            community, expanded_integration_id=self.integration_id
+        )
         await view.prepare()
         await interaction.response.edit_message(view=view)
 
@@ -582,6 +588,8 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
             assert temp_integration.config.community_id == self.community_id
 
             community = await self.get_community(db)
+
+            await interaction.response.defer(ephemeral=True)
             await validate_integration(temp_integration, community)
 
             # If a new integration is being created
@@ -599,9 +607,11 @@ class _IntegrationEditModal(Generic[IntegrationT], Modal):
         # Refresh the view
         async with session_factory() as db:
             community = await self.get_community(db)
-            view = IntegrationConfigView(community)
+            view = IntegrationConfigView(
+                community, expanded_integration_id=integration.config.id or -1
+            )
             await view.prepare()
-            await interaction.response.edit_message(view=view)
+            await interaction.edit_original_response(view=view)
 
 
 class BattlemetricsIntegrationEditModal(
