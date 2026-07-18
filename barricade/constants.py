@@ -94,6 +94,8 @@ DISCORD_HLLV_ROLE_ID = get_env_int("DISCORD_HLLV_ROLE_ID", 0)
 # IDs of the main report channels
 DISCORD_HLL_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLL_REPORTS_CHANNEL_ID", 0)
 DISCORD_HLLV_REPORTS_CHANNEL_ID = get_env_int("DISCORD_HLLV_REPORTS_CHANNEL_ID", 0)
+# ID of the channel where attachments are sent to be uploaded to the CDN
+DISCORD_ATTACHMENTS_CHANNEL_ID = get_env_int("DISCORD_ATTACHMENTS_CHANNEL_ID", 0)
 # ID of the channel to send community create requests to
 DISCORD_ENROLL_CHANNEL_ID = get_env_int("DISCORD_ENROLL_CHANNEL_ID", 0)
 # ID of the channel to send audit messages to

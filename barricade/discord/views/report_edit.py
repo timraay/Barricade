@@ -1,3 +1,5 @@
+import asyncio
+import io
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -11,6 +13,7 @@ from barricade.constants import REPORT_MAX_ATTACHMENTS, REPORT_MAX_PLAYERS
 from barricade.crud.reports import edit_report, get_report_by_id
 from barricade.db import session_factory
 from barricade.discord.communities import assert_has_admin_role
+from barricade.discord.reports import get_attachments_channel
 from barricade.discord.utils import (
     CallableButton,
     CustomException,
@@ -647,11 +650,52 @@ class ReportUploadAttachmentsModal(Modal):
             and attachment.content_type.startswith(("image/", "video/"))
         ]
 
+    @staticmethod
+    async def attachment_to_file(attachment: discord.Attachment) -> discord.File:
+        return discord.File(
+            io.BytesIO(await attachment.read()),
+            filename=attachment.filename,
+            description=attachment.description,
+        )
+
     async def on_submit(self, interaction: discord.Interaction):
-        for attachment in self.get_attachments():
-            self.view.params.attachment_urls.append(attachment.url)
+        assert interaction.message is not None
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        channel = get_attachments_channel()
+        if not channel:
+            raise CustomException(
+                "Attachments could not be uploaded",
+                "No channel was found. Please contact an admin.",
+            )
+
+        # Respect file size limits
+        # TODO: Split into multiple messages if required
+        filesize = sum(attachment.size for attachment in self.get_attachments())
+        filesize_mb = filesize / (1024 * 1024)
+        filesize_limit_mb = channel.guild.filesize_limit / (1024 * 1024)
+        if filesize > channel.guild.filesize_limit:
+            raise CustomException(
+                "Attachments could not be uploaded",
+                f"Total file size of attachments ({filesize_mb:.1f} MB) exceeds the server's file size limit ({filesize_limit_mb:.0f} MB).",
+            )
+
+        # Re-upload files to get a permanent URL
+        files = await asyncio.gather(
+            *[
+                self.attachment_to_file(attachment)
+                for attachment in self.get_attachments()
+            ]
+        )
+        message = await channel.send(files=files)
+        attachment_urls = [attachment.url for attachment in message.attachments]
+        self.view.params.attachment_urls.extend(attachment_urls)
+
         await self.view.update_view()
-        await interaction.response.edit_message(view=self.view)
+
+        await interaction.delete_original_response()
+        await interaction.message.edit(view=self.view)
 
 
 class ReportEditPlayerModal(Modal):

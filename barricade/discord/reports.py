@@ -4,6 +4,7 @@ import discord
 
 from barricade import schemas
 from barricade.constants import (
+    DISCORD_ATTACHMENTS_CHANNEL_ID,
     DISCORD_HLL_REPORTS_CHANNEL_ID,
     DISCORD_HLLV_REPORTS_CHANNEL_ID,
     T17_SUPPORT_HLL_CHANNEL_ID,
@@ -45,6 +46,16 @@ def get_t17_support_forward_channel(game: Game) -> discord.TextChannel | None:
         logging.warning("T17 Support forward channel could not be found")
     elif not isinstance(channel, discord.TextChannel):
         logging.error("T17 Support forward channel is not a text channel")
+        channel = None
+    return channel
+
+
+def get_attachments_channel() -> discord.TextChannel | None:
+    channel = bot.primary_guild.get_channel(DISCORD_ATTACHMENTS_CHANNEL_ID)
+    if not channel:
+        logging.warning("Attachments channel could not be found")
+    elif not isinstance(channel, discord.TextChannel):
+        logging.error("Attachments channel is not a text channel")
         channel = None
     return channel
 
