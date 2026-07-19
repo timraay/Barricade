@@ -248,13 +248,17 @@ class Integration(ABC):
                 db_community = await get_community_by_id(db, self.config.community_id)
                 community = schemas.Community.model_validate(db_community)
 
+            self.logger.info("Validating %r before synchronization", self)
+
             try:
                 await self.validate(community)
             except Exception as e:
                 if isinstance(e, IntegrationValidationError):
                     description = f"-# During validation we ran into the following issue:\n-# `{e}`"
+                    self.logger.info("Validation failed for %r: %s", self, e)
                 else:
                     description = "-# During validation we ran into an unexpected issue. Please reach out to Barricade staff if this keeps reoccuring."
+                    self.logger.exception("Validation failed unexpectedly for %r", self)
 
                 safe_send_to_community(
                     community,
@@ -271,10 +275,14 @@ class Integration(ABC):
                 )
                 return
 
+            self.logger.info("Synchronizing ban lists for %r", self)
+
             try:
                 await self.synchronize()
             except Exception:
                 self.logger.exception("Failed to synchronize ban lists for %r", self)
+
+            self.logger.info("Finished synchronizing ban lists for %r", self)
 
     # --- Connection hooks
 

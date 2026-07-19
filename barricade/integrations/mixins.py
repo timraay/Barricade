@@ -100,7 +100,13 @@ class IntegrationBanListMixin(Integration, ABC):
                     db, models.PlayerBan.integration_id == self.config.id
                 )
 
-        new_banlist_id = await self.create_remote_ban_list(community, game)
+        try:
+            new_banlist_id = await self.create_remote_ban_list(community, game)
+        except Exception:
+            self.logger.exception(
+                "%r: Failed to create ban list for game %s", self, game
+            )
+            raise
 
         if game == Game.HLL:
             self.config.hll_banlist_id = new_banlist_id
