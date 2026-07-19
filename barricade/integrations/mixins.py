@@ -121,6 +121,13 @@ class IntegrationBanListMixin(Integration, ABC):
         return new_banlist_id
 
     async def validate_ban_lists(self, community: schemas.Community):
+        if not self.config.id:
+            self.logger.info(
+                "%r: Skipping validation of ban lists since integration is yet to be created.",
+                self,
+            )
+            return
+
         for game in Game:
             await self._validate_ban_list(community, game)
 
