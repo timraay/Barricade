@@ -363,9 +363,9 @@ async def get_plain_report_view(
         report,
         accessory=comment_button if with_comment and not report.comment else None,
     )
-    container.add_item(
-        discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small)
-    )
+    # container.add_item(
+    #     discord.ui.Separator(visible=False, spacing=discord.SeparatorSpacing.small)
+    # )
     container_add_description(container, report)
     if with_comment and report.comment:
         container_add_comment(
