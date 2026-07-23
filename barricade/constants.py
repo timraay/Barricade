@@ -131,6 +131,9 @@ REPORT_MAX_PLAYERS = 3
 # Currently supports no more than 10 attachments, since that is the most that fit into a single media gallery.
 REPORT_MAX_ATTACHMENTS = 10
 
+# How many times in a row an integration can fail to synchronize before it is disabled.
+INTEGRATION_MAX_FAILURES = 5
+
 
 # The URL of the report form. Must end in a "?".
 # Note that this cannot just be changed. There's a lot of constants in barricade.urls as well.

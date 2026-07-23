@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
+from barricade.constants import INTEGRATION_MAX_FAILURES
 from barricade.crud.bans import (
     bulk_create_bans,
     bulk_delete_bans,
@@ -22,7 +23,7 @@ from barricade.crud.integrations import (
 )
 from barricade.crud.responses import get_successful_responses_without_bans
 from barricade.db import models, session_factory
-from barricade.discord.communities import safe_send_to_community
+from barricade.discord.communities import get_alerts_channel, safe_send_to_community
 from barricade.discord.utils import get_danger_embed
 from barricade.enums import Game, IntegrationType
 from barricade.exceptions import (
@@ -86,7 +87,9 @@ class Integration(ABC):
         self.config = config
 
         self.task: asyncio.Task | None = None
+        # TODO: Implement lock
         self.lock = asyncio.Lock()
+        self.synchronization_failure_count = 0
         self.logger = get_logger(self.config.community_id)
 
     def __repr__(self):
@@ -161,6 +164,7 @@ class Integration(ABC):
                         self._loop(), name=f"IntegrationLoop{self.config.id}"
                     )
 
+            self.synchronization_failure_count = 0
             self.logger.info("Enabled integration %r", self)
             return db_config
         except Exception:
@@ -244,45 +248,59 @@ class Integration(ABC):
                 )
                 return
 
-            async with session_factory() as db:
-                db_community = await get_community_by_id(db, self.config.community_id)
-                community = schemas.Community.model_validate(db_community)
-
-            self.logger.info("Validating %r before synchronization", self)
-
             try:
-                await self.validate(community)
+                async with session_factory() as db:
+                    db_community = await get_community_by_id(
+                        db, self.config.community_id
+                    )
+                    community = schemas.Community.model_validate(db_community)
             except Exception as e:
-                if isinstance(e, IntegrationValidationError):
-                    description = f"-# During validation we ran into the following issue:\n-# `{e}`"
-                    self.logger.info("Validation failed for %r: %s", self, e)
-                else:
-                    description = "-# During validation we ran into an unexpected issue. Please reach out to Barricade staff if this keeps reoccuring."
-                    self.logger.exception("Validation failed unexpectedly for %r", self)
-
-                safe_send_to_community(
-                    community,
-                    game=None,
-                    embed=get_danger_embed(
-                        f"Your {self.meta.name} integration was disabled!", description
-                    ),
+                self.logger.exception(
+                    "Failed to fetch community for integration %r: %s", self, e
                 )
-                # We kind of have to pray that this doesn't fail for whatever reason.
-                # We can't await it, because we would cancel ourselves.
-                safe_create_task(
-                    self.disable(),
-                    err_msg=f"Exited loop for integration {self!r} but failed to disable the integration!",
-                )
-                return
-
-            self.logger.info("Synchronizing ban lists for %r", self)
+                continue
 
             try:
-                await self.synchronize()
-            except Exception:
-                self.logger.exception("Failed to synchronize ban lists for %r", self)
+                self.logger.info("Validating %r before synchronization", self)
+                await self.validate(community)
 
-            self.logger.info("Finished synchronizing ban lists for %r", self)
+                self.logger.info("Synchronizing ban lists for %r", self)
+                await self.synchronize()
+
+                self.logger.info("Finished synchronizing ban lists for %r", self)
+            except Exception as e:
+                self.synchronization_failure_count += 1
+                self.logger.exception(
+                    "Synchronization failed for %r (%s/%s)",
+                    self,
+                    self.synchronization_failure_count,
+                    INTEGRATION_MAX_FAILURES,
+                )
+
+                if self.synchronization_failure_count >= INTEGRATION_MAX_FAILURES:
+                    if isinstance(e, IntegrationValidationError):
+                        description = f"-# Failed to synchronize for an extended period:\n-# `{e}`"
+                    else:
+                        description = "-# Failed to synchronize for an extended period due to an unexpected issue. Please reach out to Barricade staff if this keeps occuring."
+
+                    safe_send_to_community(
+                        community,
+                        game=None,
+                        embed=get_danger_embed(
+                            f"Your {self.meta.name} integration was disabled!",
+                            description,
+                        ),
+                        channel_fn=get_alerts_channel,
+                    )
+                    # We kind of have to pray that this doesn't fail for whatever reason.
+                    # We can't await it, because we would cancel ourselves.
+                    safe_create_task(
+                        self.disable(),
+                        err_msg=f"Exited loop for integration {self!r} but failed to disable the integration!",
+                    )
+                    return
+            else:
+                self.synchronization_failure_count = 0
 
     # --- Connection hooks
 
