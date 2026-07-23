@@ -73,7 +73,7 @@ async def get_report_public_review_view(
     view = await get_plain_report_view(
         report=report,
         stats=stats,
-        with_eos_ids=True,
+        with_eos_ids=False,
         refresh_button=ReportPublicReviewButton(
             button=discord.ui.Button(
                 emoji=Emojis.REFRESH,
