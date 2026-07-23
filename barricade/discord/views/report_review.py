@@ -401,7 +401,9 @@ class ReportEditCommentModal(Modal, title="Provide Additional Context"):
         comment = self.comment_input.value.strip()
 
         async with session_factory() as db:
-            db_report = await set_report_comment(db, self.report_id, comment=comment)
+            db_report = await set_report_comment(
+                db, self.report_id, comment=comment, by=interaction.user
+            )
             report = schemas.ReportWithToken.model_validate(db_report)
 
             db_community = await get_community_by_id(db, self.community_id)
