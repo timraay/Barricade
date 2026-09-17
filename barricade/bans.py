@@ -213,7 +213,7 @@ async def revoke_dangling_bans(
         db_community = await db_ban.integration.awaitable_attrs.community
         community = schemas.CommunityRef.model_validate(db_community)
 
-        db_player = await db_ban.player.awaitable_attrs.player
+        db_player = db_ban.player
         player = schemas.PlayerRef.model_validate(db_player)
 
         coro = revoke_ban(
