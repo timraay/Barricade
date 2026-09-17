@@ -262,11 +262,11 @@ def container_add_player(
             report.game,
             format_url(
                 "HLLRecords",
-                f"https://hllrecords.com/profiles/{player.player.steam_id}",
+                f"https://hllrecords.com/profiles/{player_game_id}",
             ),
             format_url(
                 "HLLVRecords",
-                f"https://hllvrecords.com/profiles/{player.player.steam_id}",
+                f"https://hllvrecords.com/profiles/{player_game_id}",
             ),
         )
     )
