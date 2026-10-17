@@ -3,7 +3,8 @@ import logging
 from collections.abc import Callable, Coroutine, Sequence
 from functools import partial
 
-from discord import Embed
+import discord
+from discord import Colour, Embed
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from barricade import schemas
@@ -14,6 +15,7 @@ from barricade.crud.bans import (
 from barricade.crud.communities import get_community_by_id
 from barricade.crud.watchlists import get_watchlist_by_player_and_community
 from barricade.db import models, session_factory
+from barricade.discord import bot
 from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
@@ -161,24 +163,75 @@ async def unban_players_detached_from_report(
         return
 
     async with session_factory() as db:
-        amount = await revoke_dangling_bans(db, player_ids=detached_player_ids)
+        db_bans = await revoke_dangling_bans(db, player_ids=detached_player_ids)
         logging.info(
             "Revoked %d dangling bans for players %s on report edit",
-            amount,
+            len(db_bans),
             detached_player_ids,
         )
+
+    await notify_communities_about_revoked_bans(report, db_bans)
 
 
 @add_hook(EventHooks.report_delete)
 async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
     player_ids = [player.player_id for player in report.players]
     async with session_factory() as db:
-        amount = await revoke_dangling_bans(db, player_ids=player_ids)
+        db_bans = await revoke_dangling_bans(db, player_ids=player_ids)
         logging.info(
             "Revoked %d dangling bans for players %s on report delete",
-            amount,
+            len(db_bans),
             player_ids,
         )
+
+
+async def notify_communities_about_revoked_bans(
+    report: schemas.ReportWithRelations,
+    db_bans: Sequence[models.PlayerBan],
+):
+    revoked_game_ids: dict[int, list[str]] = {}
+    for db_ban in db_bans:
+        player = schemas.PlayerRef.model_validate(db_ban.player)
+        game_id = player.get_game_id(db_ban.game)
+        if not game_id:
+            continue
+
+        community_id = db_ban.integration.community_id
+        game_ids = revoked_game_ids.setdefault(community_id, [])
+        if game_id not in game_ids:
+            game_ids.append(game_id)
+
+    for message_data in report.messages:
+        game_ids = revoked_game_ids.get(message_data.community_id)
+        if not game_ids:
+            continue
+
+        logger = get_logger(message_data.community_id)
+        logger.info(
+            "Notifying community %s about revoked bans on edited report %s for players %s",
+            message_data.community_id,
+            report.id,
+            game_ids,
+        )
+        try:
+            message = bot.get_partial_message(
+                message_data.channel_id, message_data.message_id
+            )
+            await message.reply(
+                embed=Embed(
+                    description=(
+                        "-# **This report was edited!** One or more bans have been revoked as a result."
+                        f"\n-# `{'`, `'.join(game_ids)}`"
+                    ),
+                    color=Colour.red(),
+                )
+            )
+        except discord.HTTPException:
+            logger.warning(
+                "Failed to notify community %s about revoked bans on report %s",
+                message_data.community_id,
+                report.id,
+            )
 
 
 @add_hook(EventHooks.player_ban)
@@ -197,7 +250,7 @@ async def revoke_dangling_bans(
     db: AsyncSession,
     player_ids: Sequence[int] | None = None,
     community_id: int | None = None,
-) -> int:
+) -> Sequence[models.PlayerBan]:
     db_bans = await get_player_bans_without_responses(
         db,
         player_ids=player_ids,
@@ -205,6 +258,7 @@ async def revoke_dangling_bans(
     )
 
     coros = []
+    revoked_bans = []
     for db_ban in db_bans:
         integration = get_integration_from_ban(db_ban)
         if not integration:
@@ -223,9 +277,10 @@ async def revoke_dangling_bans(
             game=db_ban.game,
         )
         coros.append(coro)
+        revoked_bans.append(db_ban)
 
     await asyncio.gather(*coros)
-    return len(db_bans)
+    return revoked_bans
 
 
 def get_integration_from_ban(db_ban: models.PlayerBan) -> Integration | None:

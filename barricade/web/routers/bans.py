@@ -96,10 +96,12 @@ async def delete_dangling_bans(
     player_id: int | None = None,
     community_id: int | None = None,
 ) -> int:
-    return await revoke_dangling_bans(
-        db,
-        player_ids=[player_id] if player_id is not None else None,
-        community_id=community_id,
+    return len(
+        await revoke_dangling_bans(
+            db,
+            player_ids=[player_id] if player_id is not None else None,
+            community_id=community_id,
+        )
     )
 
 
