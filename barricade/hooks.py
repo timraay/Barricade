@@ -51,8 +51,8 @@ class EventHooks(StrEnum):
         return EventHooks.player_ban._invoke(response)
 
     @staticmethod
-    def invoke_player_unban(response: schemas.Response):
-        return EventHooks.player_unban._invoke(response)
+    def invoke_player_unban(event: schemas.PlayerUnban):
+        return EventHooks.player_unban._invoke(event)
 
 
 def add_hook(hook_type: EventHooks):

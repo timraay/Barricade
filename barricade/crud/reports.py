@@ -472,12 +472,24 @@ async def delete_report(
         pr = schemas.PlayerReportRef.model_validate(db_pr)
         stats[pr.id] = await get_response_stats(db, pr)
 
+    stmt = (
+        select(models.PlayerReportResponse.community_id)
+        .join(models.PlayerReportResponse.player_report)
+        .where(
+            models.PlayerReport.report_id == report_id,
+            models.PlayerReportResponse.banned.is_(True),
+        )
+        .distinct()
+    )
+    banned_community_ids = list((await db.scalars(stmt)).all())
+
     # Delete it
     await db.delete(db_report)
     await db.commit()
 
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
+    report.banned_community_ids = banned_community_ids
     EventHooks.invoke_report_delete(report)
     safe_create_task(audit_report_delete(report, stats, by=by))
 
