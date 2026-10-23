@@ -30,13 +30,11 @@ from barricade.crud.reports import (
 )
 from barricade.crud.responses import (
     bulk_get_response_stats,
-    get_community_responses_to_report,
     get_pending_responses,
     get_reports_for_player_with_no_community_review,
 )
 from barricade.crud.watchlists import (
     filter_watchlisted_player_ids,
-    is_player_watchlisted,
     is_player_watchlisted_by_game_id,
 )
 from barricade.db import models, session_factory
@@ -212,112 +210,57 @@ async def delete_public_report_message(report: schemas.ReportWithRelations):
 
 @add_hook(EventHooks.report_delete)
 async def delete_private_report_messages(report: schemas.ReportWithRelations):
-    async with session_factory() as db:
-        for message_data in report.messages:
-            logger = (
-                get_logger(message_data.community_id)
-                if message_data.community_id
-                else logging
+    for message_data in report.messages:
+        logger = (
+            get_logger(message_data.community_id)
+            if message_data.community_id
+            else logging
+        )
+        try:
+            message = bot.get_partial_message(
+                message_data.channel_id, message_data.message_id
             )
-            try:
-                message = bot.get_partial_message(
-                    message_data.channel_id, message_data.message_id
-                )
 
-                # Send warning if community had banned this player
-                if (
-                    message_data.message_type == ReportMessageType.REVIEW
-                    and message_data.community_id
-                ):
-                    db_responses = await get_community_responses_to_report(
-                        db, report, message_data.community_id
+            # Send warning if T17 Support was notified about this player
+            if message_data.message_type == ReportMessageType.T17_SUPPORT:
+                # TODO: Disable buttons
+                # await message.edit(view=None)
+                await message.reply(
+                    embed=discord.Embed(
+                        description="-# **This report was deleted!** If this user was game banned, consider revoking it.",
+                        color=discord.Colour.red(),
                     )
-
-                    banned_game_ids: list[str] = []
-                    for db_response in db_responses:
-                        if not db_response.banned:
-                            continue
-
-                        player = schemas.PlayerRef.model_validate(
-                            db_response.player_report.player
-                        )
-                        player_game_id = player.get_game_id(
-                            db_response.player_report.report.game
-                        )
-                        if player_game_id:
-                            banned_game_ids.append(player_game_id)
-
-                    if banned_game_ids:
-                        view = View()
-                        if len(report.players) == 1:
-                            player_report = report.players[0]
-                            is_watchlisted = await is_player_watchlisted(
-                                db, player_report.player_id, message_data.community_id
-                            )
-                            view.add_item(
-                                PlayerToggleWatchlistButton.create(
-                                    community_id=message_data.community_id,
-                                    player_id=player_report.player_id,
-                                    is_watchlisted=is_watchlisted,
-                                )
-                            )
-                        else:
-                            # TODO
-                            pass
-
-                        logger.info(
-                            "Notifying community %s about revoked bans on deleted report %s for players %s",
-                            message_data.community_id,
-                            report.id,
-                            banned_game_ids,
-                        )
-                        # TODO: Disable buttons
-                        # await message.edit(view=None)
-                        await message.reply(
-                            embed=discord.Embed(
-                                description=(
-                                    "-# **This report was deleted!** One or more bans have been revoked as a result."
-                                    f"\n-# `{'`, `'.join(banned_game_ids)}`"
-                                ),
-                                color=discord.Colour.red(),
-                            ),
-                            view=view,
-                        )
-                        continue
-
-                # Send warning if T17 Support was notified about this player
-                elif message_data.message_type == ReportMessageType.T17_SUPPORT:
-                    # TODO: Disable buttons
-                    # await message.edit(view=None)
-                    await message.reply(
-                        embed=discord.Embed(
-                            description="-# **This report was deleted!** If this user was game banned, consider revoking it.",
-                            color=discord.Colour.red(),
-                        )
-                    )
-                    continue
-
-                # Otherwise: Simply delete the report
-                logger.info(
-                    "Deleting report message %s/%s (%s)",
-                    message_data.channel_id,
-                    message_data.message_id,
-                    message_data.message_type,
                 )
-                await message.delete()
-            except discord.HTTPException:
-                logger.warning(
-                    "Failed to update message %s/%s (%s) on report delete",
-                    message_data.channel_id,
-                    message_data.message_id,
-                    message_data.message_type,
-                )
-                pass
-            except Exception:
-                logger.exception(
-                    "Unexpected error occurred while attempting to delete %r",
-                    message_data,
-                )
+                continue
+
+            # Keep the review message so the unban notification can reply to it
+            if (
+                message_data.message_type == ReportMessageType.REVIEW
+                and message_data.community_id in report.banned_community_ids
+            ):
+                await message.edit(view=None)
+                continue
+
+            # Otherwise: Simply delete the report
+            logger.info(
+                "Deleting report message %s/%s (%s)",
+                message_data.channel_id,
+                message_data.message_id,
+                message_data.message_type,
+            )
+            await message.delete()
+        except discord.HTTPException:
+            logger.warning(
+                "Failed to update message %s/%s (%s) on report delete",
+                message_data.channel_id,
+                message_data.message_id,
+                message_data.message_type,
+            )
+        except Exception:
+            logger.exception(
+                "Unexpected error occurred while attempting to delete %r",
+                message_data,
+            )
 
 
 # Integration NEW_REPORT hook

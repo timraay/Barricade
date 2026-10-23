@@ -22,6 +22,7 @@ from barricade.enums import (
     ReportMessageType,
     ReportReasonFlag,
     ReportRejectReason,
+    UnbanReason,
 )
 
 
@@ -439,6 +440,7 @@ class ReportWithToken(SafeReportWithToken):
 
 class ReportWithRelations(ReportWithToken):
     messages: list[ReportMessageRef]
+    banned_community_ids: list[int] = Field(default_factory=list)
 
 
 class Response(_ResponseBase, _ModelFromAttributes):
@@ -449,6 +451,14 @@ class Response(_ResponseBase, _ModelFromAttributes):
 
 class ResponseWithToken(Response):
     player_report: PlayerReportWithToken  # type: ignore
+
+
+class PlayerUnban(BaseModel):
+    players: list[PlayerRef]
+    report: ReportRef
+    reason: UnbanReason
+    messages: list[ReportMessageRef] = Field(default_factory=list)
+    community: CommunityRef | None = None
 
 
 class SafeCommunityWithRelations(SafeCommunity):

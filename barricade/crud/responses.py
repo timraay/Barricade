@@ -8,7 +8,13 @@ from sqlalchemy.orm import selectinload
 
 from barricade import schemas
 from barricade.db import models
-from barricade.enums import Game, PlatformFlag, ReportReasonFlag, ReportRejectReason
+from barricade.enums import (
+    Game,
+    PlatformFlag,
+    ReportReasonFlag,
+    ReportRejectReason,
+    UnbanReason,
+)
 from barricade.exceptions import NotFoundError
 from barricade.hooks import EventHooks
 from barricade.logger import get_logger
@@ -141,7 +147,14 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
     if prr.banned:
         EventHooks.invoke_player_ban(prr)
     else:
-        EventHooks.invoke_player_unban(prr)
+        EventHooks.invoke_player_unban(
+            schemas.PlayerUnban(
+                players=[prr.player_report.player],
+                report=prr.player_report.report,
+                reason=UnbanReason.MANUAL,
+                community=prr.community,
+            )
+        )
 
     logger = get_logger(prr.community_id)
     logger.info(

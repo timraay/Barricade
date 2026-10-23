@@ -19,7 +19,7 @@ from barricade.discord import bot
 from barricade.discord.communities import get_reports_channel
 from barricade.discord.utils import get_error_embed
 from barricade.discord.views.retry_error import RetryErrorView
-from barricade.enums import Game
+from barricade.enums import Game, ReportMessageType, UnbanReason
 from barricade.hooks import EventHooks, add_hook
 from barricade.integrations.integration import Integration
 from barricade.integrations.manager import IntegrationManager
@@ -116,14 +116,19 @@ async def on_player_ban(response: schemas.ResponseWithToken):
 
 
 @add_hook(EventHooks.player_unban)
-async def on_player_unban(response: schemas.Response):
-    game = response.player_report.report.game
+async def on_player_unban(event: schemas.PlayerUnban):
+    if event.community:
+        community_id = event.community.id
+        game = event.report.game
+    else:
+        community_id = None
+        game = None
 
     async with session_factory() as db:
         db_bans = await get_player_bans_without_responses(
             db,
-            player_ids=[response.player_report.player_id],
-            community_id=response.community_id,
+            player_ids=[player.id for player in event.players],
+            community_id=community_id,
             game=game,
         )
 
@@ -133,62 +138,87 @@ async def on_player_unban(response: schemas.Response):
         return
 
     coros = []
+    revoked_bans = []
     for db_ban in db_bans:
         integration = get_integration_from_ban(db_ban)
         if not integration:
             continue
 
-        player = response.player_report.player
+        db_community = await db_ban.integration.awaitable_attrs.community
+        community = schemas.CommunityRef.model_validate(db_community)
+        player = schemas.PlayerRef.model_validate(db_ban.player)
 
         coro = revoke_ban(
             integration,
-            response.community,
+            community,
             player,
             game=db_ban.game,
+            reason=event.reason,
         )
         coros.append(coro)
+        revoked_bans.append(db_ban)
 
     await asyncio.gather(*coros)
+
+    logging.info(
+        "Revoked %d dangling bans for players %s, reason: %s",
+        len(revoked_bans),
+        [player.id for player in event.players],
+        event.reason.value,
+    )
+    await notify_communities_about_revoked_bans(event, revoked_bans)
 
 
 @add_hook(EventHooks.report_edit)
 async def unban_players_detached_from_report(
     report: schemas.ReportWithRelations, old_report: schemas.ReportWithToken
 ):
-    old_player_ids = {player.player_id for player in old_report.players}
     new_player_ids = {player.player_id for player in report.players}
-    detached_player_ids = list(old_player_ids.difference(new_player_ids))
+    detached_players = [
+        player.player
+        for player in old_report.players
+        if player.player_id not in new_player_ids
+    ]
 
-    if not detached_player_ids:
+    if not detached_players:
         return
 
-    async with session_factory() as db:
-        db_bans = await revoke_dangling_bans(db, player_ids=detached_player_ids)
-        logging.info(
-            "Revoked %d dangling bans for players %s on report edit",
-            len(db_bans),
-            detached_player_ids,
+    EventHooks.invoke_player_unban(
+        schemas.PlayerUnban(
+            players=detached_players,
+            report=report,
+            messages=report.messages,
+            reason=UnbanReason.REPORT_EDIT,
         )
-
-    await notify_communities_about_revoked_bans(report, db_bans)
+    )
 
 
 @add_hook(EventHooks.report_delete)
-async def unban_player_on_report_delete(report: schemas.ReportWithRelations):
-    player_ids = [player.player_id for player in report.players]
-    async with session_factory() as db:
-        db_bans = await revoke_dangling_bans(db, player_ids=player_ids)
-        logging.info(
-            "Revoked %d dangling bans for players %s on report delete",
-            len(db_bans),
-            player_ids,
+async def unban_players_on_report_delete(report: schemas.ReportWithRelations):
+    if not report.players:
+        return
+
+    EventHooks.invoke_player_unban(
+        schemas.PlayerUnban(
+            players=[player.player for player in report.players],
+            report=report,
+            messages=report.messages,
+            reason=UnbanReason.REPORT_DELETE,
         )
+    )
 
 
 async def notify_communities_about_revoked_bans(
-    report: schemas.ReportWithRelations,
+    event: schemas.PlayerUnban,
     db_bans: Sequence[models.PlayerBan],
 ):
+    if event.reason == UnbanReason.REPORT_EDIT:
+        title = "This report was edited!"
+    elif event.reason == UnbanReason.REPORT_DELETE:
+        title = "This report was deleted!"
+    else:
+        return
+
     revoked_game_ids: dict[int, list[str]] = {}
     for db_ban in db_bans:
         player = schemas.PlayerRef.model_validate(db_ban.player)
@@ -201,16 +231,22 @@ async def notify_communities_about_revoked_bans(
         if game_id not in game_ids:
             game_ids.append(game_id)
 
-    for message_data in report.messages:
+    for message_data in event.messages:
+        if (
+            message_data.message_type != ReportMessageType.REVIEW
+            or message_data.community_id is None
+        ):
+            continue
+
         game_ids = revoked_game_ids.get(message_data.community_id)
         if not game_ids:
             continue
 
         logger = get_logger(message_data.community_id)
         logger.info(
-            "Notifying community %s about revoked bans on edited report %s for players %s",
+            "Notifying community %s about revoked bans on report %s for players %s",
             message_data.community_id,
-            report.id,
+            event.report.id,
             game_ids,
         )
         try:
@@ -220,7 +256,7 @@ async def notify_communities_about_revoked_bans(
             await message.reply(
                 embed=Embed(
                     description=(
-                        "-# **This report was edited!** One or more bans have been revoked as a result."
+                        f"-# **{title}** One or more bans have been revoked as a result."
                         f"\n-# `{'`, `'.join(game_ids)}`"
                     ),
                     color=Colour.red(),
@@ -230,7 +266,7 @@ async def notify_communities_about_revoked_bans(
             logger.warning(
                 "Failed to notify community %s about revoked bans on report %s",
                 message_data.community_id,
-                report.id,
+                event.report.id,
             )
 
 
@@ -250,7 +286,7 @@ async def revoke_dangling_bans(
     db: AsyncSession,
     player_ids: Sequence[int] | None = None,
     community_id: int | None = None,
-) -> Sequence[models.PlayerBan]:
+) -> int:
     db_bans = await get_player_bans_without_responses(
         db,
         player_ids=player_ids,
@@ -258,7 +294,6 @@ async def revoke_dangling_bans(
     )
 
     coros = []
-    revoked_bans = []
     for db_ban in db_bans:
         integration = get_integration_from_ban(db_ban)
         if not integration:
@@ -275,12 +310,12 @@ async def revoke_dangling_bans(
             community,
             player,
             game=db_ban.game,
+            reason=UnbanReason.MANUAL,
         )
         coros.append(coro)
-        revoked_bans.append(db_ban)
 
     await asyncio.gather(*coros)
-    return revoked_bans
+    return len(db_bans)
 
 
 def get_integration_from_ban(db_ban: models.PlayerBan) -> Integration | None:
@@ -300,13 +335,21 @@ async def revoke_ban(
     community: schemas.CommunityRef,
     player: schemas.PlayerRef,
     game: Game,
+    reason: UnbanReason,
 ):
     if not isinstance(integration.config, schemas.IntegrationConfig):
         raise ValueError("Integration needs to be saved first")
 
+    get_logger(community.id).info(
+        "Revoking ban for player %s (%s), reason: %s",
+        player.id,
+        player.get_game_id(game),
+        reason.value,
+    )
+
     embed = get_error_embed(
         "Integration failed to unban player!",
-        "Either manually delete the ban or retry using the button below.",
+        f"Reason: {reason.value}. Either manually delete the ban or retry using the button below.",
     )
 
     await forward_errors(
