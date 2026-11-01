@@ -489,8 +489,7 @@ async def delete_report(
 
     # Invoke hooks and audit
     report = schemas.ReportWithRelations.model_validate(db_report)
-    report.banned_community_ids = banned_community_ids
-    EventHooks.invoke_report_delete(report)
+    EventHooks.invoke_report_delete(report, banned_community_ids)
     safe_create_task(audit_report_delete(report, stats, by=by))
 
     return True

@@ -197,7 +197,9 @@ async def edit_private_report_messages(report: schemas.ReportWithRelations, _):
 
 
 @add_hook(EventHooks.report_delete)
-async def delete_public_report_message(report: schemas.ReportWithRelations):
+async def delete_public_report_message(
+    report: schemas.ReportWithRelations, _: Sequence[int]
+):
     try:
         channel = get_report_channel(report.game)
         message = bot.get_partial_message(
@@ -209,7 +211,9 @@ async def delete_public_report_message(report: schemas.ReportWithRelations):
 
 
 @add_hook(EventHooks.report_delete)
-async def delete_private_report_messages(report: schemas.ReportWithRelations):
+async def delete_private_report_messages(
+    report: schemas.ReportWithRelations, banned_community_ids: Sequence[int]
+):
     for message_data in report.messages:
         logger = (
             get_logger(message_data.community_id)
@@ -236,7 +240,7 @@ async def delete_private_report_messages(report: schemas.ReportWithRelations):
             # Keep the review message so the unban notification can reply to it
             if (
                 message_data.message_type == ReportMessageType.REVIEW
-                and message_data.community_id in report.banned_community_ids
+                and message_data.community_id in banned_community_ids
             ):
                 await message.edit(view=None)
                 continue

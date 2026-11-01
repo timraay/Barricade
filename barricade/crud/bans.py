@@ -214,9 +214,7 @@ async def get_player_bans_without_responses(
         )
         .options(
             selectinload(models.PlayerBan.player),
-            joinedload(models.PlayerBan.integration).joinedload(
-                models.Integration.community
-            ),
+            joinedload(models.PlayerBan.integration),
         )
     )
 

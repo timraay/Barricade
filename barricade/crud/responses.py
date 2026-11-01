@@ -148,7 +148,7 @@ async def set_report_response(db: AsyncSession, params: schemas.ResponseCreatePa
         EventHooks.invoke_player_ban(prr)
     else:
         EventHooks.invoke_player_unban(
-            schemas.PlayerUnban(
+            schemas.PlayerUnbanEvent(
                 players=[prr.player_report.player],
                 report=prr.player_report.report,
                 reason=UnbanReason.MANUAL,
