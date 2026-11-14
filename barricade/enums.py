@@ -115,6 +115,12 @@ class ReportRejectReason(StrEnum):
     INCONCLUSIVE = "Not severe enough"
 
 
+class UnbanReason(StrEnum):
+    MANUAL = "Manual"
+    REPORT_EDIT = "Report edit"
+    REPORT_DELETE = "Report deletion"
+
+
 class IntegrationType(StrEnum):
     BATTLEMETRICS = "Battlemetrics"
     COMMUNITY_RCON = "CRCON"

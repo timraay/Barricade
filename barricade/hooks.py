@@ -1,5 +1,5 @@
 from collections import defaultdict
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from enum import StrEnum
 
 from barricade import schemas
@@ -43,16 +43,18 @@ class EventHooks(StrEnum):
         return EventHooks.report_edit._invoke(report, old_report)
 
     @staticmethod
-    def invoke_report_delete(report: schemas.ReportWithRelations):
-        return EventHooks.report_delete._invoke(report)
+    def invoke_report_delete(
+        report: schemas.ReportWithRelations, banned_community_ids: Sequence[int]
+    ):
+        return EventHooks.report_delete._invoke(report, banned_community_ids)
 
     @staticmethod
     def invoke_player_ban(response: schemas.ResponseWithToken):
         return EventHooks.player_ban._invoke(response)
 
     @staticmethod
-    def invoke_player_unban(response: schemas.Response):
-        return EventHooks.player_unban._invoke(response)
+    def invoke_player_unban(event: schemas.PlayerUnbanEvent):
+        return EventHooks.player_unban._invoke(event)
 
 
 def add_hook(hook_type: EventHooks):
